@@ -1,0 +1,177 @@
+import { useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import type { StockCategory, StockUnit } from './useStockItems';
+
+export interface ExtractedIngredient {
+  name: string;
+  quantity: number;
+  unit: StockUnit;
+  category: StockCategory;
+  price?: number | null;
+  supplier?: string | null;
+  selected?: boolean;
+}
+
+export interface RecipeData {
+  recipeName?: string;
+  preparationMethod?: string;
+  yieldQuantity?: number;
+  preparationTime?: number;
+}
+
+export interface ExtractionResult {
+  ingredients: ExtractedIngredient[];
+  summary: string;
+  recipeData?: RecipeData;
+}
+
+export function useIngredientImport() {
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [extractedIngredients, setExtractedIngredients] = useState<ExtractedIngredient[]>([]);
+  const [summary, setSummary] = useState<string>('');
+  const [recipeData, setRecipeData] = useState<RecipeData | null>(null);
+
+  const extractFromFile = async (file: File, extractRecipe = false): Promise<ExtractionResult | null> => {
+    setIsProcessing(true);
+    setExtractedIngredients([]);
+    setSummary('');
+    setRecipeData(null);
+
+    try {
+      let fileType: 'image' | 'pdf' | 'excel';
+      let content: string;
+
+      // Check file size - max 5MB
+      const MAX_SIZE = 5 * 1024 * 1024;
+      if (file.size > MAX_SIZE) {
+        toast.error('Arquivo muito grande', {
+          description: 'O tamanho máximo permitido é 5MB.',
+        });
+        return null;
+      }
+
+      console.log(`Processing file: ${file.name}, size: ${(file.size / 1024).toFixed(2)}KB, type: ${file.type}`);
+
+      if (file.type.startsWith('image/')) {
+        fileType = 'image';
+        content = await fileToBase64(file);
+      } else if (file.type === 'application/pdf') {
+        fileType = 'pdf';
+        content = await fileToBase64(file);
+      } else if (
+        file.type === 'application/vnd.ms-excel' ||
+        file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      ) {
+        fileType = 'excel';
+        content = await fileToBase64(file);
+      } else {
+        toast.error('Tipo de arquivo não suportado');
+        return null;
+      }
+
+      console.log(`Sending ${fileType} to extract-ingredients, base64 length: ${content.length}`);
+
+      const { data, error } = await supabase.functions.invoke('extract-ingredients', {
+        body: { fileType, content, extractRecipe },
+      });
+
+      console.log('Edge function response:', { data, error });
+
+      if (error) {
+        console.error('Edge function error:', error);
+        throw new Error(error.message);
+      }
+
+      if (data.error) {
+        toast.error(data.error);
+        return null;
+      }
+
+      const ingredients = (data.ingredients || []).map((ing: ExtractedIngredient) => ({
+        ...ing,
+        selected: true,
+      }));
+
+      setExtractedIngredients(ingredients);
+      setSummary(data.summary || '');
+      
+      // Extract recipe data if available
+      const extractedRecipeData: RecipeData | undefined = (data.recipeName || data.preparationMethod) ? {
+        recipeName: data.recipeName,
+        preparationMethod: data.preparationMethod,
+        yieldQuantity: data.yieldQuantity,
+        preparationTime: data.preparationTime,
+      } : undefined;
+      
+      if (extractedRecipeData) {
+        setRecipeData(extractedRecipeData);
+      }
+
+      return { ingredients, summary: data.summary || '', recipeData: extractedRecipeData };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao processar arquivo';
+      toast.error(message);
+      return null;
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const toggleIngredient = (index: number) => {
+    setExtractedIngredients((prev) =>
+      prev.map((ing, i) =>
+        i === index ? { ...ing, selected: !ing.selected } : ing
+      )
+    );
+  };
+
+  const updateIngredient = (index: number, updates: Partial<ExtractedIngredient>) => {
+    setExtractedIngredients((prev) =>
+      prev.map((ing, i) =>
+        i === index ? { ...ing, ...updates } : ing
+      )
+    );
+  };
+
+  const removeIngredient = (index: number) => {
+    setExtractedIngredients((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const clearExtraction = () => {
+    setExtractedIngredients([]);
+    setSummary('');
+    setRecipeData(null);
+  };
+
+  const getSelectedIngredients = () => {
+    return extractedIngredients.filter((ing) => ing.selected);
+  };
+
+  return {
+    isProcessing,
+    extractedIngredients,
+    summary,
+    recipeData,
+    extractFromFile,
+    toggleIngredient,
+    updateIngredient,
+    removeIngredient,
+    clearExtraction,
+    getSelectedIngredients,
+  };
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Remove the data URL prefix if present
+      const base64 = result.includes(',') ? result.split(',')[1] : result;
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
