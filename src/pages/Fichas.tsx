@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Search, DollarSign, Calculator, Clock, Users, ChefHat, Edit, Trash2, Mic, Plus, FileText, Loader2, X, Camera } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, DollarSign, Calculator, Clock, Users, ChefHat, Edit, Trash2, Mic, Plus, FileText, Loader2 } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { Input } from '@/components/ui/input';
 import { ImageUpload } from '@/components/ImageUpload';
@@ -15,7 +15,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -26,20 +25,15 @@ import {
   MobileListBadge,
 } from '@/components/ui/mobile-list';
 import { useTechnicalSheets, TechnicalSheetWithIngredients } from '@/hooks/useTechnicalSheets';
+import { useTechnicalSheetStages } from '@/hooks/useTechnicalSheetStages';
 import { useStockItems, type StockUnit, type StockCategory } from '@/hooks/useStockItems';
 import { VoiceImportDialog, type ExtractedItem } from '@/components/VoiceImportDialog';
 import { RecipeFileImportDialog } from '@/components/RecipeFileImportDialog';
+import { StageForm, type StageFormData } from '@/components/fichas/StageForm';
+import { StageDisplay } from '@/components/fichas/StageDisplay';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import type { ExtractedIngredient, RecipeData } from '@/hooks/useIngredientImport';
-
-interface IngredienteForm {
-  id: string;
-  stockItemId: string;
-  nome: string;
-  quantidade: string;
-  unidade: string;
-}
 
 const calcularCustoTotal = (sheet: TechnicalSheetWithIngredients) => {
   if (sheet.total_cost) return sheet.total_cost;
@@ -65,23 +59,21 @@ export default function Fichas() {
   const [editingSheet, setEditingSheet] = useState<TechnicalSheetWithIngredients | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Load stages for selected sheet
+  const { stages: sheetStages, createStage, deleteStage } = useTechnicalSheetStages(selectedSheet?.id);
+
   const [formData, setFormData] = useState({
     nome: '',
     descricao: '',
     tempoPreparo: '',
     rendimento: '',
     unidadeRendimento: 'un',
-    modoPreparo: '',
     image_url: '',
     productionType: 'final' as 'insumo' | 'final',
   });
 
-  const [ingredientes, setIngredientes] = useState<IngredienteForm[]>([]);
-  const [novoIngrediente, setNovoIngrediente] = useState({
-    stockItemId: '',
-    quantidade: '',
-    unidade: 'kg',
-  });
+  // Stages for form
+  const [stages, setStages] = useState<StageFormData[]>([]);
 
   const filteredSheets = sheets.filter(sheet =>
     sheet.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -95,44 +87,11 @@ export default function Fichas() {
       tempoPreparo: '',
       rendimento: '',
       unidadeRendimento: 'un',
-      modoPreparo: '',
       image_url: '',
       productionType: 'final',
     });
-    setIngredientes([]);
-    setNovoIngrediente({ stockItemId: '', quantidade: '', unidade: 'kg' });
+    setStages([]);
     setEditingSheet(null);
-  };
-
-  const handleAddIngrediente = () => {
-    if (!novoIngrediente.stockItemId || !novoIngrediente.quantidade) {
-      toast.error('Selecione o ingrediente e informe a quantidade');
-      return;
-    }
-
-    const stockItem = stockItems.find(item => item.id === novoIngrediente.stockItemId);
-    if (!stockItem) return;
-
-    if (ingredientes.some(i => i.stockItemId === novoIngrediente.stockItemId)) {
-      toast.error('Este ingrediente já foi adicionado');
-      return;
-    }
-
-    setIngredientes([
-      ...ingredientes,
-      {
-        id: crypto.randomUUID(),
-        stockItemId: novoIngrediente.stockItemId,
-        nome: stockItem.name,
-        quantidade: novoIngrediente.quantidade,
-        unidade: novoIngrediente.unidade,
-      }
-    ]);
-    setNovoIngrediente({ stockItemId: '', quantidade: '', unidade: 'kg' });
-  };
-
-  const handleRemoveIngrediente = (id: string) => {
-    setIngredientes(ingredientes.filter(i => i.id !== id));
   };
 
   // Voice Import
@@ -293,6 +252,14 @@ export default function Fichas() {
 
   const openNewDialog = () => {
     resetForm();
+    // Add a default stage
+    setStages([{
+      id: crypto.randomUUID(),
+      name: 'Parte 1',
+      preparationMethod: '',
+      ingredients: [],
+      order_index: 0,
+    }]);
     setFormDialogOpen(true);
   };
 
@@ -304,18 +271,60 @@ export default function Fichas() {
       tempoPreparo: sheet.preparation_time?.toString() || '',
       rendimento: sheet.yield_quantity?.toString() || '',
       unidadeRendimento: sheet.yield_unit || 'un',
-      modoPreparo: sheet.preparation_method || '',
       image_url: sheet.image_url || '',
       productionType: sheet.production_type || 'final',
     });
-    const existingIngredients: IngredienteForm[] = (sheet.ingredients || []).map(ing => ({
-      id: ing.id,
-      stockItemId: ing.stock_item_id,
-      nome: ing.stock_item?.name || 'Ingrediente',
-      quantidade: ing.quantity.toString(),
-      unidade: ing.unit,
-    }));
-    setIngredientes(existingIngredients);
+    
+    // Convert existing stages and ingredients to form format
+    const stageMap = new Map<string, StageFormData>();
+    
+    // First, create stages from sheetStages
+    sheetStages.forEach((stage, index) => {
+      stageMap.set(stage.id, {
+        id: stage.id,
+        name: stage.name,
+        preparationMethod: stage.description || '',
+        ingredients: [],
+        order_index: stage.order_index,
+      });
+    });
+
+    // Add ingredients to their respective stages
+    (sheet.ingredients || []).forEach(ing => {
+      if (ing.stage_id && stageMap.has(ing.stage_id)) {
+        const stage = stageMap.get(ing.stage_id)!;
+        stage.ingredients.push({
+          id: ing.id,
+          stockItemId: ing.stock_item_id,
+          nome: ing.stock_item?.name || 'Ingrediente',
+          quantidade: ing.quantity.toString(),
+          unidade: ing.unit,
+        });
+      }
+    });
+
+    // If no stages exist, create one with all ingredients
+    if (stageMap.size === 0) {
+      const defaultStage: StageFormData = {
+        id: crypto.randomUUID(),
+        name: 'Parte 1',
+        preparationMethod: sheet.preparation_method || '',
+        ingredients: (sheet.ingredients || []).map(ing => ({
+          id: ing.id,
+          stockItemId: ing.stock_item_id,
+          nome: ing.stock_item?.name || 'Ingrediente',
+          quantidade: ing.quantity.toString(),
+          unidade: ing.unit,
+        })),
+        order_index: 0,
+      };
+      setStages([defaultStage]);
+    } else {
+      // Sort stages by order_index
+      const sortedStages = Array.from(stageMap.values()).sort((a, b) => a.order_index - b.order_index);
+      setStages(sortedStages);
+    }
+    
     setDetailDialogOpen(false);
     setFormDialogOpen(true);
   };
@@ -337,16 +346,24 @@ export default function Fichas() {
       return;
     }
 
+    // Validate at least one stage has ingredients
+    const totalIngredients = stages.reduce((sum, stage) => sum + stage.ingredients.length, 0);
+    if (totalIngredients === 0) {
+      toast.error('Adicione pelo menos um ingrediente');
+      return;
+    }
+
     setIsSaving(true);
     try {
       let sheetId: string;
       
       if (editingSheet) {
+        // Update existing sheet
         await updateSheet.mutateAsync({
           id: editingSheet.id,
           name: formData.nome,
           description: formData.descricao || null,
-          preparation_method: formData.modoPreparo || null,
+          preparation_method: null, // We now use stages for preparation
           preparation_time: formData.tempoPreparo ? parseInt(formData.tempoPreparo) : null,
           yield_quantity: formData.rendimento ? parseFloat(formData.rendimento) : 1,
           yield_unit: formData.unidadeRendimento,
@@ -354,49 +371,58 @@ export default function Fichas() {
         });
         sheetId = editingSheet.id;
 
-        const existingIds = new Set(ingredientes.map(i => i.id));
-        const toRemove = (editingSheet.ingredients || []).filter(ing => !existingIds.has(ing.id));
-        for (const ing of toRemove) {
+        // Remove all existing ingredients (we'll re-add them with stages)
+        for (const ing of editingSheet.ingredients || []) {
           await removeIngredient.mutateAsync(ing.id);
         }
 
-        const newIngredients = ingredientes.filter(i => 
-          !editingSheet.ingredients?.some(existing => existing.id === i.id)
-        );
-        for (const ing of newIngredients) {
-          await addIngredient.mutateAsync({
-            technical_sheet_id: sheetId,
-            stock_item_id: ing.stockItemId,
-            quantity: parseFloat(ing.quantidade),
-            unit: ing.unidade,
-          });
+        // Remove existing stages
+        for (const stage of sheetStages) {
+          await deleteStage.mutateAsync(stage.id);
         }
       } else {
+        // Create new sheet
         const newSheet = await createSheet.mutateAsync({
           name: formData.nome,
           description: formData.descricao || null,
-          preparation_method: formData.modoPreparo || null,
+          preparation_method: null,
           preparation_time: formData.tempoPreparo ? parseInt(formData.tempoPreparo) : null,
           yield_quantity: formData.rendimento ? parseFloat(formData.rendimento) : 1,
           yield_unit: formData.unidadeRendimento,
           image_url: formData.image_url || null,
         });
         sheetId = newSheet.id;
+      }
 
-        for (const ing of ingredientes) {
+      // Create stages and ingredients
+      for (const stage of stages) {
+        // Create the stage
+        const newStage = await createStage.mutateAsync({
+          technical_sheet_id: sheetId,
+          name: stage.name,
+          description: stage.preparationMethod || null,
+          order_index: stage.order_index,
+          duration_minutes: null,
+        });
+
+        // Add ingredients to the stage
+        for (const ing of stage.ingredients) {
           await addIngredient.mutateAsync({
             technical_sheet_id: sheetId,
             stock_item_id: ing.stockItemId,
             quantity: parseFloat(ing.quantidade),
             unit: ing.unidade,
+            stage_id: newStage.id,
           });
         }
       }
       
+      toast.success(editingSheet ? 'Ficha técnica atualizada!' : 'Ficha técnica criada!');
       setFormDialogOpen(false);
       resetForm();
     } catch (error) {
       console.error('Error saving recipe:', error);
+      toast.error('Erro ao salvar ficha técnica');
     } finally {
       setIsSaving(false);
     }
@@ -612,7 +638,7 @@ export default function Fichas() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <Card className="border-primary/20 bg-primary/5">
+                  <Card className="border-primary/20 bg-primary/10">
                     <CardContent className="p-4">
                       <div className="flex items-center gap-2 mb-1">
                         <DollarSign className="h-4 w-4 text-primary" />
@@ -623,55 +649,27 @@ export default function Fichas() {
                       </p>
                     </CardContent>
                   </Card>
-                  <Card className="border-green-500/20 bg-green-500/5">
+                  <Card className="border-accent/20 bg-accent/10">
                     <CardContent className="p-4">
                       <div className="flex items-center gap-2 mb-1">
-                        <Calculator className="h-4 w-4 text-green-600" />
+                        <Calculator className="h-4 w-4 text-accent-foreground" />
                         <span className="text-sm text-muted-foreground">Custo/{selectedSheet.yield_unit}</span>
                       </div>
-                      <p className="text-xl font-bold text-green-600">
+                      <p className="text-xl font-bold text-accent-foreground">
                         R$ {calcularCustoPorcao(selectedSheet).toFixed(2)}
                       </p>
                     </CardContent>
                   </Card>
                 </div>
 
-                {selectedSheet.ingredients && selectedSheet.ingredients.length > 0 && (
-                  <div>
-                    <h4 className="font-medium mb-3">Ingredientes</h4>
-                    <div className="border rounded-lg divide-y">
-                      {selectedSheet.ingredients.map((ing) => (
-                        <div key={ing.id} className="flex justify-between items-center p-3">
-                          <span className="font-medium text-sm">{ing.stock_item?.name || 'Item removido'}</span>
-                          <div className="text-right flex items-baseline gap-3">
-                            <span className="text-base font-bold">
-                              {ing.quantity} {ing.unit}
-                            </span>
-                            {ing.total_cost && ing.total_cost > 0 && (
-                              <span className="text-xs text-muted-foreground">
-                                R$ {ing.total_cost.toFixed(2)}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                      <div className="flex justify-between items-center p-3 text-sm bg-muted/50 font-medium">
-                        <span>Total da Receita</span>
-                        <span className="text-primary font-bold">
-                          R$ {calcularCustoTotal(selectedSheet).toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                {/* Stage Display with ingredients organized by stage */}
+                <StageDisplay 
+                  stages={sheetStages} 
+                  ingredients={selectedSheet.ingredients || []} 
+                />
 
-                {(!selectedSheet.ingredients || selectedSheet.ingredients.length === 0) && (
-                  <div className="text-center py-4 text-muted-foreground border rounded-lg">
-                    <p className="text-sm">Nenhum ingrediente cadastrado.</p>
-                  </div>
-                )}
-
-                {selectedSheet.preparation_method && (
+                {/* Legacy preparation method display */}
+                {selectedSheet.preparation_method && sheetStages.length === 0 && (
                   <div>
                     <h4 className="font-medium mb-2">Modo de Preparo</h4>
                     <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
@@ -690,14 +688,14 @@ export default function Fichas() {
         setFormDialogOpen(open);
         if (!open) resetForm();
       }}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh]">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>{editingSheet ? 'Editar Ficha Técnica' : 'Nova Ficha Técnica'}</DialogTitle>
             <DialogDescription>
               {editingSheet ? 'Atualize os dados da receita' : 'Preencha os dados da receita'}
             </DialogDescription>
           </DialogHeader>
-          <ScrollArea className="max-h-[60vh] pr-4">
+          <ScrollArea className="max-h-[65vh] pr-4">
             <div className="space-y-4 py-4">
               {/* Image Upload */}
               <div className="flex items-start gap-4">
@@ -793,113 +791,12 @@ export default function Fichas() {
                 </div>
               </div>
 
-              {/* Ingredientes */}
-              <div className="space-y-3">
-                <Label>Ingredientes</Label>
-                
-                {ingredientes.length > 0 && (
-                  <div className="border rounded-lg divide-y">
-                    {ingredientes.map((ing) => (
-                      <div key={ing.id} className="flex items-center justify-between p-2 text-sm">
-                        <span className="font-medium">{ing.nome}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground">
-                            {ing.quantidade} {ing.unidade}
-                          </span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-destructive hover:text-destructive"
-                            onClick={() => handleRemoveIngrediente(ing.id)}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="grid grid-cols-12 gap-2">
-                  <div className="col-span-5">
-                    <Select
-                      value={novoIngrediente.stockItemId}
-                      onValueChange={(value) => setNovoIngrediente({ ...novoIngrediente, stockItemId: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Ingrediente" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {stockItems.length === 0 ? (
-                          <div className="py-4 text-center text-sm text-muted-foreground">
-                            Cadastre ingredientes no Estoque Central
-                          </div>
-                        ) : (
-                          stockItems.map((item) => (
-                            <SelectItem key={item.id} value={item.id}>
-                              {item.name}
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="col-span-3">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      placeholder="Qtd"
-                      value={novoIngrediente.quantidade}
-                      onChange={(e) => setNovoIngrediente({ ...novoIngrediente, quantidade: e.target.value })}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <Select
-                      value={novoIngrediente.unidade}
-                      onValueChange={(value) => setNovoIngrediente({ ...novoIngrediente, unidade: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="kg">kg</SelectItem>
-                        <SelectItem value="g">g</SelectItem>
-                        <SelectItem value="L">L</SelectItem>
-                        <SelectItem value="ml">ml</SelectItem>
-                        <SelectItem value="unidade">un</SelectItem>
-                        <SelectItem value="dz">dz</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="col-span-2">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="w-full"
-                      onClick={handleAddIngrediente}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-                {stockItems.length === 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    Os ingredientes vêm do Estoque Central. Cadastre itens lá primeiro.
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="preparo">Modo de Preparo</Label>
-                <Textarea
-                  id="preparo"
-                  value={formData.modoPreparo}
-                  onChange={(e) => setFormData({ ...formData, modoPreparo: e.target.value })}
-                  placeholder="Descreva o passo a passo..."
-                  rows={6}
-                />
-              </div>
+              {/* Stage Form - Multi-part recipe */}
+              <StageForm
+                stages={stages}
+                onStagesChange={setStages}
+                stockItems={stockItems.map(item => ({ id: item.id, name: item.name, unit: item.unit }))}
+              />
             </div>
           </ScrollArea>
           <DialogFooter>

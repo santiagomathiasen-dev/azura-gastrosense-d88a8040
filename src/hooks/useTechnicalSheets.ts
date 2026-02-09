@@ -110,10 +110,22 @@ export function useTechnicalSheets() {
   });
 
   const addIngredient = useMutation({
-    mutationFn: async (ingredient: Database['public']['Tables']['technical_sheet_ingredients']['Insert']) => {
+    mutationFn: async (ingredient: {
+      technical_sheet_id: string;
+      stock_item_id: string;
+      quantity: number;
+      unit: string;
+      stage_id?: string | null;
+    }) => {
       const { data, error } = await supabase
         .from('technical_sheet_ingredients')
-        .insert(ingredient)
+        .insert({
+          technical_sheet_id: ingredient.technical_sheet_id,
+          stock_item_id: ingredient.stock_item_id,
+          quantity: ingredient.quantity,
+          unit: ingredient.unit,
+          stage_id: ingredient.stage_id || null,
+        })
         .select()
         .single();
       if (error) throw error;
@@ -121,6 +133,7 @@ export function useTechnicalSheets() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['technical_sheets'] });
+      queryClient.invalidateQueries({ queryKey: ['technical_sheet_stages'] });
     },
   });
 
