@@ -115,6 +115,30 @@ export type Database = {
           },
         ]
       }
+      login_rate_limits: {
+        Row: {
+          attempt_count: number
+          key: string
+          locked_until: string | null
+          updated_at: string
+          window_started_at: string
+        }
+        Insert: {
+          attempt_count?: number
+          key: string
+          locked_until?: string | null
+          updated_at?: string
+          window_started_at?: string
+        }
+        Update: {
+          attempt_count?: number
+          key?: string
+          locked_until?: string | null
+          updated_at?: string
+          window_started_at?: string
+        }
+        Relationships: []
+      }
       losses: {
         Row: {
           created_at: string
@@ -1048,6 +1072,18 @@ export type Database = {
         Args: { data_owner_id: string }
         Returns: boolean
       }
+      check_collaborator_login_rate_limit: {
+        Args: {
+          p_key: string
+          p_lockout_seconds?: number
+          p_max_attempts?: number
+          p_window_seconds?: number
+        }
+        Returns: {
+          allowed: boolean
+          minutes_remaining: number
+        }[]
+      }
       get_owner_id: { Args: never; Returns: string }
       get_user_role: {
         Args: never
@@ -1059,6 +1095,16 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      record_collaborator_login_attempt: {
+        Args: {
+          p_key: string
+          p_lockout_seconds?: number
+          p_max_attempts?: number
+          p_success: boolean
+          p_window_seconds?: number
+        }
+        Returns: undefined
       }
     }
     Enums: {

@@ -12,60 +12,6 @@ type RequestBody = {
   pin: string;
 };
 
-// Simple in-memory rate limiting store
-// In production with multiple instances, use Redis/Upstash
-const loginAttempts = new Map<string, { count: number; resetTime: number }>();
-
-const RATE_LIMIT_MAX_ATTEMPTS = 5;
-const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-const LOCKOUT_DURATION_MS = 30 * 60 * 1000; // 30 minutes after max failures
-
-function checkRateLimit(key: string): { allowed: boolean; remainingAttempts: number } {
-  const now = Date.now();
-  const attempt = loginAttempts.get(key);
-
-  // Clean up old entries
-  if (attempt && now > attempt.resetTime) {
-    loginAttempts.delete(key);
-  }
-
-  const current = loginAttempts.get(key);
-  if (!current) {
-    return { allowed: true, remainingAttempts: RATE_LIMIT_MAX_ATTEMPTS };
-  }
-
-  if (current.count >= RATE_LIMIT_MAX_ATTEMPTS) {
-    return { allowed: false, remainingAttempts: 0 };
-  }
-
-  return { allowed: true, remainingAttempts: RATE_LIMIT_MAX_ATTEMPTS - current.count };
-}
-
-function recordAttempt(key: string, success: boolean): void {
-  const now = Date.now();
-  const current = loginAttempts.get(key);
-
-  if (success) {
-    // Clear on successful login
-    loginAttempts.delete(key);
-    return;
-  }
-
-  if (!current || now > current.resetTime) {
-    loginAttempts.set(key, {
-      count: 1,
-      resetTime: now + RATE_LIMIT_WINDOW_MS,
-    });
-  } else {
-    current.count += 1;
-    // Extend lockout on continued failures
-    if (current.count >= RATE_LIMIT_MAX_ATTEMPTS) {
-      current.resetTime = now + LOCKOUT_DURATION_MS;
-    }
-    loginAttempts.set(key, current);
-  }
-}
-
 async function hashPin(pin: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(pin + "azura_salt_2024");
@@ -128,19 +74,24 @@ serve(async (req) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(gestorEmail)) return badRequest("Email inválido");
     if (!/^\d{6}$/.test(pin)) return badRequest("PIN deve ter 6 dígitos");
 
-    // Rate limiting check using gestor email as key
-    const rateLimitKey = `login:${gestorEmail}`;
-    const { allowed, remainingAttempts } = checkRateLimit(rateLimitKey);
-    
-    if (!allowed) {
-      const attempt = loginAttempts.get(rateLimitKey);
-      const minutesRemaining = attempt 
-        ? Math.ceil((attempt.resetTime - Date.now()) / 60000)
-        : 15;
-      return rateLimitResponse(minutesRemaining);
-    }
-
     const admin = createClient(url, serviceRoleKey);
+
+    // Database-based distributed rate limiting
+    const rateLimitKey = `login:${gestorEmail}`;
+    const { data: rateLimitResult, error: rateLimitError } = await admin.rpc(
+      "check_collaborator_login_rate_limit",
+      { p_key: rateLimitKey }
+    );
+    
+    if (rateLimitError) {
+      console.error("Rate limit check error:", rateLimitError);
+      // On error, allow the request but log it (fail open for availability)
+    } else if (rateLimitResult && rateLimitResult.length > 0) {
+      const { allowed, minutes_remaining } = rateLimitResult[0];
+      if (!allowed) {
+        return rateLimitResponse(minutes_remaining || 15);
+      }
+    }
 
     // 1) Find gestor by email using admin API
     const { data: usersData, error: usersError } = await admin.auth.admin.listUsers({
@@ -161,7 +112,10 @@ serve(async (req) => {
 
     if (!gestorUser?.id) {
       // Record failed attempt but don't reveal if email exists
-      recordAttempt(rateLimitKey, false);
+      await admin.rpc("record_collaborator_login_attempt", { 
+        p_key: rateLimitKey, 
+        p_success: false 
+      });
       return new Response(JSON.stringify({ error: "Email ou PIN incorretos" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -181,7 +135,10 @@ serve(async (req) => {
 
     if (collabError || !collaborator) {
       // Record failed attempt
-      recordAttempt(rateLimitKey, false);
+      await admin.rpc("record_collaborator_login_attempt", { 
+        p_key: rateLimitKey, 
+        p_success: false 
+      });
       return new Response(JSON.stringify({ error: "Email ou PIN incorretos" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -189,7 +146,10 @@ serve(async (req) => {
     }
 
     // Successful login - clear rate limit counter
-    recordAttempt(rateLimitKey, true);
+    await admin.rpc("record_collaborator_login_attempt", { 
+      p_key: rateLimitKey, 
+      p_success: true 
+    });
 
     // 3) If collaborator has an auth_user_id, sign them in
     if (collaborator.auth_user_id) {
