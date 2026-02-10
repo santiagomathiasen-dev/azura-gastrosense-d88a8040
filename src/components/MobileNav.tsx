@@ -12,9 +12,11 @@ import {
   Users,
   BarChart3
 } from 'lucide-react';
+import { Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { useCollaboratorContext } from '@/contexts/CollaboratorContext';
+import { useUserRole } from '@/hooks/useUserRole';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 const navItems = [
@@ -33,6 +35,7 @@ const navItems = [
 export function MobileNav() {
   const { logout } = useAuth();
   const { isCollaboratorMode, clearCollaboratorSession, hasAccess } = useCollaboratorContext();
+  const { isAdmin } = useUserRole();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -44,14 +47,16 @@ export function MobileNav() {
     navigate('/auth');
   };
 
-  // Filter nav items based on permissions
-  const visibleNavItems = navItems.filter(item => {
-    if (item.gestorOnly && isCollaboratorMode) return false;
-    if (isCollaboratorMode && item.permission) {
-      return hasAccess(item.to);
-    }
-    return true;
-  });
+  const visibleNavItems = [
+    ...navItems.filter(item => {
+      if (item.gestorOnly && isCollaboratorMode) return false;
+      if (isCollaboratorMode && item.permission) {
+        return hasAccess(item.to);
+      }
+      return true;
+    }),
+    ...(isAdmin ? [{ to: '/gestores', icon: Shield, label: 'Gestores', permission: null }] : []),
+  ];
 
   return (
     <nav className="md:hidden fixed left-0 top-14 bottom-0 w-16 bg-card border-r border-border z-50 flex flex-col">
