@@ -19,6 +19,7 @@ import EstoqueFinalizados from "@/pages/EstoqueFinalizados";
 import EstoqueInsumosProduzidos from "@/pages/EstoqueInsumosProduzidos";
 import ProdutosVenda from "@/pages/ProdutosVenda";
 import Colaboradores from "@/pages/Colaboradores";
+import Gestores from "@/pages/Gestores";
 import Relatorios from "@/pages/Relatorios";
 import NotFound from "@/pages/NotFound";
 
@@ -48,6 +49,7 @@ const App = () => (
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/colaboradores" element={<Colaboradores />} />
+                <Route path="/gestores" element={<Gestores />} />
                 <Route path="/estoque" element={<Estoque />} />
                 <Route path="/estoque-producao" element={<EstoqueProducao />} />
                 <Route path="/fichas" element={<Fichas />} />

@@ -17,10 +17,12 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useCollaboratorContext } from '@/contexts/CollaboratorContext';
+import { useUserRole } from '@/hooks/useUserRole';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Shield } from 'lucide-react';
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Painel', permission: 'can_access_dashboard' },
@@ -39,6 +41,7 @@ const navItems = [
 export function Sidebar() {
   const { logout, user } = useAuth();
   const { collaborator, isCollaboratorMode, clearCollaboratorSession, hasAccess } = useCollaboratorContext();
+  const { isAdmin } = useUserRole();
   const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
 
@@ -51,16 +54,18 @@ export function Sidebar() {
     navigate('/auth');
   };
 
-  // Filter nav items based on permissions
-  const visibleNavItems = navItems.filter(item => {
-    // Gestor-only items (like Colaboradores) are hidden for collaborators
-    if (item.gestorOnly && isCollaboratorMode) return false;
-    // Check permission for collaborators
-    if (isCollaboratorMode && item.permission) {
-      return hasAccess(item.to);
-    }
-    return true;
-  });
+  // Build visible nav items
+  const visibleNavItems = [
+    ...navItems.filter(item => {
+      if (item.gestorOnly && isCollaboratorMode) return false;
+      if (isCollaboratorMode && item.permission) {
+        return hasAccess(item.to);
+      }
+      return true;
+    }),
+    // Admin-only: Gestores
+    ...(isAdmin ? [{ to: '/gestores', icon: Shield, label: 'Gestores', permission: null }] : []),
+  ];
   return (
     <aside 
       className={cn(
