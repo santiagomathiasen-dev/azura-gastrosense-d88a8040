@@ -1,9 +1,12 @@
-import { useState, useMemo } from 'react';
-import { Factory, Search, Calendar as CalendarIcon, Play, CheckCircle2, Clock, Eye, ChevronLeft, ChevronRight, XCircle, ListChecks } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { Factory, Search, Calendar as CalendarIcon, Play, CheckCircle2, Clock, Eye, ChevronLeft, ChevronRight, XCircle, ListChecks, Check, ChevronDown, Loader2 } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -20,6 +23,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { toast } from 'sonner';
 import {
   MobileList,
@@ -30,6 +38,8 @@ import {
 } from '@/components/ui/mobile-list';
 import { useProductions, ProductionWithSheet, STATUS_LABELS, ProductionStatus } from '@/hooks/useProductions';
 import { useTechnicalSheets } from '@/hooks/useTechnicalSheets';
+import { useTechnicalSheetStages, StageWithSteps } from '@/hooks/useTechnicalSheetStages';
+import { useProductionStepExecution } from '@/hooks/useProductionStepExecution';
 import { ProductionExecutionDialog } from '@/components/production/ProductionExecutionDialog';
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, addDays, addWeeks, addMonths, addYears, subDays, subWeeks, subMonths, subYears, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -624,7 +634,7 @@ export default function Producao() {
   );
 }
 
-// Inline preview component using real data
+// Inline preview component with full technical sheet, stages, steps and completion checkboxes
 function ProductionPreviewSheet({
   open,
   onOpenChange,
@@ -643,21 +653,46 @@ function ProductionPreviewSheet({
   isUpdating: boolean;
 }) {
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
+
+  const { stages, isLoading: stagesLoading } = useTechnicalSheetStages(
+    producao?.technical_sheet?.id
+  );
+
+  const {
+    stepExecutions,
+    isLoading: executionsLoading,
+    initializeStepExecutions,
+    toggleStepCompletion,
+    isStepCompleted,
+    getCompletionPercentage,
+  } = useProductionStepExecution(producao?.id);
+
+  // Initialize executions & expand all stages when dialog opens
+  useEffect(() => {
+    if (open && producao && stages.length > 0) {
+      const allStepIds = stages.flatMap(stage => stage.steps.map(step => step.id));
+      if (allStepIds.length > 0 && (producao.status === 'in_progress' || producao.status === 'completed')) {
+        initializeStepExecutions.mutate({ productionId: producao.id, stepIds: allStepIds });
+      }
+      setExpandedStages(new Set(stages.map(s => s.id)));
+    }
+  }, [open, producao?.id, stages.length]);
 
   if (!producao || !producao.technical_sheet) return null;
 
   const sheet = producao.technical_sheet;
   const multiplier = Number(producao.planned_quantity) / Number(sheet.yield_quantity);
   const canEditDate = producao.status === 'planned' || producao.status === 'in_progress';
+  const canMarkSteps = producao.status === 'in_progress';
 
-  // Parse scheduled date as local date
   const [year, month, day] = producao.scheduled_date.split('-').map(Number);
   const scheduledDate = new Date(year, month - 1, day);
   const today = startOfDay(new Date());
-  
-  // Check if production is overdue (planned but past scheduled date)
   const isOverdue = producao.status === 'planned' && scheduledDate < today;
+
+  const totalSteps = stages.reduce((sum, stage) => sum + stage.steps.length, 0);
+  const completionPercentage = getCompletionPercentage(totalSteps);
 
   const handleDateSelect = async (date: Date | undefined) => {
     if (date) {
@@ -669,65 +704,73 @@ function ProductionPreviewSheet({
     }
   };
 
+  const toggleStage = (stageId: string) => {
+    const next = new Set(expandedStages);
+    if (next.has(stageId)) next.delete(stageId);
+    else next.add(stageId);
+    setExpandedStages(next);
+  };
+
+  const handleStepToggle = async (stepId: string) => {
+    if (!canMarkSteps) return;
+    const currentlyCompleted = isStepCompleted(stepId);
+    await toggleStepCompletion.mutateAsync({ stepId, completed: !currentlyCompleted });
+  };
+
+  const getStageCompletionCount = (stage: StageWithSteps): [number, number] => {
+    const completed = stage.steps.filter(step => isStepCompleted(step.id)).length;
+    return [completed, stage.steps.length];
+  };
+
+  // Get ingredients for a specific stage
+  const getStageIngredients = (stageId: string) => {
+    return sheet.ingredients.filter((ing: any) => ing.stage_id === stageId);
+  };
+
+  // Get ingredients without a stage
+  const unstagedIngredients = sheet.ingredients.filter((ing: any) => !ing.stage_id);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>{producao.name}</DialogTitle>
+          <DialogTitle className="text-xl">{producao.name}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="space-y-4 py-2 flex-1 overflow-y-auto">
+          {/* Summary Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
             <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
               <p className="text-muted-foreground text-xs">Planejado</p>
-              <p className="font-bold text-lg text-primary">{producao.planned_quantity}</p>
+              <p className="font-bold text-lg text-primary">{producao.planned_quantity} {sheet.yield_unit}</p>
             </div>
             {producao.status === 'completed' && producao.actual_quantity !== null && (
-              <div className="p-3 rounded-lg bg-success/10 border border-success/20">
+              <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
                 <p className="text-muted-foreground text-xs">Produzido</p>
-                <p className="font-bold text-lg text-success">{producao.actual_quantity}</p>
+                <p className="font-bold text-lg text-green-600">{producao.actual_quantity} {sheet.yield_unit}</p>
               </div>
             )}
             <div className={cn(
               "p-3 rounded-lg",
               isOverdue ? "bg-destructive/10 border border-destructive/30" : "bg-muted"
             )}>
-              <p className={cn(
-                "text-xs",
-                isOverdue ? "text-destructive" : "text-muted-foreground"
-              )}>Data {isOverdue && "(Atrasada)"}</p>
+              <p className={cn("text-xs", isOverdue ? "text-destructive" : "text-muted-foreground")}>
+                Data {isOverdue && "(Atrasada)"}
+              </p>
               {canEditDate ? (
                 <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                   <PopoverTrigger asChild>
-                    <button
-                      className={cn(
-                        "font-medium flex items-center gap-1 hover:opacity-80 transition-opacity",
-                        isOverdue ? "text-destructive" : ""
-                      )}
-                      disabled={isUpdating}
-                    >
+                    <button className={cn("font-medium flex items-center gap-1 hover:opacity-80", isOverdue ? "text-destructive" : "")} disabled={isUpdating}>
                       {format(scheduledDate, "dd/MM/yy", { locale: ptBR })}
-                      <CalendarIcon className={cn(
-                        "h-3 w-3",
-                        isOverdue ? "text-destructive/70" : "text-muted-foreground"
-                      )} />
+                      <CalendarIcon className={cn("h-3 w-3", isOverdue ? "text-destructive/70" : "text-muted-foreground")} />
                     </button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={scheduledDate}
-                      onSelect={handleDateSelect}
-                      initialFocus
-                      className="pointer-events-auto"
-                      locale={ptBR}
-                    />
+                    <Calendar mode="single" selected={scheduledDate} onSelect={handleDateSelect} initialFocus className="pointer-events-auto" locale={ptBR} />
                   </PopoverContent>
                 </Popover>
               ) : (
-                <p className="font-medium">
-                  {format(scheduledDate, "dd/MM/yy", { locale: ptBR })}
-                </p>
+                <p className="font-medium">{format(scheduledDate, "dd/MM/yy", { locale: ptBR })}</p>
               )}
             </div>
             <div className="p-3 rounded-lg bg-muted">
@@ -736,19 +779,144 @@ function ProductionPreviewSheet({
             </div>
           </div>
 
-          <div>
-            <h4 className="font-medium mb-2 text-sm">Ingredientes Necessários</h4>
-            <div className="rounded-lg border divide-y text-sm">
-              {sheet.ingredients.map((ing, idx) => (
-                <div key={idx} className="flex justify-between items-center p-2.5">
-                  <span>{ing.stock_item?.name || 'Item'}</span>
-                  <span className="font-medium text-primary">
-                    {(Number(ing.quantity) * multiplier).toFixed(2)} {ing.unit}
-                  </span>
-                </div>
-              ))}
+          {/* Progress Bar (only for in_progress) */}
+          {canMarkSteps && totalSteps > 0 && (
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Progresso</span>
+                <span className="font-medium">{completionPercentage}%</span>
+              </div>
+              <Progress value={completionPercentage} className="h-2" />
             </div>
-          </div>
+          )}
+
+          {/* Stages with ingredients + steps */}
+          {stagesLoading || executionsLoading ? (
+            <div className="flex justify-center py-6">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : stages.length === 0 ? (
+            /* No stages — show flat ingredient list */
+            <div>
+              <h4 className="font-medium mb-2 text-sm">Ingredientes Necessários</h4>
+              <div className="rounded-lg border divide-y text-sm">
+                {sheet.ingredients.map((ing: any, idx: number) => (
+                  <div key={idx} className="flex justify-between items-center p-2.5">
+                    <span>{ing.stock_item?.name || 'Item'}</span>
+                    <span className="font-medium text-primary">
+                      {(Number(ing.quantity) * multiplier).toFixed(2)} {ing.unit}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Unstaged ingredients */}
+              {unstagedIngredients.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-2 text-sm">Ingredientes Gerais</h4>
+                  <div className="rounded-lg border divide-y text-sm">
+                    {unstagedIngredients.map((ing: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-center p-2.5">
+                        <span>{ing.stock_item?.name || 'Item'}</span>
+                        <span className="font-medium text-primary">
+                          {(Number(ing.quantity) * multiplier).toFixed(2)} {ing.unit}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {stages.map((stage, stageIndex) => {
+                const [completed, total] = getStageCompletionCount(stage);
+                const isStageComplete = completed === total && total > 0;
+                const isExpanded = expandedStages.has(stage.id);
+                const stageIngredients = getStageIngredients(stage.id);
+
+                return (
+                  <Collapsible key={stage.id} open={isExpanded} onOpenChange={() => toggleStage(stage.id)}>
+                    <CollapsibleTrigger asChild>
+                      <div className={cn(
+                        "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors hover:bg-muted/50",
+                        isStageComplete && "border-green-500/30 bg-green-500/5"
+                      )}>
+                        {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-sm">Etapa {stageIndex + 1}: {stage.name}</span>
+                            {isStageComplete && <Check className="h-4 w-4 text-green-500" />}
+                          </div>
+                          {stage.description && <p className="text-xs text-muted-foreground truncate">{stage.description}</p>}
+                        </div>
+                        {total > 0 && (
+                          <Badge variant={isStageComplete ? 'default' : 'secondary'} className="shrink-0 text-xs">
+                            {completed}/{total}
+                          </Badge>
+                        )}
+                        {stage.duration_minutes && (
+                          <span className="text-xs text-muted-foreground flex items-center gap-1 shrink-0">
+                            <Clock className="h-3 w-3" />{stage.duration_minutes}min
+                          </span>
+                        )}
+                      </div>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="ml-7 mt-2 space-y-2">
+                        {/* Stage ingredients */}
+                        {stageIngredients.length > 0 && (
+                          <div className="rounded-lg border divide-y text-sm bg-muted/30">
+                            <div className="p-2 text-xs font-medium text-muted-foreground">Ingredientes desta etapa</div>
+                            {stageIngredients.map((ing: any, idx: number) => (
+                              <div key={idx} className="flex justify-between items-center p-2.5">
+                                <span className="text-sm">{ing.stock_item?.name || 'Item'}</span>
+                                <span className="font-medium text-primary text-sm">
+                                  {(Number(ing.quantity) * multiplier).toFixed(2)} {ing.unit}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Stage steps with checkboxes */}
+                        {stage.steps.map((step, stepIndex) => {
+                          const stepCompleted = isStepCompleted(step.id);
+                          return (
+                            <div
+                              key={step.id}
+                              className={cn(
+                                "flex items-start gap-3 p-3 rounded-lg border transition-all",
+                                stepCompleted ? "bg-green-500/5 border-green-500/20" : "bg-card"
+                              )}
+                            >
+                              <Checkbox
+                                checked={stepCompleted}
+                                onCheckedChange={() => handleStepToggle(step.id)}
+                                disabled={!canMarkSteps}
+                                className="mt-0.5"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className={cn("text-sm", stepCompleted && "line-through text-muted-foreground")}>
+                                  <span className="font-medium">{stepIndex + 1}.</span> {step.description}
+                                </p>
+                                {step.notes && <p className="text-xs text-muted-foreground mt-1">{step.notes}</p>}
+                              </div>
+                              {step.duration_minutes && (
+                                <span className="text-xs text-muted-foreground flex items-center gap-1 shrink-0">
+                                  <Clock className="h-3 w-3" />{step.duration_minutes}min
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                );
+              })}
+            </div>
+          )}
 
           {producao.notes && (
             <div>
@@ -759,19 +927,15 @@ function ProductionPreviewSheet({
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Fechar
-          </Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
           {producao.status === 'planned' && (
             <Button onClick={onStartProduction} className="gap-2">
-              <Play className="h-4 w-4" />
-              Iniciar
+              <Play className="h-4 w-4" />Iniciar
             </Button>
           )}
           {producao.status === 'in_progress' && (
-            <Button onClick={onComplete} className="gap-2">
-              <CheckCircle2 className="h-4 w-4" />
-              Concluir
+            <Button onClick={onComplete} className="gap-2" disabled={completionPercentage < 100 && totalSteps > 0}>
+              <CheckCircle2 className="h-4 w-4" />Concluir
             </Button>
           )}
         </DialogFooter>

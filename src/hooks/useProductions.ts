@@ -66,6 +66,7 @@ export function useProductions() {
               stock_item_id,
               quantity,
               unit,
+              stage_id,
               stock_item:stock_items(name)
             )
           )
