@@ -12,6 +12,7 @@ export interface FinishedProductionStock {
   unit: string;
   notes: string | null;
   image_url?: string | null;
+  praca?: string | null;
   created_at: string;
   updated_at: string;
   technical_sheet?: {
