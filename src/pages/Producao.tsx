@@ -918,6 +918,16 @@ function ProductionPreviewSheet({
             </div>
           )}
 
+          {/* Preparation Method */}
+          {sheet.preparation_method && (
+            <div>
+              <h4 className="font-medium mb-2 text-sm">Modo de Preparo</h4>
+              <p className="text-base leading-relaxed p-4 rounded-lg bg-muted/50 whitespace-pre-wrap">
+                {sheet.preparation_method}
+              </p>
+            </div>
+          )}
+
           {producao.notes && (
             <div>
               <h4 className="font-medium mb-1 text-sm">Observações</h4>
