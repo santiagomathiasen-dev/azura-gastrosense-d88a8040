@@ -21,6 +21,7 @@ import ProdutosVenda from "@/pages/ProdutosVenda";
 import Colaboradores from "@/pages/Colaboradores";
 import Gestores from "@/pages/Gestores";
 import Relatorios from "@/pages/Relatorios";
+import Perdas from "@/pages/Perdas";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -58,6 +59,7 @@ const App = () => (
                 <Route path="/estoque-finalizados" element={<EstoqueFinalizados />} />
                 <Route path="/estoque-insumos-produzidos" element={<EstoqueInsumosProduzidos />} />
                 <Route path="/produtos-venda" element={<ProdutosVenda />} />
+                <Route path="/perdas" element={<Perdas />} />
                 <Route path="/relatorios" element={<Relatorios />} />
               </Route>
               
