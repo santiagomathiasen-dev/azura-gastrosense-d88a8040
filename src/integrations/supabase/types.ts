@@ -321,6 +321,7 @@ export type Database = {
           notes: string | null
           period_type: Database["public"]["Enums"]["production_period"]
           planned_quantity: number
+          praca: Database["public"]["Enums"]["production_praca"] | null
           scheduled_date: string
           scheduled_end_date: string | null
           status: Database["public"]["Enums"]["production_status"]
@@ -337,6 +338,7 @@ export type Database = {
           notes?: string | null
           period_type?: Database["public"]["Enums"]["production_period"]
           planned_quantity?: number
+          praca?: Database["public"]["Enums"]["production_praca"] | null
           scheduled_date: string
           scheduled_end_date?: string | null
           status?: Database["public"]["Enums"]["production_status"]
@@ -353,6 +355,7 @@ export type Database = {
           notes?: string | null
           period_type?: Database["public"]["Enums"]["production_period"]
           planned_quantity?: number
+          praca?: Database["public"]["Enums"]["production_praca"] | null
           scheduled_date?: string
           scheduled_end_date?: string | null
           status?: Database["public"]["Enums"]["production_status"]
@@ -1113,6 +1116,12 @@ export type Database = {
       movement_source: "manual" | "production" | "audio" | "image"
       movement_type: "entry" | "exit" | "adjustment"
       production_period: "day" | "week" | "month" | "year" | "custom"
+      production_praca:
+        | "gelateria"
+        | "confeitaria"
+        | "padaria"
+        | "praca_quente"
+        | "bar"
       production_status: "planned" | "in_progress" | "completed" | "cancelled"
       production_type: "insumo" | "final"
       purchase_status: "pending" | "ordered" | "delivered" | "cancelled"
@@ -1258,6 +1267,13 @@ export const Constants = {
       movement_source: ["manual", "production", "audio", "image"],
       movement_type: ["entry", "exit", "adjustment"],
       production_period: ["day", "week", "month", "year", "custom"],
+      production_praca: [
+        "gelateria",
+        "confeitaria",
+        "padaria",
+        "praca_quente",
+        "bar",
+      ],
       production_status: ["planned", "in_progress", "completed", "cancelled"],
       production_type: ["insumo", "final"],
       purchase_status: ["pending", "ordered", "delivered", "cancelled"],
