@@ -53,6 +53,15 @@ import {
 import { cn } from '@/lib/utils';
 
 type PeriodType = 'day' | 'week' | 'month' | 'year';
+type PracaType = 'all' | 'gelateria' | 'confeitaria' | 'padaria' | 'praca_quente' | 'bar' | 'sem_praca';
+
+const PRACAS: { value: string; label: string }[] = [
+  { value: 'gelateria', label: 'Gelateria' },
+  { value: 'confeitaria', label: 'Confeitaria' },
+  { value: 'padaria', label: 'Padaria' },
+  { value: 'praca_quente', label: 'Praça Quente' },
+  { value: 'bar', label: 'Bar' },
+];
 
 const statusConfig: Record<ProductionStatus, { label: string; icon: typeof CalendarIcon; variant: 'default' | 'warning' | 'success' | 'destructive' }> = {
   planned: { label: 'Planejada', icon: CalendarIcon, variant: 'default' },
@@ -73,6 +82,7 @@ export default function Producao() {
   const [executionDialogOpen, setExecutionDialogOpen] = useState(false);
   const [actualQuantity, setActualQuantity] = useState('');
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [pracaFilter, setPracaFilter] = useState<PracaType>('all');
   
   // Period filter state
   const [periodType, setPeriodType] = useState<PeriodType>('week');
@@ -83,6 +93,7 @@ export default function Producao() {
     name: '',
     plannedQuantity: '',
     scheduledDate: '',
+    praca: '' as string,
   });
 
   // Calculate period boundaries
@@ -142,14 +153,16 @@ export default function Producao() {
   // Filter productions by period and search
   const filteredProducoes = useMemo(() => {
     return productions.filter(prod => {
-      // Parse date as local date to avoid timezone issues
       const [year, month, day] = prod.scheduled_date.split('-').map(Number);
       const prodDate = new Date(year, month - 1, day);
       const inPeriod = isWithinInterval(prodDate, { start: periodBoundaries.start, end: periodBoundaries.end });
       const matchesSearch = prod.name.toLowerCase().includes(search.toLowerCase());
-      return inPeriod && matchesSearch;
+      const matchesPraca = pracaFilter === 'all' 
+        || (pracaFilter === 'sem_praca' && !prod.praca)
+        || prod.praca === pracaFilter;
+      return inPeriod && matchesSearch && matchesPraca;
     });
-  }, [productions, periodBoundaries, search]);
+  }, [productions, periodBoundaries, search, pracaFilter]);
 
   const producoesPorStatus = {
     planned: filteredProducoes.filter(p => p.status === 'planned'),
@@ -159,7 +172,7 @@ export default function Producao() {
   };
 
   const openNewDialog = () => {
-    setFormData({ technicalSheetId: '', name: '', plannedQuantity: '', scheduledDate: '' });
+    setFormData({ technicalSheetId: '', name: '', plannedQuantity: '', scheduledDate: '', praca: '' });
     setDialogOpen(true);
   };
 
@@ -177,7 +190,8 @@ export default function Producao() {
       name,
       planned_quantity: parseFloat(formData.plannedQuantity),
       scheduled_date: formData.scheduledDate,
-    });
+      ...(formData.praca ? { praca: formData.praca } : {}),
+    } as any);
     
     setDialogOpen(false);
   };
@@ -298,12 +312,17 @@ export default function Producao() {
           </div>
         }
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <MobileListTitle>{producao.name}</MobileListTitle>
           <MobileListBadge variant={config.variant}>
             <StatusIcon className="h-3 w-3 mr-1" />
             {config.label}
           </MobileListBadge>
+          {producao.praca && (
+            <Badge variant="outline" className="text-xs">
+              {PRACAS.find(p => p.value === producao.praca)?.label || producao.praca}
+            </Badge>
+          )}
         </div>
 
         <MobileListDetails>
@@ -387,6 +406,19 @@ export default function Producao() {
             <ChevronRight className="h-3 w-3" />
           </Button>
         </div>
+
+        <Select value={pracaFilter} onValueChange={(v) => setPracaFilter(v as PracaType)}>
+          <SelectTrigger className="w-[120px] h-8 text-xs">
+            <SelectValue placeholder="Praça" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all" className="text-xs">Todas</SelectItem>
+            {PRACAS.map(p => (
+              <SelectItem key={p.value} value={p.value} className="text-xs">{p.label}</SelectItem>
+            ))}
+            <SelectItem value="sem_praca" className="text-xs">Sem praça</SelectItem>
+          </SelectContent>
+        </Select>
         
         <div className="relative flex-1 min-w-[120px]">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
@@ -529,6 +561,19 @@ export default function Producao() {
                   onChange={(e) => setFormData({ ...formData, scheduledDate: e.target.value })}
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Praça</Label>
+              <Select value={formData.praca} onValueChange={(v) => setFormData({ ...formData, praca: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a praça (opcional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRACAS.map(p => (
+                    <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>
