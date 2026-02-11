@@ -14,7 +14,7 @@ import { useSaleProducts, SaleProduct, ComponentInput } from '@/hooks/useSalePro
 import { useFinishedProductionsStock } from '@/hooks/useFinishedProductionsStock';
 import { useStockItems } from '@/hooks/useStockItems';
 import { useTechnicalSheets } from '@/hooks/useTechnicalSheets';
-import { useUserRole } from '@/hooks/useUserRole';
+
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { VoiceImportDialog, type ExtractedItem } from '@/components/VoiceImportDialog';
 import { AIImportDialog } from '@/components/AIImportDialog';
@@ -28,7 +28,7 @@ export default function ProdutosVenda() {
   const { finishedStock } = useFinishedProductionsStock();
   const { items: stockItems } = useStockItems();
   const { sheets: technicalSheets } = useTechnicalSheets();
-  const { isAdmin } = useUserRole();
+  
   
   const [search, setSearch] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -393,9 +393,9 @@ export default function ProdutosVenda() {
               <CardContent className="flex flex-col items-center justify-center py-8">
                 <ShoppingBag className="h-10 w-10 text-muted-foreground mb-3" />
                 <h3 className="text-base font-semibold mb-1">Nenhum produto cadastrado</h3>
-                <p className="text-muted-foreground text-center text-sm max-w-md">
-                  {isAdmin ? 'Vá para a aba "Cadastro" para criar produtos.' : 'Aguarde o administrador cadastrar produtos.'}
-                </p>
+                 <p className="text-muted-foreground text-center text-sm max-w-md">
+                   Vá para a aba "Cadastro" para criar produtos.
+                 </p>
               </CardContent>
             </Card>
           ) : (
@@ -528,9 +528,8 @@ export default function ProdutosVenda() {
                         </Button>
                       </div>
 
-                      {/* Admin-only actions */}
-                      {isAdmin && (
-                        <div className="flex gap-2 pt-2 mt-2 border-t">
+                      {/* Edit/Delete actions */}
+                      <div className="flex gap-2 pt-2 mt-2 border-t">
                           <Button
                             variant="outline"
                             size="sm"
@@ -565,7 +564,6 @@ export default function ProdutosVenda() {
                             </AlertDialogContent>
                           </AlertDialog>
                         </div>
-                      )}
                     </CardContent>
                   </Card>
                 );
@@ -574,9 +572,8 @@ export default function ProdutosVenda() {
           )}
         </TabsContent>
 
-        {/* Register Tab - For admins to create products */}
+        {/* Register Tab - For all users to create products */}
         <TabsContent value="register" className="space-y-4">
-          {isAdmin ? (
             <>
               {/* Action Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-2xl mx-auto">
@@ -667,17 +664,6 @@ export default function ProdutosVenda() {
                 ))}
               </div>
             </>
-          ) : (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-8">
-                <ShoppingBag className="h-10 w-10 text-muted-foreground mb-3" />
-                <h3 className="text-base font-semibold mb-1">Acesso Restrito</h3>
-                <p className="text-muted-foreground text-center text-sm">
-                  Apenas administradores podem cadastrar produtos.
-                </p>
-              </CardContent>
-            </Card>
-          )}
         </TabsContent>
       </Tabs>
 
