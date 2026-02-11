@@ -77,6 +77,7 @@ export type Database = {
           id: string
           image_url: string | null
           notes: string | null
+          praca: string | null
           quantity: number
           technical_sheet_id: string
           unit: string
@@ -88,6 +89,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           notes?: string | null
+          praca?: string | null
           quantity?: number
           technical_sheet_id: string
           unit?: string
@@ -99,6 +101,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           notes?: string | null
+          praca?: string | null
           quantity?: number
           technical_sheet_id?: string
           unit?: string

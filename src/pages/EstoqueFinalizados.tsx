@@ -16,11 +16,22 @@ import { useTechnicalSheets } from '@/hooks/useTechnicalSheets';
 import { ImageUpload } from '@/components/ImageUpload';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
+type PracaType = 'all' | 'gelateria' | 'confeitaria' | 'padaria' | 'praca_quente' | 'bar' | 'sem_praca';
+
+const PRACAS: { value: string; label: string }[] = [
+  { value: 'gelateria', label: 'Gelateria' },
+  { value: 'confeitaria', label: 'Confeitaria' },
+  { value: 'padaria', label: 'Padaria' },
+  { value: 'praca_quente', label: 'Praça Quente' },
+  { value: 'bar', label: 'Bar' },
+];
+
 export default function EstoqueFinalizados() {
   const { finishedStock, isLoading, addFinishedProduction, updateFinishedProduction, deleteFinishedProduction, registerLoss } = useFinishedProductionsStock();
   const { sheets: technicalSheets } = useTechnicalSheets();
   
   const [search, setSearch] = useState('');
+  const [pracaFilter, setPracaFilter] = useState<PracaType>('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<FinishedProductionStock | null>(null);
   const [lossDialogOpen, setLossDialogOpen] = useState(false);
@@ -39,9 +50,13 @@ export default function EstoqueFinalizados() {
     image_url: '',
   });
 
-  const filteredStock = finishedStock.filter(item =>
-    item.technical_sheet?.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredStock = finishedStock.filter(item => {
+    const matchesSearch = item.technical_sheet?.name.toLowerCase().includes(search.toLowerCase());
+    const matchesPraca = pracaFilter === 'all'
+      || (pracaFilter === 'sem_praca' && !(item as any).praca)
+      || (item as any).praca === pracaFilter;
+    return matchesSearch && matchesPraca;
+  });
 
   const handleAdd = () => {
     const sheet = technicalSheets.find(s => s.id === formData.technical_sheet_id);
@@ -107,7 +122,6 @@ export default function EstoqueFinalizados() {
         description="Produções prontas para venda"
       />
 
-      {/* Actions Bar - Compact */}
       <div className="flex gap-2 mb-2">
         <div className="relative flex-1">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
@@ -118,6 +132,19 @@ export default function EstoqueFinalizados() {
             className="pl-7 h-8 text-xs"
           />
         </div>
+
+        <Select value={pracaFilter} onValueChange={(v) => setPracaFilter(v as PracaType)}>
+          <SelectTrigger className="w-[120px] h-8 text-xs">
+            <SelectValue placeholder="Praça" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all" className="text-xs">Todas</SelectItem>
+            {PRACAS.map(p => (
+              <SelectItem key={p.value} value={p.value} className="text-xs">{p.label}</SelectItem>
+            ))}
+            <SelectItem value="sem_praca" className="text-xs">Sem praça</SelectItem>
+          </SelectContent>
+        </Select>
 
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
@@ -399,10 +426,15 @@ export default function EstoqueFinalizados() {
                       <h3 className="font-medium text-sm truncate">
                         {item.technical_sheet?.name || 'Desconhecido'}
                       </h3>
-                      <div className="flex items-center gap-2 mt-1">
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
                         <Badge variant={Number(item.quantity) > 0 ? 'default' : 'destructive'} className="text-xs">
                           {formatQuantity(Number(item.quantity))} {item.unit}
                         </Badge>
+                        {(item as any).praca && (
+                          <Badge variant="outline" className="text-xs">
+                            {PRACAS.find(p => p.value === (item as any).praca)?.label || (item as any).praca}
+                          </Badge>
+                        )}
                       </div>
                     </div>
                     

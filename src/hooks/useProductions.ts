@@ -221,13 +221,21 @@ export function useProductions() {
 
     const technicalSheetId = production.technical_sheet.id;
     const unit = production.technical_sheet.yield_unit;
+    const praca = production.praca || null;
 
-    // Check if entry already exists for this technical sheet
-    const { data: existing } = await supabase
+    // Check if entry already exists for this technical sheet + praca combo
+    let query = supabase
       .from('finished_productions_stock')
       .select('id, quantity')
-      .eq('technical_sheet_id', technicalSheetId)
-      .single();
+      .eq('technical_sheet_id', technicalSheetId);
+    
+    if (praca) {
+      query = query.eq('praca', praca);
+    } else {
+      query = query.is('praca', null);
+    }
+
+    const { data: existing } = await query.single();
 
     if (existing) {
       // Update existing entry
@@ -239,15 +247,18 @@ export function useProductions() {
         .eq('id', existing.id);
     } else {
       // Create new entry
+      const insertData: any = {
+        user_id: ownerId,
+        technical_sheet_id: technicalSheetId,
+        quantity: actualQuantity,
+        unit: unit,
+        notes: `Produção: ${production.name}`,
+      };
+      if (praca) insertData.praca = praca;
+
       await supabase
         .from('finished_productions_stock')
-        .insert({
-          user_id: ownerId,
-          technical_sheet_id: technicalSheetId,
-          quantity: actualQuantity,
-          unit: unit,
-          notes: `Produção: ${production.name}`,
-        });
+        .insert(insertData);
     }
   };
 
