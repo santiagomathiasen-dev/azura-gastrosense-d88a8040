@@ -201,15 +201,11 @@ export default function ProdutosVenda() {
 
   const handlePrepare = async (productId: string) => {
     const qty = getQuantity(productId);
-    for (let i = 0; i < qty; i++) {
-      await new Promise<void>((resolve) => {
-        prepareSaleProduct.mutate(productId, {
-          onSettled: () => resolve(),
-        });
-      });
-    }
-    // Reset quantity after preparing
-    setQuantities(prev => ({ ...prev, [productId]: 1 }));
+    prepareSaleProduct.mutate({ sale_product_id: productId, quantity: qty }, {
+      onSuccess: () => {
+        setQuantities(prev => ({ ...prev, [productId]: 1 }));
+      },
+    });
   };
 
   if (isLoading) {

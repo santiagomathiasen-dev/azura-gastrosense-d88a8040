@@ -181,7 +181,7 @@ export function useSaleProducts() {
 
   // Prepare product - deduct components from stock and add 1 to ready_quantity
   const prepareSaleProduct = useMutation({
-    mutationFn: async (sale_product_id: string) => {
+    mutationFn: async ({ sale_product_id, quantity = 1 }: { sale_product_id: string; quantity?: number }) => {
       if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
       if (!ownerId) throw new Error('Usuário não autenticado');
 
@@ -190,9 +190,9 @@ export function useSaleProducts() {
 
       const insufficientItems: string[] = [];
 
-      // Process each component and deduct from appropriate stock
+      // Process each component and deduct from appropriate stock (multiplied by quantity)
       for (const component of product.components || []) {
-        const neededQty = Number(component.quantity);
+        const neededQty = Number(component.quantity) * quantity;
 
         if (component.component_type === 'finished_production') {
           const { data: stock } = await supabase
@@ -218,7 +218,6 @@ export function useSaleProducts() {
             await supabase.from('finished_productions_stock').update({ quantity: newQty }).eq('id', stock.id);
           }
         } else if (component.component_type === 'stock_item') {
-          // First try to deduct from production stock
           const { data: prodStock } = await supabase
             .from('production_stock')
             .select('id, quantity, stock_item:stock_items(name)')
@@ -235,7 +234,6 @@ export function useSaleProducts() {
             continue;
           }
 
-          // Deduct from production stock
           const newProdQty = Number(prodStock.quantity) - neededQty;
           if (newProdQty <= 0) {
             await supabase.from('production_stock').delete().eq('id', prodStock.id);
@@ -243,7 +241,6 @@ export function useSaleProducts() {
             await supabase.from('production_stock').update({ quantity: newProdQty }).eq('id', prodStock.id);
           }
         } else if (component.component_type === 'sale_product') {
-          // Deduct from another sale product's ready_quantity
           const { data: otherProduct } = await supabase
             .from('sale_products')
             .select('id, ready_quantity, name')
@@ -266,10 +263,10 @@ export function useSaleProducts() {
         throw new Error(`Estoque insuficiente para: ${insufficientItems.join(', ')}`);
       }
 
-      // Increment ready_quantity
+      // Increment ready_quantity by the full amount
       const { error: updateError } = await supabase
         .from('sale_products')
-        .update({ ready_quantity: (product.ready_quantity || 0) + 1 })
+        .update({ ready_quantity: (product.ready_quantity || 0) + quantity })
         .eq('id', sale_product_id);
       if (updateError) throw updateError;
     },

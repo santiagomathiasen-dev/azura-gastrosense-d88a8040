@@ -34,6 +34,7 @@ export interface ProductionWithSheet extends Production {
     name: string;
     yield_quantity: number;
     yield_unit: string;
+    preparation_method: string | null;
     ingredients: {
       stock_item_id: string;
       quantity: number;
@@ -62,6 +63,7 @@ export function useProductions() {
             name,
             yield_quantity,
             yield_unit,
+            preparation_method,
             ingredients:technical_sheet_ingredients(
               stock_item_id,
               quantity,
