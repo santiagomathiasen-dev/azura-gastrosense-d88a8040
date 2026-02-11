@@ -13,7 +13,8 @@ import {
   Boxes,
   UtensilsCrossed,
   Users,
-  BarChart3
+  BarChart3,
+  TrendingDown
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useCollaboratorContext } from '@/contexts/CollaboratorContext';
@@ -35,6 +36,7 @@ const navItems = [
   { to: '/compras', icon: ShoppingCart, label: 'Compras', permission: 'can_access_compras' },
   { to: '/estoque-finalizados', icon: PackageCheck, label: 'Prod. Finalizadas', permission: 'can_access_finalizados' },
   { to: '/produtos-venda', icon: ShoppingBag, label: 'Produtos p/ Venda', permission: 'can_access_produtos_venda' },
+  { to: '/perdas', icon: TrendingDown, label: 'Perdas', permission: 'can_access_estoque' },
   { to: '/relatorios', icon: BarChart3, label: 'Relatórios', permission: 'can_access_dashboard' },
 ];
 

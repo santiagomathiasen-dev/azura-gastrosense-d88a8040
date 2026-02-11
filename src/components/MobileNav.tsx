@@ -10,7 +10,8 @@ import {
   PackageCheck,
   ShoppingBag,
   Users,
-  BarChart3
+  BarChart3,
+  TrendingDown
 } from 'lucide-react';
 import { Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -29,6 +30,7 @@ const navItems = [
   { to: '/compras', icon: ShoppingCart, label: 'Compras', permission: 'can_access_compras' },
   { to: '/estoque-finalizados', icon: PackageCheck, label: 'Finaliz.', permission: 'can_access_finalizados' },
   { to: '/produtos-venda', icon: ShoppingBag, label: 'Venda', permission: 'can_access_produtos_venda' },
+  { to: '/perdas', icon: TrendingDown, label: 'Perdas', permission: 'can_access_estoque' },
   { to: '/relatorios', icon: BarChart3, label: 'Relatórios', permission: 'can_access_dashboard' },
 ];
 
