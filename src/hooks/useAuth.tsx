@@ -1,0 +1,120 @@
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import type { User, Session } from '@supabase/supabase-js';
+
+interface AuthContextType {
+  user: User | null;
+  session: Session | null;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<{ error?: string }>;
+  signup: (email: string, password: string, name: string) => Promise<{ error?: string }>;
+  logout: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Set up auth state listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        setIsLoading(false);
+      }
+    );
+
+    // THEN check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setIsLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const login = async (email: string, password: string): Promise<{ error?: string }> => {
+    if (!email || !password) {
+      return { error: 'Por favor, preencha todos os campos' };
+    }
+    
+    if (password.length < 6) {
+      return { error: 'Senha deve ter pelo menos 6 caracteres' };
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+
+    if (error) {
+      // Handle common error messages
+      if (error.message.includes('Invalid login credentials')) {
+        return { error: 'Email ou senha incorretos' };
+      }
+      if (error.message.includes('Email not confirmed')) {
+        return { error: 'Por favor, confirme seu email antes de fazer login' };
+      }
+      return { error: error.message };
+    }
+
+    return {};
+  };
+
+  const signup = async (email: string, password: string, name: string): Promise<{ error?: string }> => {
+    if (!email || !password || !name) {
+      return { error: 'Por favor, preencha todos os campos' };
+    }
+    
+    if (password.length < 6) {
+      return { error: 'Senha deve ter pelo menos 6 caracteres' };
+    }
+
+    const redirectUrl = `${window.location.origin}/`;
+
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        emailRedirectTo: redirectUrl,
+        data: {
+          name: name.trim(),
+        },
+      },
+    });
+
+    if (error) {
+      if (error.message.includes('User already registered')) {
+        return { error: 'Este email já está cadastrado' };
+      }
+      return { error: error.message };
+    }
+
+    return {};
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setSession(null);
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, session, isLoading, login, signup, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+}

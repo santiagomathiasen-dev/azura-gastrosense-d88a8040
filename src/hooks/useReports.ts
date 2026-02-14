@@ -1,0 +1,305 @@
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from './useAuth';
+import { useOwnerId } from './useOwnerId';
+import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, format, subDays } from 'date-fns';
+
+export interface SalesReportItem {
+  date: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+}
+
+export interface LossReportItem {
+  date: string;
+  productName: string;
+  quantity: number;
+  unit: string;
+  sourceType: string;
+  estimatedValue: number;
+}
+
+export interface PurchasedIngredientsItem {
+  date: string;
+  itemName: string;
+  quantity: number;
+  unit: string;
+  supplierName: string | null;
+  totalCost: number;
+}
+
+export interface UsedIngredientsItem {
+  date: string;
+  itemName: string;
+  quantity: number;
+  unit: string;
+  productionName: string | null;
+  source: string;
+}
+
+export interface PurchaseReportItem {
+  date: string;
+  itemName: string;
+  quantity: number;
+  unit: string;
+  supplierName: string | null;
+  status: string;
+  estimatedCost: number;
+}
+
+export type DateRangeType = 'today' | 'week' | 'month' | 'custom';
+
+export function useReports(dateRange: DateRangeType, customStart?: Date, customEnd?: Date) {
+  const { user } = useAuth();
+  const { ownerId } = useOwnerId();
+
+  // Calculate date range based on selection
+  const getDateRange = () => {
+    const now = new Date();
+    switch (dateRange) {
+      case 'today':
+        return { start: now, end: now };
+      case 'week':
+        return { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) };
+      case 'month':
+        return { start: startOfMonth(now), end: endOfMonth(now) };
+      case 'custom':
+        return { start: customStart || subDays(now, 30), end: customEnd || now };
+      default:
+        return { start: startOfMonth(now), end: endOfMonth(now) };
+    }
+  };
+
+  const { start, end } = getDateRange();
+  const startDate = format(start, 'yyyy-MM-dd');
+  const endDate = format(end, 'yyyy-MM-dd');
+
+  // Sales Report
+  const { data: salesReport = [], isLoading: salesLoading } = useQuery({
+    queryKey: ['reports', 'sales', ownerId, startDate, endDate],
+    queryFn: async () => {
+      if (!user?.id && !ownerId) return [];
+      
+      const { data, error } = await supabase
+        .from('sales')
+        .select(`
+          id,
+          quantity_sold,
+          sale_date,
+          sale_product:sale_products(name, sale_price)
+        `)
+        .gte('sale_date', `${startDate}T00:00:00`)
+        .lte('sale_date', `${endDate}T23:59:59`)
+        .order('sale_date', { ascending: false });
+      
+      if (error) throw error;
+      
+      return data.map(sale => ({
+        date: format(new Date(sale.sale_date), 'dd/MM/yyyy HH:mm'),
+        productName: (sale.sale_product as any)?.name || 'Produto desconhecido',
+        quantity: sale.quantity_sold,
+        unitPrice: (sale.sale_product as any)?.sale_price || 0,
+        total: sale.quantity_sold * ((sale.sale_product as any)?.sale_price || 0),
+      })) as SalesReportItem[];
+    },
+    enabled: !!user?.id || !!ownerId,
+  });
+
+  // Losses Report - from unified losses table + legacy stock_movements
+  const { data: lossesReport = [], isLoading: lossesLoading } = useQuery({
+    queryKey: ['reports', 'losses', ownerId, startDate, endDate],
+    queryFn: async () => {
+      if (!user?.id && !ownerId) return [];
+      
+      // Get losses from the new unified losses table
+      const { data: lossesData, error: lossesError } = await supabase
+        .from('losses')
+        .select('*')
+        .gte('created_at', `${startDate}T00:00:00`)
+        .lte('created_at', `${endDate}T23:59:59`)
+        .order('created_at', { ascending: false });
+      
+      if (lossesError) throw lossesError;
+
+      // Also get legacy losses from stock_movements (for backwards compatibility)
+      const { data: legacyData, error: legacyError } = await supabase
+        .from('stock_movements')
+        .select(`
+          id,
+          quantity,
+          created_at,
+          notes,
+          stock_item:stock_items(name, unit_price)
+        `)
+        .eq('type', 'exit')
+        .ilike('notes', '%perda%')
+        .gte('created_at', `${startDate}T00:00:00`)
+        .lte('created_at', `${endDate}T23:59:59`)
+        .order('created_at', { ascending: false });
+      
+      if (legacyError) throw legacyError;
+
+      // Combine both sources
+      const newLosses = (lossesData || []).map(loss => ({
+        date: format(new Date(loss.created_at), 'dd/MM/yyyy HH:mm'),
+        productName: loss.source_name,
+        quantity: Number(loss.quantity),
+        unit: loss.unit,
+        sourceType: loss.source_type,
+        estimatedValue: Number(loss.estimated_value) || 0,
+      }));
+
+      const legacyLosses = (legacyData || []).map(movement => ({
+        date: format(new Date(movement.created_at), 'dd/MM/yyyy HH:mm'),
+        productName: (movement.stock_item as any)?.name || 'Item desconhecido',
+        quantity: Number(movement.quantity),
+        unit: 'unidade',
+        sourceType: 'stock_item',
+        estimatedValue: Number(movement.quantity) * ((movement.stock_item as any)?.unit_price || 0),
+      }));
+
+      return [...newLosses, ...legacyLosses].sort((a, b) => 
+        new Date(b.date.split(' ')[0].split('/').reverse().join('-')).getTime() - 
+        new Date(a.date.split(' ')[0].split('/').reverse().join('-')).getTime()
+      ) as LossReportItem[];
+    },
+    enabled: !!user?.id || !!ownerId,
+  });
+
+  // Purchased Ingredients Report (delivered purchase items)
+  const { data: purchasedReport = [], isLoading: purchasedLoading } = useQuery({
+    queryKey: ['reports', 'purchased', ownerId, startDate, endDate],
+    queryFn: async () => {
+      if (!user?.id && !ownerId) return [];
+      
+      const { data, error } = await supabase
+        .from('purchase_list_items')
+        .select(`
+          id,
+          ordered_quantity,
+          actual_delivery_date,
+          stock_item:stock_items(name, unit, unit_price),
+          supplier:suppliers(name)
+        `)
+        .eq('status', 'delivered')
+        .not('actual_delivery_date', 'is', null)
+        .gte('actual_delivery_date', startDate)
+        .lte('actual_delivery_date', endDate)
+        .order('actual_delivery_date', { ascending: false });
+      
+      if (error) throw error;
+      
+      return data.map(item => ({
+        date: item.actual_delivery_date ? format(new Date(item.actual_delivery_date), 'dd/MM/yyyy') : '-',
+        itemName: (item.stock_item as any)?.name || 'Item desconhecido',
+        quantity: item.ordered_quantity || 0,
+        unit: (item.stock_item as any)?.unit || 'un',
+        supplierName: (item.supplier as any)?.name || null,
+        totalCost: (item.ordered_quantity || 0) * ((item.stock_item as any)?.unit_price || 0),
+      })) as PurchasedIngredientsItem[];
+    },
+    enabled: !!user?.id || !!ownerId,
+  });
+
+  // Used Ingredients Report (stock exits for production)
+  const { data: usedReport = [], isLoading: usedLoading } = useQuery({
+    queryKey: ['reports', 'used', ownerId, startDate, endDate],
+    queryFn: async () => {
+      if (!user?.id && !ownerId) return [];
+      
+      const { data, error } = await supabase
+        .from('stock_movements')
+        .select(`
+          id,
+          quantity,
+          created_at,
+          source,
+          notes,
+          stock_item:stock_items(name, unit)
+        `)
+        .eq('type', 'exit')
+        .gte('created_at', `${startDate}T00:00:00`)
+        .lte('created_at', `${endDate}T23:59:59`)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      return data.map(movement => ({
+        date: format(new Date(movement.created_at), 'dd/MM/yyyy HH:mm'),
+        itemName: (movement.stock_item as any)?.name || 'Item desconhecido',
+        quantity: movement.quantity,
+        unit: (movement.stock_item as any)?.unit || 'un',
+        productionName: movement.notes || null,
+        source: movement.source === 'production' ? 'Produção' : movement.source === 'manual' ? 'Manual' : movement.source,
+      })) as UsedIngredientsItem[];
+    },
+    enabled: !!user?.id || !!ownerId,
+  });
+
+  // Purchase List Report (all purchase items)
+  const { data: purchaseListReport = [], isLoading: purchaseListLoading } = useQuery({
+    queryKey: ['reports', 'purchase_list', ownerId, startDate, endDate],
+    queryFn: async () => {
+      if (!user?.id && !ownerId) return [];
+      
+      const { data, error } = await supabase
+        .from('purchase_list_items')
+        .select(`
+          id,
+          suggested_quantity,
+          ordered_quantity,
+          status,
+          created_at,
+          order_date,
+          stock_item:stock_items(name, unit, unit_price),
+          supplier:suppliers(name)
+        `)
+        .gte('created_at', `${startDate}T00:00:00`)
+        .lte('created_at', `${endDate}T23:59:59`)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      const statusLabels: Record<string, string> = {
+        pending: 'Pendente',
+        ordered: 'Comprado',
+        delivered: 'Entregue',
+        cancelled: 'Cancelado',
+      };
+      
+      return data.map(item => ({
+        date: item.order_date 
+          ? format(new Date(item.order_date), 'dd/MM/yyyy')
+          : format(new Date(item.created_at), 'dd/MM/yyyy'),
+        itemName: (item.stock_item as any)?.name || 'Item desconhecido',
+        quantity: item.ordered_quantity || item.suggested_quantity,
+        unit: (item.stock_item as any)?.unit || 'un',
+        supplierName: (item.supplier as any)?.name || null,
+        status: statusLabels[item.status] || item.status,
+        estimatedCost: (item.ordered_quantity || item.suggested_quantity) * ((item.stock_item as any)?.unit_price || 0),
+      })) as PurchaseReportItem[];
+    },
+    enabled: !!user?.id || !!ownerId,
+  });
+
+  // Calculate totals
+  const totalSales = salesReport.reduce((sum, item) => sum + item.total, 0);
+  const totalLosses = lossesReport.reduce((sum, item) => sum + item.estimatedValue, 0);
+  const totalPurchased = purchasedReport.reduce((sum, item) => sum + item.totalCost, 0);
+  const totalPurchaseList = purchaseListReport.reduce((sum, item) => sum + item.estimatedCost, 0);
+
+  return {
+    salesReport,
+    lossesReport,
+    purchasedReport,
+    usedReport,
+    purchaseListReport,
+    totalSales,
+    totalLosses,
+    totalPurchased,
+    totalPurchaseList,
+    isLoading: salesLoading || lossesLoading || purchasedLoading || usedLoading || purchaseListLoading,
+  };
+}

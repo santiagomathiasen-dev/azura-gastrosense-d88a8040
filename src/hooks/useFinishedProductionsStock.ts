@@ -1,0 +1,240 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from './useAuth';
+import { useOwnerId } from './useOwnerId';
+import { toast } from 'sonner';
+
+export interface FinishedProductionStock {
+  id: string;
+  user_id: string;
+  technical_sheet_id: string;
+  quantity: number;
+  unit: string;
+  notes: string | null;
+  image_url?: string | null;
+  praca?: string | null;
+  created_at: string;
+  updated_at: string;
+  technical_sheet?: {
+    id: string;
+    name: string;
+    yield_unit: string;
+    image_url: string | null;
+  };
+}
+
+export function useFinishedProductionsStock() {
+  const { user } = useAuth();
+  const { ownerId, isLoading: isOwnerLoading } = useOwnerId();
+  const queryClient = useQueryClient();
+
+  // Query uses RLS - no need to filter by user_id client-side
+  const { data: finishedStock = [], isLoading, error } = useQuery({
+    queryKey: ['finished_productions_stock', ownerId],
+    queryFn: async () => {
+      if (!user?.id && !ownerId) return [];
+      const { data, error } = await supabase
+        .from('finished_productions_stock')
+        .select(`
+          *,
+          technical_sheet:technical_sheets(
+            id,
+            name,
+            yield_unit,
+            image_url
+          )
+        `)
+        .order('updated_at', { ascending: false });
+      if (error) throw error;
+      return data as FinishedProductionStock[];
+    },
+    enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
+  });
+
+  const addFinishedProduction = useMutation({
+    mutationFn: async (data: { 
+      technical_sheet_id: string; 
+      quantity: number; 
+      unit: string;
+      notes?: string;
+      image_url?: string;
+    }) => {
+      if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
+      if (!ownerId) throw new Error('Usuário não autenticado');
+      
+      // Check if entry already exists for this technical sheet
+      const { data: existing } = await supabase
+        .from('finished_productions_stock')
+        .select('id, quantity')
+        .eq('technical_sheet_id', data.technical_sheet_id)
+        .single();
+
+      if (existing) {
+        // Update existing entry
+        const updateData: any = { 
+          quantity: Number(existing.quantity) + data.quantity,
+          notes: data.notes,
+        };
+        if (data.image_url) updateData.image_url = data.image_url;
+        
+        const { error } = await supabase
+          .from('finished_productions_stock')
+          .update(updateData)
+          .eq('id', existing.id);
+        if (error) throw error;
+      } else {
+        // Create new entry
+        const insertData: any = {
+          user_id: ownerId,
+          technical_sheet_id: data.technical_sheet_id,
+          quantity: data.quantity,
+          unit: data.unit,
+          notes: data.notes,
+        };
+        if (data.image_url) insertData.image_url = data.image_url;
+        
+        const { error } = await supabase
+          .from('finished_productions_stock')
+          .insert(insertData);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['finished_productions_stock'] });
+      toast.success('Produção finalizada adicionada ao estoque!');
+    },
+    onError: (err: Error) => {
+      toast.error(`Erro ao adicionar produção: ${err.message}`);
+    },
+  });
+
+  const updateFinishedProduction = useMutation({
+    mutationFn: async ({ id, quantity, unit, notes, image_url }: { id: string; quantity: number; unit?: string; notes?: string; image_url?: string }) => {
+      const updateData: any = { quantity, notes };
+      if (unit) updateData.unit = unit;
+      if (image_url !== undefined) updateData.image_url = image_url || null;
+      
+      const { error } = await supabase
+        .from('finished_productions_stock')
+        .update(updateData)
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['finished_productions_stock'] });
+      toast.success('Quantidade atualizada!');
+    },
+    onError: (err: Error) => {
+      toast.error(`Erro ao atualizar: ${err.message}`);
+    },
+  });
+
+  const deleteFinishedProduction = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('finished_productions_stock')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['finished_productions_stock'] });
+      toast.success('Item removido do estoque!');
+    },
+    onError: (err: Error) => {
+      toast.error(`Erro ao remover: ${err.message}`);
+    },
+  });
+
+  // Register loss for finished production - uses technical sheet cost
+  const registerLoss = useMutation({
+    mutationFn: async ({ id, quantity = 1 }: { id: string; quantity?: number }) => {
+      if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
+      if (!ownerId) throw new Error('Usuário não autenticado');
+      
+      const item = finishedStock.find(s => s.id === id);
+      if (!item) throw new Error('Item não encontrado');
+      
+      if (Number(item.quantity) < quantity) {
+        throw new Error('Quantidade insuficiente para registrar perda.');
+      }
+
+      // Get the technical sheet to calculate the cost
+      const { data: technicalSheet } = await supabase
+        .from('technical_sheets')
+        .select('cost_per_unit, total_cost, yield_quantity')
+        .eq('id', item.technical_sheet_id)
+        .single();
+
+      // Calculate estimated value based on technical sheet cost
+      let estimatedValue = 0;
+      if (technicalSheet) {
+        if (technicalSheet.cost_per_unit) {
+          estimatedValue = Number(technicalSheet.cost_per_unit) * quantity;
+        } else if (technicalSheet.total_cost && technicalSheet.yield_quantity) {
+          const costPerUnit = Number(technicalSheet.total_cost) / Number(technicalSheet.yield_quantity);
+          estimatedValue = costPerUnit * quantity;
+        }
+      }
+
+      // Decrement quantity
+      const newQuantity = Number(item.quantity) - quantity;
+      if (newQuantity <= 0) {
+        await supabase.from('finished_productions_stock').delete().eq('id', id);
+      } else {
+        await supabase.from('finished_productions_stock').update({ quantity: newQuantity }).eq('id', id);
+      }
+
+      // Record the loss with the technical sheet cost
+      const { error: lossError } = await supabase
+        .from('losses')
+        .insert({
+          user_id: ownerId,
+          source_type: 'finished_production',
+          source_id: item.technical_sheet_id,
+          source_name: item.technical_sheet?.name || 'Produção desconhecida',
+          quantity: quantity,
+          unit: item.unit,
+          estimated_value: estimatedValue,
+        });
+      if (lossError) throw lossError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['finished_productions_stock'] });
+      queryClient.invalidateQueries({ queryKey: ['losses'] });
+      toast.success('Perda registrada!');
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+
+  // Function to deduct from finished stock (used when selling)
+  const deductFromStock = async (technicalSheetId: string, quantity: number): Promise<boolean> => {
+    const item = finishedStock.find(s => s.technical_sheet_id === technicalSheetId);
+    if (!item || Number(item.quantity) < quantity) {
+      return false;
+    }
+    
+    const newQuantity = Number(item.quantity) - quantity;
+    if (newQuantity <= 0) {
+      await supabase.from('finished_productions_stock').delete().eq('id', item.id);
+    } else {
+      await supabase.from('finished_productions_stock').update({ quantity: newQuantity }).eq('id', item.id);
+    }
+    
+    return true;
+  };
+
+  return {
+    finishedStock,
+    isLoading,
+    isOwnerLoading,
+    error,
+    addFinishedProduction,
+    updateFinishedProduction,
+    deleteFinishedProduction,
+    deductFromStock,
+    registerLoss,
+  };
+}
