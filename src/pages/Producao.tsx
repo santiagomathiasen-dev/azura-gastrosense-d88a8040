@@ -1,5 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
+<<<<<<< HEAD
 import { Factory, Search, Calendar as CalendarIcon, Play, CheckCircle2, Clock, Eye, ChevronLeft, ChevronRight, XCircle, ListChecks, Check, ChevronDown, Loader2, PauseCircle } from 'lucide-react';
+=======
+import { Factory, Search, Calendar as CalendarIcon, Play, CheckCircle2, Clock, Eye, ChevronLeft, ChevronRight, XCircle, ListChecks, Check, ChevronDown, Loader2 } from 'lucide-react';
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { Input } from '@/components/ui/input';
@@ -68,13 +72,20 @@ const statusConfig: Record<ProductionStatus, { label: string; icon: typeof Calen
   in_progress: { label: 'Em andamento', icon: Play, variant: 'warning' },
   completed: { label: 'Concluída', icon: CheckCircle2, variant: 'success' },
   cancelled: { label: 'Cancelada', icon: XCircle, variant: 'destructive' },
+<<<<<<< HEAD
   paused: { label: 'Pausada', icon: PauseCircle, variant: 'warning' },
+=======
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
 };
 
 export default function Producao() {
   const { productions, isLoading, createProduction, updateProduction } = useProductions();
   const { sheets } = useTechnicalSheets();
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -84,11 +95,19 @@ export default function Producao() {
   const [actualQuantity, setActualQuantity] = useState('');
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [pracaFilter, setPracaFilter] = useState<PracaType>('all');
+<<<<<<< HEAD
 
   // Period filter state
   const [periodType, setPeriodType] = useState<PeriodType>('week');
   const [currentDate, setCurrentDate] = useState(new Date());
 
+=======
+  
+  // Period filter state
+  const [periodType, setPeriodType] = useState<PeriodType>('week');
+  const [currentDate, setCurrentDate] = useState(new Date());
+  
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
   const [formData, setFormData] = useState({
     technicalSheetId: '',
     name: '',
@@ -158,7 +177,11 @@ export default function Producao() {
       const prodDate = new Date(year, month - 1, day);
       const inPeriod = isWithinInterval(prodDate, { start: periodBoundaries.start, end: periodBoundaries.end });
       const matchesSearch = prod.name.toLowerCase().includes(search.toLowerCase());
+<<<<<<< HEAD
       const matchesPraca = pracaFilter === 'all'
+=======
+      const matchesPraca = pracaFilter === 'all' 
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
         || (pracaFilter === 'sem_praca' && !prod.praca)
         || prod.praca === pracaFilter;
       return inPeriod && matchesSearch && matchesPraca;
@@ -167,7 +190,11 @@ export default function Producao() {
 
   const producoesPorStatus = {
     planned: filteredProducoes.filter(p => p.status === 'planned'),
+<<<<<<< HEAD
     in_progress: filteredProducoes.filter(p => p.status === 'in_progress' || p.status === 'paused'),
+=======
+    in_progress: filteredProducoes.filter(p => p.status === 'in_progress'),
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
     completed: filteredProducoes.filter(p => p.status === 'completed'),
     cancelled: filteredProducoes.filter(p => p.status === 'cancelled'),
   };
@@ -193,13 +220,22 @@ export default function Producao() {
       scheduled_date: formData.scheduledDate,
       ...(formData.praca ? { praca: formData.praca } : {}),
     } as any);
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
     setDialogOpen(false);
   };
 
   const updateStatus = async (id: string, newStatus: ProductionStatus, actualQty?: number) => {
+<<<<<<< HEAD
     await updateProduction.mutateAsync({
       id,
+=======
+    await updateProduction.mutateAsync({ 
+      id, 
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
       status: newStatus,
       ...(actualQty !== undefined && { actual_quantity: actualQty })
     });
@@ -232,13 +268,21 @@ export default function Producao() {
 
   const handleCompleteProduction = async () => {
     if (!selectedProducao) return;
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
     const qty = parseFloat(actualQuantity);
     if (isNaN(qty) || qty < 0) {
       toast.error('Informe uma quantidade válida');
       return;
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
     await updateStatus(selectedProducao.id, 'completed', qty);
     setCompleteDialogOpen(false);
     setPreviewOpen(false);
@@ -283,6 +327,7 @@ export default function Producao() {
                   variant="outline"
                   onClick={(e) => {
                     e.stopPropagation();
+<<<<<<< HEAD
                     updateStatus(producao.id, 'paused');
                   }}
                   title="Pausar"
@@ -294,6 +339,8 @@ export default function Producao() {
                   variant="outline"
                   onClick={(e) => {
                     e.stopPropagation();
+=======
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
                     openExecutionDialog(producao);
                   }}
                   title="Passo a passo"
@@ -311,6 +358,7 @@ export default function Producao() {
                 </Button>
               </>
             )}
+<<<<<<< HEAD
             {producao.status === 'paused' && (
               <Button
                 size="sm"
@@ -324,6 +372,8 @@ export default function Producao() {
                 <Play className="h-3 w-3" />
               </Button>
             )}
+=======
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
             <Button
               size="sm"
               variant="ghost"
@@ -405,7 +455,11 @@ export default function Producao() {
             <SelectItem value="year" className="text-xs">Ano</SelectItem>
           </SelectContent>
         </Select>
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
         <div className="flex items-center gap-1">
           <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigatePeriod('prev')}>
             <ChevronLeft className="h-3 w-3" />
@@ -444,7 +498,11 @@ export default function Producao() {
             <SelectItem value="sem_praca" className="text-xs">Sem praça</SelectItem>
           </SelectContent>
         </Select>
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
         <div className="relative flex-1 min-w-[120px]">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
           <Input
@@ -676,8 +734,13 @@ export default function Producao() {
             <Button variant="outline" onClick={() => setCompleteDialogOpen(false)}>
               Cancelar
             </Button>
+<<<<<<< HEAD
             <Button
               onClick={handleCompleteProduction}
+=======
+            <Button 
+              onClick={handleCompleteProduction} 
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
               disabled={updateProduction.isPending}
               className="gap-2"
             >

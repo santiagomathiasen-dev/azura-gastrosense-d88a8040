@@ -344,7 +344,11 @@ export type Database = {
           praca?: Database["public"]["Enums"]["production_praca"] | null
           scheduled_date: string
           scheduled_end_date?: string | null
+<<<<<<< HEAD
           status?: Database["public"]["Enums"]["production_status"] | "paused"
+=======
+          status?: Database["public"]["Enums"]["production_status"]
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
           technical_sheet_id: string
           updated_at?: string
           user_id: string
@@ -1120,16 +1124,26 @@ export type Database = {
       movement_type: "entry" | "exit" | "adjustment"
       production_period: "day" | "week" | "month" | "year" | "custom"
       production_praca:
+<<<<<<< HEAD
       | "gelateria"
       | "confeitaria"
       | "padaria"
       | "praca_quente"
       | "bar"
       production_status: "planned" | "in_progress" | "completed" | "cancelled" | "paused"
+=======
+        | "gelateria"
+        | "confeitaria"
+        | "padaria"
+        | "praca_quente"
+        | "bar"
+      production_status: "planned" | "in_progress" | "completed" | "cancelled"
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
       production_type: "insumo" | "final"
       purchase_status: "pending" | "ordered" | "delivered" | "cancelled"
       sale_component_type: "finished_production" | "stock_item" | "sale_product"
       stock_category:
+<<<<<<< HEAD
       | "laticinios"
       | "secos_e_graos"
       | "hortifruti"
@@ -1137,6 +1151,15 @@ export type Database = {
       | "embalagens"
       | "limpeza"
       | "outros"
+=======
+        | "laticinios"
+        | "secos_e_graos"
+        | "hortifruti"
+        | "carnes_e_peixes"
+        | "embalagens"
+        | "limpeza"
+        | "outros"
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
       stock_unit: "kg" | "g" | "L" | "ml" | "unidade" | "caixa" | "dz"
     }
     CompositeTypes: {
@@ -1151,6 +1174,7 @@ type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
+<<<<<<< HEAD
   | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
   | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
@@ -1159,10 +1183,21 @@ export type Tables<
   ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
     DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
   : never = never,
+=======
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+<<<<<<< HEAD
     DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
@@ -1187,10 +1222,37 @@ export type TablesInsert<
   }
   ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
   : never = never,
+=======
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+<<<<<<< HEAD
     Insert: infer I
   }
   ? I
@@ -1212,10 +1274,34 @@ export type TablesUpdate<
   }
   ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
   : never = never,
+=======
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+<<<<<<< HEAD
     Update: infer U
   }
   ? U
@@ -1237,11 +1323,35 @@ export type Enums<
   }
   ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
   : never = never,
+=======
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+<<<<<<< HEAD
   ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
   : never
 
@@ -1254,13 +1364,32 @@ export type CompositeTypes<
   }
   ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
   : never = never,
+=======
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+<<<<<<< HEAD
   ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
   : never
+=======
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
 
 export const Constants = {
   public: {
@@ -1277,7 +1406,11 @@ export const Constants = {
         "praca_quente",
         "bar",
       ],
+<<<<<<< HEAD
       production_status: ["planned", "in_progress", "completed", "cancelled", "paused"],
+=======
+      production_status: ["planned", "in_progress", "completed", "cancelled"],
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
       production_type: ["insumo", "final"],
       purchase_status: ["pending", "ordered", "delivered", "cancelled"],
       sale_component_type: [

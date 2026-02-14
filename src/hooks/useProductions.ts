@@ -18,7 +18,10 @@ export const STATUS_LABELS: Record<ProductionStatus, string> = {
   in_progress: 'Em Andamento',
   completed: 'Concluída',
   cancelled: 'Cancelada',
+<<<<<<< HEAD
   paused: 'Pausada',
+=======
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
 };
 
 export const PERIOD_LABELS: Record<ProductionPeriod, string> = {
@@ -121,11 +124,19 @@ export function useProductions() {
         .select('waste_factor, current_quantity, name, unit')
         .eq('id', stockItemId)
         .single();
+<<<<<<< HEAD
 
       const wasteFactor = Number(wasteFactorResult.data?.waste_factor || 0) / 100;
       const baseQty = Number(ingredient.quantity) * multiplier;
       const neededQty = baseQty * (1 + wasteFactor); // Apply waste factor
 
+=======
+      
+      const wasteFactor = Number(wasteFactorResult.data?.waste_factor || 0) / 100;
+      const baseQty = Number(ingredient.quantity) * multiplier;
+      const neededQty = baseQty * (1 + wasteFactor); // Apply waste factor
+      
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
       let remainingQty = neededQty;
 
       // 1. First, try to use from production stock
@@ -138,23 +149,38 @@ export function useProductions() {
       if (prodStock && Number(prodStock.quantity) > 0) {
         const useFromProd = Math.min(Number(prodStock.quantity), remainingQty);
         const newProdQty = Number(prodStock.quantity) - useFromProd;
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
         if (newProdQty <= 0) {
           await supabase.from('production_stock').delete().eq('id', prodStock.id);
         } else {
           await supabase.from('production_stock').update({ quantity: newProdQty }).eq('id', prodStock.id);
         }
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
         remainingQty -= useFromProd;
       }
 
       // 2. If still need more, use from central stock
       if (remainingQty > 0) {
         const centralQty = Number(wasteFactorResult.data?.current_quantity || 0);
+<<<<<<< HEAD
 
         if (centralQty > 0) {
           const useFromCentral = Math.min(centralQty, remainingQty);
 
+=======
+        
+        if (centralQty > 0) {
+          const useFromCentral = Math.min(centralQty, remainingQty);
+          
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
           // Create exit movement from central stock
           await supabase.from('stock_movements').insert({
             stock_item_id: stockItemId,
@@ -165,7 +191,11 @@ export function useProductions() {
             related_production_id: production.id,
             notes: `Baixa automática - Produção: ${production.name}`,
           });
+<<<<<<< HEAD
 
+=======
+          
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
           remainingQty -= useFromCentral;
         }
       }
@@ -192,8 +222,13 @@ export function useProductions() {
           // Update existing purchase item
           await supabase
             .from('purchase_list_items')
+<<<<<<< HEAD
             .update({
               suggested_quantity: Number(existingPurchase.suggested_quantity) + remainingQty
+=======
+            .update({ 
+              suggested_quantity: Number(existingPurchase.suggested_quantity) + remainingQty 
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
             })
             .eq('id', existingPurchase.id);
         } else {
@@ -229,7 +264,11 @@ export function useProductions() {
       .from('finished_productions_stock')
       .select('id, quantity')
       .eq('technical_sheet_id', technicalSheetId);
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
     if (praca) {
       query = query.eq('praca', praca);
     } else {
@@ -242,7 +281,11 @@ export function useProductions() {
       // Update existing entry
       await supabase
         .from('finished_productions_stock')
+<<<<<<< HEAD
         .update({
+=======
+        .update({ 
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
           quantity: Number(existing.quantity) + actualQuantity,
         })
         .eq('id', existing.id);
@@ -267,7 +310,11 @@ export function useProductions() {
     mutationFn: async ({ id, ...updates }: ProductionUpdate & { id: string }) => {
       // Get the current production to check status change
       const currentProduction = productions.find(p => p.id === id);
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
       const { data, error } = await supabase
         .from('productions')
         .update(updates)
@@ -302,7 +349,11 @@ export function useProductions() {
       queryClient.invalidateQueries({ queryKey: ['stock_items'] });
       queryClient.invalidateQueries({ queryKey: ['stock_movements'] });
       queryClient.invalidateQueries({ queryKey: ['finished_productions_stock'] });
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
       if (variables.status === 'in_progress') {
         toast.success('Produção iniciada! Estoque atualizado automaticamente.');
       } else if (variables.status === 'completed') {
