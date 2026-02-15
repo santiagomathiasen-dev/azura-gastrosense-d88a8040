@@ -247,43 +247,44 @@ export function ProductionExecutionDialog({
           )}
         </ScrollArea>
 
-        <div className="flex-1 flex gap-2">
-          {production.status === 'in_progress' && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => updateProduction.mutate({ id: production.id, status: 'paused' })}
-              disabled={updateProduction.isPending}
-              className="gap-2"
-            >
-              <PauseCircle className="h-4 w-4" />
-              Pausar
-            </Button>
-          )}
-          {production.status === 'paused' && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => updateProduction.mutate({ id: production.id, status: 'in_progress' })}
-              disabled={updateProduction.isPending}
-              className="gap-2 text-warning border-warning hover:bg-warning/10"
-            >
-              <Play className="h-4 w-4" />
-              Retomar
-            </Button>
-          )}
-        </div>
-        <Button variant="outline" onClick={() => onOpenChange(false)}>
-          Fechar
-        </Button>
-        {allCompleted && (
-          <Button onClick={onComplete} className="gap-2" disabled={production.status === 'paused'}>
-            <Check className="h-4 w-4" />
-            Finalizar Produção
+        <DialogFooter className="gap-2">
+          <div className="flex-1 flex gap-2">
+            {production.status === 'in_progress' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => updateProduction.mutate({ id: production.id, status: 'paused' })}
+                disabled={updateProduction.isPending}
+                className="gap-2"
+              >
+                <PauseCircle className="h-4 w-4" />
+                Pausar
+              </Button>
+            )}
+            {production.status === 'paused' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => updateProduction.mutate({ id: production.id, status: 'in_progress' })}
+                disabled={updateProduction.isPending}
+                className="gap-2 text-warning border-warning hover:bg-warning/10"
+              >
+                <Play className="h-4 w-4" />
+                Retomar
+              </Button>
+            )}
+          </div>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Fechar
           </Button>
-        )}
-      </DialogFooter>
-    </DialogContent>
+          {allCompleted && (
+            <Button onClick={onComplete} className="gap-2" disabled={production.status === 'paused'}>
+              <Check className="h-4 w-4" />
+              Finalizar Produção
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
     </Dialog >
   );
 }
