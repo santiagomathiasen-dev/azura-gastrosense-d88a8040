@@ -1,9 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-<<<<<<< HEAD
 import { Factory, Search, Calendar as CalendarIcon, Play, CheckCircle2, Clock, Eye, ChevronLeft, ChevronRight, XCircle, ListChecks, Check, ChevronDown, Loader2, PauseCircle } from 'lucide-react';
-=======
-import { Factory, Search, Calendar as CalendarIcon, Play, CheckCircle2, Clock, Eye, ChevronLeft, ChevronRight, XCircle, ListChecks, Check, ChevronDown, Loader2 } from 'lucide-react';
->>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { Input } from '@/components/ui/input';
@@ -72,20 +68,13 @@ const statusConfig: Record<ProductionStatus, { label: string; icon: typeof Calen
   in_progress: { label: 'Em andamento', icon: Play, variant: 'warning' },
   completed: { label: 'Concluída', icon: CheckCircle2, variant: 'success' },
   cancelled: { label: 'Cancelada', icon: XCircle, variant: 'destructive' },
-<<<<<<< HEAD
   paused: { label: 'Pausada', icon: PauseCircle, variant: 'warning' },
-=======
->>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
 };
 
 export default function Producao() {
   const { productions, isLoading, createProduction, updateProduction } = useProductions();
   const { sheets } = useTechnicalSheets();
-<<<<<<< HEAD
 
-=======
-  
->>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -95,19 +84,11 @@ export default function Producao() {
   const [actualQuantity, setActualQuantity] = useState('');
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [pracaFilter, setPracaFilter] = useState<PracaType>('all');
-<<<<<<< HEAD
 
   // Period filter state
   const [periodType, setPeriodType] = useState<PeriodType>('week');
   const [currentDate, setCurrentDate] = useState(new Date());
 
-=======
-  
-  // Period filter state
-  const [periodType, setPeriodType] = useState<PeriodType>('week');
-  const [currentDate, setCurrentDate] = useState(new Date());
-  
->>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
   const [formData, setFormData] = useState({
     technicalSheetId: '',
     name: '',
@@ -177,11 +158,7 @@ export default function Producao() {
       const prodDate = new Date(year, month - 1, day);
       const inPeriod = isWithinInterval(prodDate, { start: periodBoundaries.start, end: periodBoundaries.end });
       const matchesSearch = prod.name.toLowerCase().includes(search.toLowerCase());
-<<<<<<< HEAD
       const matchesPraca = pracaFilter === 'all'
-=======
-      const matchesPraca = pracaFilter === 'all' 
->>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
         || (pracaFilter === 'sem_praca' && !prod.praca)
         || prod.praca === pracaFilter;
       return inPeriod && matchesSearch && matchesPraca;
@@ -190,11 +167,7 @@ export default function Producao() {
 
   const producoesPorStatus = {
     planned: filteredProducoes.filter(p => p.status === 'planned'),
-<<<<<<< HEAD
     in_progress: filteredProducoes.filter(p => p.status === 'in_progress' || p.status === 'paused'),
-=======
-    in_progress: filteredProducoes.filter(p => p.status === 'in_progress'),
->>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
     completed: filteredProducoes.filter(p => p.status === 'completed'),
     cancelled: filteredProducoes.filter(p => p.status === 'cancelled'),
   };
@@ -220,22 +193,13 @@ export default function Producao() {
       scheduled_date: formData.scheduledDate,
       ...(formData.praca ? { praca: formData.praca } : {}),
     } as any);
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
     setDialogOpen(false);
   };
 
   const updateStatus = async (id: string, newStatus: ProductionStatus, actualQty?: number) => {
-<<<<<<< HEAD
     await updateProduction.mutateAsync({
       id,
-=======
-    await updateProduction.mutateAsync({ 
-      id, 
->>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
       status: newStatus,
       ...(actualQty !== undefined && { actual_quantity: actualQty })
     });
@@ -268,21 +232,13 @@ export default function Producao() {
 
   const handleCompleteProduction = async () => {
     if (!selectedProducao) return;
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
     const qty = parseFloat(actualQuantity);
     if (isNaN(qty) || qty < 0) {
       toast.error('Informe uma quantidade válida');
       return;
     }
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
     await updateStatus(selectedProducao.id, 'completed', qty);
     setCompleteDialogOpen(false);
     setPreviewOpen(false);
@@ -320,6 +276,19 @@ export default function Producao() {
                 <Play className="h-3 w-3" />
               </Button>
             )}
+            {(producao.status === 'in_progress' || producao.status === 'paused') && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openExecutionDialog(producao);
+                }}
+                title="Passo a passo"
+              >
+                <ListChecks className="h-3 w-3" />
+              </Button>
+            )}
             {producao.status === 'in_progress' && (
               <>
                 <Button
@@ -327,25 +296,11 @@ export default function Producao() {
                   variant="outline"
                   onClick={(e) => {
                     e.stopPropagation();
-<<<<<<< HEAD
                     updateStatus(producao.id, 'paused');
                   }}
                   title="Pausar"
                 >
                   <PauseCircle className="h-3 w-3" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={(e) => {
-                    e.stopPropagation();
-=======
->>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
-                    openExecutionDialog(producao);
-                  }}
-                  title="Passo a passo"
-                >
-                  <ListChecks className="h-3 w-3" />
                 </Button>
                 <Button
                   size="sm"
@@ -358,7 +313,6 @@ export default function Producao() {
                 </Button>
               </>
             )}
-<<<<<<< HEAD
             {producao.status === 'paused' && (
               <Button
                 size="sm"
@@ -372,8 +326,6 @@ export default function Producao() {
                 <Play className="h-3 w-3" />
               </Button>
             )}
-=======
->>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
             <Button
               size="sm"
               variant="ghost"
@@ -455,11 +407,7 @@ export default function Producao() {
             <SelectItem value="year" className="text-xs">Ano</SelectItem>
           </SelectContent>
         </Select>
-<<<<<<< HEAD
 
-=======
-        
->>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
         <div className="flex items-center gap-1">
           <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigatePeriod('prev')}>
             <ChevronLeft className="h-3 w-3" />
@@ -498,11 +446,7 @@ export default function Producao() {
             <SelectItem value="sem_praca" className="text-xs">Sem praça</SelectItem>
           </SelectContent>
         </Select>
-<<<<<<< HEAD
 
-=======
-        
->>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
         <div className="relative flex-1 min-w-[120px]">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
           <Input
@@ -515,68 +459,70 @@ export default function Producao() {
       </div>
 
       {/* Content - Scrollable */}
-      <div className="flex-1 overflow-auto">{filteredProducoes.length === 0 ? (
-        <EmptyState
-          icon={Factory}
-          title="Nenhuma produção"
-          description="Agende uma nova produção"
-          action={{ label: 'Agendar', onClick: openNewDialog }}
-        />
-      ) : (
-        <div className="space-y-3">
-          {/* Planejadas */}
-          {producoesPorStatus.planned.length > 0 && (
-            <div>
-              <h3 className="font-medium mb-2 text-xs flex items-center gap-1">
-                <CalendarIcon className="h-3 w-3 text-primary" />
-                Planejadas ({producoesPorStatus.planned.length})
-              </h3>
-              <MobileList>
-                {producoesPorStatus.planned.map(renderProducaoItem)}
-              </MobileList>
-            </div>
-          )}
+      <div className="flex-1 overflow-auto">{
+        filteredProducoes.length === 0 ? (
+          <EmptyState
+            icon={Factory}
+            title="Nenhuma produção"
+            description="Agende uma nova produção"
+            action={{ label: 'Agendar', onClick: openNewDialog }}
+          />
+        ) : (
+          <div className="space-y-3">
+            {/* Planejadas */}
+            {producoesPorStatus.planned.length > 0 && (
+              <div>
+                <h3 className="font-medium mb-2 text-xs flex items-center gap-1">
+                  <CalendarIcon className="h-3 w-3 text-primary" />
+                  Planejadas ({producoesPorStatus.planned.length})
+                </h3>
+                <MobileList>
+                  {producoesPorStatus.planned.map(renderProducaoItem)}
+                </MobileList>
+              </div>
+            )}
 
-          {/* Em Andamento */}
-          {producoesPorStatus.in_progress.length > 0 && (
-            <div>
-              <h3 className="font-medium mb-2 text-xs flex items-center gap-1">
-                <Play className="h-3 w-3 text-warning" />
-                Em Andamento ({producoesPorStatus.in_progress.length})
-              </h3>
-              <MobileList>
-                {producoesPorStatus.in_progress.map(renderProducaoItem)}
-              </MobileList>
-            </div>
-          )}
+            {/* Em Andamento */}
+            {producoesPorStatus.in_progress.length > 0 && (
+              <div>
+                <h3 className="font-medium mb-2 text-xs flex items-center gap-1">
+                  <Play className="h-3 w-3 text-warning" />
+                  Em Andamento ({producoesPorStatus.in_progress.length})
+                </h3>
+                <MobileList>
+                  {producoesPorStatus.in_progress.map(renderProducaoItem)}
+                </MobileList>
+              </div>
+            )}
 
-          {/* Concluídas */}
-          {producoesPorStatus.completed.length > 0 && (
-            <div>
-              <h3 className="font-medium mb-2 text-xs flex items-center gap-1 text-muted-foreground">
-                <CheckCircle2 className="h-3 w-3 text-success" />
-                Concluídas ({producoesPorStatus.completed.length})
-              </h3>
-              <MobileList>
-                {producoesPorStatus.completed.map(renderProducaoItem)}
-              </MobileList>
-            </div>
-          )}
+            {/* Concluídas */}
+            {producoesPorStatus.completed.length > 0 && (
+              <div>
+                <h3 className="font-medium mb-2 text-xs flex items-center gap-1 text-muted-foreground">
+                  <CheckCircle2 className="h-3 w-3 text-success" />
+                  Concluídas ({producoesPorStatus.completed.length})
+                </h3>
+                <MobileList>
+                  {producoesPorStatus.completed.map(renderProducaoItem)}
+                </MobileList>
+              </div>
+            )}
 
-          {/* Canceladas */}
-          {producoesPorStatus.cancelled.length > 0 && (
-            <div>
-              <h3 className="font-medium mb-2 text-xs flex items-center gap-1 text-muted-foreground">
-                <XCircle className="h-3 w-3 text-destructive" />
-                Canceladas ({producoesPorStatus.cancelled.length})
-              </h3>
-              <MobileList>
-                {producoesPorStatus.cancelled.map(renderProducaoItem)}
-              </MobileList>
-            </div>
-          )}
-        </div>
-      )}
+            {/* Canceladas */}
+            {producoesPorStatus.cancelled.length > 0 && (
+              <div>
+                <h3 className="font-medium mb-2 text-xs flex items-center gap-1 text-muted-foreground">
+                  <XCircle className="h-3 w-3 text-destructive" />
+                  Canceladas ({producoesPorStatus.cancelled.length})
+                </h3>
+                <MobileList>
+                  {producoesPorStatus.cancelled.map(renderProducaoItem)}
+                </MobileList>
+              </div>
+            )}
+          </div>
+        )
+      }
       </div>
 
       {/* Dialog Nova Produção */}
@@ -734,13 +680,8 @@ export default function Producao() {
             <Button variant="outline" onClick={() => setCompleteDialogOpen(false)}>
               Cancelar
             </Button>
-<<<<<<< HEAD
             <Button
               onClick={handleCompleteProduction}
-=======
-            <Button 
-              onClick={handleCompleteProduction} 
->>>>>>> 5f1f866254404c7cb42469b81d5840235ef18cf8
               disabled={updateProduction.isPending}
               className="gap-2"
             >
@@ -801,6 +742,8 @@ function ProductionPreviewSheet({
     getCompletionPercentage,
   } = useProductionStepExecution(producao?.id);
 
+  const { updateProduction } = useProductions();
+
   // Initialize executions & expand all stages when dialog opens
   useEffect(() => {
     if (open && producao && stages.length > 0) {
@@ -818,6 +761,7 @@ function ProductionPreviewSheet({
   const multiplier = Number(producao.planned_quantity) / Number(sheet.yield_quantity);
   const canEditDate = producao.status === 'planned' || producao.status === 'in_progress';
   const canMarkSteps = producao.status === 'in_progress';
+  const showProgress = producao.status === 'in_progress' || producao.status === 'paused';
 
   const [year, month, day] = producao.scheduled_date.split('-').map(Number);
   const scheduledDate = new Date(year, month - 1, day);
@@ -912,8 +856,8 @@ function ProductionPreviewSheet({
             </div>
           </div>
 
-          {/* Progress Bar (only for in_progress) */}
-          {canMarkSteps && totalSteps > 0 && (
+          {/* Progress Bar (only for in_progress or paused) */}
+          {showProgress && totalSteps > 0 && (
             <div className="space-y-1">
               <div className="flex justify-between text-xs">
                 <span className="text-muted-foreground">Progresso</span>
@@ -1070,6 +1014,33 @@ function ProductionPreviewSheet({
         </div>
 
         <DialogFooter className="gap-2">
+          <div className="flex-1 flex gap-2">
+            {producao.status === 'in_progress' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => updateProduction.mutate({ id: producao.id, status: 'paused' })}
+                disabled={updateProduction.isPending}
+                className="gap-2"
+              >
+                <PauseCircle className="h-4 w-4" />
+                Pausar
+              </Button>
+            )}
+            {producao.status === 'paused' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => updateProduction.mutate({ id: producao.id, status: 'in_progress' })}
+                disabled={updateProduction.isPending}
+                className="gap-2 text-warning border-warning hover:bg-warning/10"
+              >
+                <Play className="h-4 w-4" />
+                Retomar
+              </Button>
+            )}
+          </div>
+
           <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
           {producao.status === 'planned' && (
             <Button onClick={onStartProduction} className="gap-2">

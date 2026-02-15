@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Check, Clock, ChevronRight, ChevronDown, Loader2 } from 'lucide-react';
+import { Check, Clock, ChevronRight, ChevronDown, Loader2, PauseCircle, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/collapsible';
 import { useTechnicalSheetStages, StageWithSteps } from '@/hooks/useTechnicalSheetStages';
 import { useProductionStepExecution } from '@/hooks/useProductionStepExecution';
-import type { ProductionWithSheet } from '@/hooks/useProductions';
+import { useProductions, ProductionWithSheet } from '@/hooks/useProductions';
 
 interface ProductionExecutionDialogProps {
   open: boolean;
@@ -35,12 +35,13 @@ export function ProductionExecutionDialog({
   onComplete,
 }: ProductionExecutionDialogProps) {
   const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
-  
+
   const { stages, isLoading: stagesLoading } = useTechnicalSheetStages(
     production?.technical_sheet?.id
   );
-  
-  const { 
+
+  const { updateProduction } = useProductions();
+  const {
     stepExecutions,
     isLoading: executionsLoading,
     initializeStepExecutions,
@@ -54,12 +55,12 @@ export function ProductionExecutionDialog({
     if (open && production && stages.length > 0) {
       const allStepIds = stages.flatMap(stage => stage.steps.map(step => step.id));
       if (allStepIds.length > 0) {
-        initializeStepExecutions.mutate({ 
-          productionId: production.id, 
-          stepIds: allStepIds 
+        initializeStepExecutions.mutate({
+          productionId: production.id,
+          stepIds: allStepIds
         });
       }
-      
+
       // Expand first stage by default
       if (stages.length > 0) {
         setExpandedStages(new Set([stages[0].id]));
@@ -84,10 +85,11 @@ export function ProductionExecutionDialog({
   };
 
   const handleStepToggle = async (stepId: string) => {
+    if (production.status !== 'in_progress') return;
     const currentlyCompleted = isStepCompleted(stepId);
-    await toggleStepCompletion.mutateAsync({ 
-      stepId, 
-      completed: !currentlyCompleted 
+    await toggleStepCompletion.mutateAsync({
+      stepId,
+      completed: !currentlyCompleted
     });
   };
 
@@ -104,12 +106,17 @@ export function ProductionExecutionDialog({
         <DialogHeader>
           <div className="space-y-2">
             <DialogTitle className="text-xl">{production.name}</DialogTitle>
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">
-                {production.planned_quantity} {production.technical_sheet.yield_unit}
-              </span>
-              {multiplier !== 1 && (
-                <Badge variant="outline">Multiplicador: {multiplier.toFixed(2)}x</Badge>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">
+                  {production.planned_quantity} {production.technical_sheet.yield_unit}
+                </span>
+                {multiplier !== 1 && (
+                  <Badge variant="outline">Multiplicador: {multiplier.toFixed(2)}x</Badge>
+                )}
+              </div>
+              {production.status === 'paused' && (
+                <Badge variant="warning" className="animate-pulse">PAUSADA</Badge>
               )}
             </div>
           </div>
@@ -160,7 +167,7 @@ export function ProductionExecutionDialog({
                         ) : (
                           <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                         )}
-                        
+
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="font-medium">
@@ -194,7 +201,7 @@ export function ProductionExecutionDialog({
                       <div className="ml-7 mt-2 space-y-1">
                         {stage.steps.map((step, stepIndex) => {
                           const stepCompleted = isStepCompleted(step.id);
-                          
+
                           return (
                             <div
                               key={step.id}
@@ -207,9 +214,10 @@ export function ProductionExecutionDialog({
                               <Checkbox
                                 checked={stepCompleted}
                                 onCheckedChange={() => handleStepToggle(step.id)}
+                                disabled={production.status !== 'in_progress'}
                                 className="mt-0.5"
                               />
-                              
+
                               <div className="flex-1 min-w-0">
                                 <p className={`text-sm ${stepCompleted ? 'line-through text-muted-foreground' : ''}`}>
                                   <span className="font-medium">{stepIndex + 1}.</span> {step.description}
@@ -239,18 +247,43 @@ export function ProductionExecutionDialog({
           )}
         </ScrollArea>
 
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Fechar
-          </Button>
-          {allCompleted && (
-            <Button onClick={onComplete} className="gap-2">
-              <Check className="h-4 w-4" />
-              Finalizar Produção
+        <div className="flex-1 flex gap-2">
+          {production.status === 'in_progress' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => updateProduction.mutate({ id: production.id, status: 'paused' })}
+              disabled={updateProduction.isPending}
+              className="gap-2"
+            >
+              <PauseCircle className="h-4 w-4" />
+              Pausar
             </Button>
           )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          {production.status === 'paused' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => updateProduction.mutate({ id: production.id, status: 'in_progress' })}
+              disabled={updateProduction.isPending}
+              className="gap-2 text-warning border-warning hover:bg-warning/10"
+            >
+              <Play className="h-4 w-4" />
+              Retomar
+            </Button>
+          )}
+        </div>
+        <Button variant="outline" onClick={() => onOpenChange(false)}>
+          Fechar
+        </Button>
+        {allCompleted && (
+          <Button onClick={onComplete} className="gap-2" disabled={production.status === 'paused'}>
+            <Check className="h-4 w-4" />
+            Finalizar Produção
+          </Button>
+        )}
+      </DialogFooter>
+    </DialogContent>
+    </Dialog >
   );
 }
