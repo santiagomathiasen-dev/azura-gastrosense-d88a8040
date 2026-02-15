@@ -49,7 +49,7 @@ export function useSaleProducts() {
     queryKey: ['sale_products', ownerId],
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
-      
+
       const { data, error } = await supabase
         .from('sale_products')
         .select(`
@@ -58,7 +58,7 @@ export function useSaleProducts() {
         `)
         .order('name', { ascending: true });
       if (error) throw error;
-      
+
       return data as SaleProduct[];
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
@@ -188,7 +188,7 @@ export function useSaleProducts() {
       const product = saleProducts.find(p => p.id === sale_product_id);
       if (!product) throw new Error('Produto não encontrado');
 
-      const insufficientItems: string[] = [];
+      const insufficientItems: { id: string; name: string; type: SaleComponentType; amount: number }[] = [];
 
       // Process each component and deduct from appropriate stock (multiplied by quantity)
       for (const component of product.components || []) {
@@ -207,7 +207,13 @@ export function useSaleProducts() {
               .select('name')
               .eq('id', component.component_id)
               .single();
-            insufficientItems.push(sheet?.name || 'Produção desconhecida');
+
+            insufficientItems.push({
+              id: component.component_id,
+              name: sheet?.name || 'Produção desconhecida',
+              type: 'finished_production',
+              amount: Math.max(0, neededQty - (Number(stock?.quantity) || 0))
+            });
             continue;
           }
 
@@ -230,7 +236,13 @@ export function useSaleProducts() {
               .select('name')
               .eq('id', component.component_id)
               .single();
-            insufficientItems.push(stockItem?.name || 'Item desconhecido');
+
+            insufficientItems.push({
+              id: component.component_id,
+              name: stockItem?.name || 'Item desconhecido',
+              type: 'stock_item',
+              amount: Math.max(0, neededQty - (Number(prodStock?.quantity) || 0))
+            });
             continue;
           }
 
@@ -248,7 +260,12 @@ export function useSaleProducts() {
             .single();
 
           if (!otherProduct || Number(otherProduct.ready_quantity) < neededQty) {
-            insufficientItems.push(otherProduct?.name || 'Produto desconhecido');
+            insufficientItems.push({
+              id: component.component_id,
+              name: otherProduct?.name || 'Produto desconhecido',
+              type: 'sale_product',
+              amount: neededQty - (Number(otherProduct?.ready_quantity) || 0)
+            });
             continue;
           }
 
@@ -260,7 +277,9 @@ export function useSaleProducts() {
       }
 
       if (insufficientItems.length > 0) {
-        throw new Error(`Estoque insuficiente para: ${insufficientItems.join(', ')}`);
+        const error = new Error(`Estoque insuficiente`);
+        (error as any).insufficientItems = insufficientItems;
+        throw error;
       }
 
       // Increment ready_quantity by the full amount

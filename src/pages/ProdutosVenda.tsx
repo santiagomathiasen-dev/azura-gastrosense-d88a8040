@@ -14,6 +14,8 @@ import { useSaleProducts, SaleProduct, ComponentInput } from '@/hooks/useSalePro
 import { useFinishedProductionsStock } from '@/hooks/useFinishedProductionsStock';
 import { useStockItems } from '@/hooks/useStockItems';
 import { useTechnicalSheets } from '@/hooks/useTechnicalSheets';
+import { usePurchaseList } from '@/hooks/usePurchaseList';
+import { toast } from 'sonner';
 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { VoiceImportDialog, type ExtractedItem } from '@/components/VoiceImportDialog';
@@ -28,17 +30,18 @@ export default function ProdutosVenda() {
   const { finishedStock } = useFinishedProductionsStock();
   const { items: stockItems } = useStockItems();
   const { sheets: technicalSheets } = useTechnicalSheets();
-  
-  
+  const { createItem: createPurchaseItem } = usePurchaseList();
+
+
   const [search, setSearch] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<SaleProduct | null>(null);
   const [voiceDialogOpen, setVoiceDialogOpen] = useState(false);
   const [aiImportDialogOpen, setAiImportDialogOpen] = useState(false);
-  
+
   // Quantity state per product (for prepare action)
   const [quantities, setQuantities] = useState<Record<string, number>>({});
-  
+
   // Form state
   const [formData, setFormData] = useState({
     name: '',
@@ -86,14 +89,14 @@ export default function ProdutosVenda() {
 
   const addComponent = () => {
     if (!newComponent.component_type || !newComponent.component_id || !newComponent.quantity) return;
-    
+
     setComponents([...components, {
       component_type: newComponent.component_type as SaleComponentType,
       component_id: newComponent.component_id,
       quantity: Number(newComponent.quantity),
       unit: newComponent.unit,
     }]);
-    
+
     setNewComponent({ component_type: '', component_id: '', quantity: '', unit: '' });
   };
 
@@ -123,7 +126,7 @@ export default function ProdutosVenda() {
 
   const handleUpdate = () => {
     if (!editingProduct) return;
-    
+
     updateSaleProduct.mutate({
       id: editingProduct.id,
       name: formData.name,
@@ -186,15 +189,15 @@ export default function ProdutosVenda() {
 
   // Quantity handlers
   const getQuantity = (productId: string) => quantities[productId] || 1;
-  
+
   const incrementQuantity = (productId: string) => {
     setQuantities(prev => ({ ...prev, [productId]: (prev[productId] || 1) + 1 }));
   };
-  
+
   const decrementQuantity = (productId: string) => {
     setQuantities(prev => ({ ...prev, [productId]: Math.max(1, (prev[productId] || 1) - 1) }));
   };
-  
+
   const setQuantity = (productId: string, value: number) => {
     setQuantities(prev => ({ ...prev, [productId]: Math.max(1, value) }));
   };
@@ -205,6 +208,32 @@ export default function ProdutosVenda() {
       onSuccess: () => {
         setQuantities(prev => ({ ...prev, [productId]: 1 }));
       },
+      onError: (error: any) => {
+        if (error.insufficientItems) {
+          const missingIngredients = error.insufficientItems.filter((item: any) => item.type === 'stock_item');
+          const missingProductions = error.insufficientItems.filter((item: any) => item.type === 'finished_production');
+
+          if (missingIngredients.length > 0) {
+            missingIngredients.forEach((item: any) => {
+              createPurchaseItem.mutate({
+                stock_item_id: item.id,
+                suggested_quantity: item.amount,
+                status: 'pending',
+              });
+            });
+
+            toast.warning('Estoque insuficiente! Ingredientes adicionados à lista de compras.', {
+              description: `Faltando: ${missingIngredients.map((i: any) => i.name).join(', ')}`,
+            });
+          }
+
+          if (missingProductions.length > 0) {
+            toast.error('Produção insuficiente!', {
+              description: `Você precisa produzir mais: ${missingProductions.map((i: any) => i.name).join(', ')}`,
+            });
+          }
+        }
+      }
     });
   };
 
@@ -257,13 +286,13 @@ export default function ProdutosVenda() {
       {/* Components Section */}
       <div className="space-y-3 pt-4 border-t">
         <Label className="text-base font-semibold">Componentes do Produto</Label>
-        
+
         {/* Add Component Form */}
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 p-3 bg-muted/50 rounded-lg">
           <Select
             value={newComponent.component_type}
-            onValueChange={(v) => setNewComponent({ 
-              ...newComponent, 
+            onValueChange={(v) => setNewComponent({
+              ...newComponent,
               component_type: v as SaleComponentType,
               component_id: '',
               unit: '',
@@ -284,8 +313,8 @@ export default function ProdutosVenda() {
             onValueChange={(v) => {
               const options = getComponentOptions();
               const selected = options.find(o => o.id === v);
-              setNewComponent({ 
-                ...newComponent, 
+              setNewComponent({
+                ...newComponent,
                 component_id: v,
                 unit: selected?.unit || '',
               });
@@ -313,8 +342,8 @@ export default function ProdutosVenda() {
             placeholder="Qtd"
           />
 
-          <Button 
-            type="button" 
+          <Button
+            type="button"
             onClick={addComponent}
             disabled={!newComponent.component_type || !newComponent.component_id || !newComponent.quantity}
           >
@@ -329,8 +358,8 @@ export default function ProdutosVenda() {
               <div key={idx} className="flex items-center justify-between p-2 bg-muted rounded-lg">
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="text-xs">
-                    {comp.component_type === 'finished_production' ? 'Produção' : 
-                     comp.component_type === 'stock_item' ? 'Ingrediente' : 'Produto'}
+                    {comp.component_type === 'finished_production' ? 'Produção' :
+                      comp.component_type === 'stock_item' ? 'Ingrediente' : 'Produto'}
                   </Badge>
                   <span className="font-medium">
                     {getComponentName(comp.component_type, comp.component_id)}
@@ -389,16 +418,16 @@ export default function ProdutosVenda() {
               <CardContent className="flex flex-col items-center justify-center py-8">
                 <ShoppingBag className="h-10 w-10 text-muted-foreground mb-3" />
                 <h3 className="text-base font-semibold mb-1">Nenhum produto cadastrado</h3>
-                 <p className="text-muted-foreground text-center text-sm max-w-md">
-                   Vá para a aba "Cadastro" para criar produtos.
-                 </p>
+                <p className="text-muted-foreground text-center text-sm max-w-md">
+                  Vá para a aba "Cadastro" para criar produtos.
+                </p>
               </CardContent>
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {filteredProducts.map((product) => {
                 const qty = getQuantity(product.id);
-                
+
                 return (
                   <Card key={product.id} className="flex flex-col">
                     <CardHeader className="pb-2 p-4">
@@ -409,7 +438,7 @@ export default function ProdutosVenda() {
                             <CardDescription className="mt-1 text-xs line-clamp-1">{product.description}</CardDescription>
                           )}
                         </div>
-                        <Badge 
+                        <Badge
                           variant={product.ready_quantity > 0 ? 'default' : 'secondary'}
                           className="text-sm font-bold shrink-0"
                         >
@@ -464,7 +493,7 @@ export default function ProdutosVenda() {
                           >
                             <Minus className="h-4 w-4" />
                           </Button>
-                          
+
                           <Input
                             type="number"
                             min="1"
@@ -472,7 +501,7 @@ export default function ProdutosVenda() {
                             onChange={(e) => setQuantity(product.id, parseInt(e.target.value) || 1)}
                             className="h-8 text-center w-16"
                           />
-                          
+
                           <Button
                             variant="outline"
                             size="icon"
@@ -482,8 +511,8 @@ export default function ProdutosVenda() {
                             <Plus className="h-4 w-4" />
                           </Button>
                         </div>
-                        
-                        <Button 
+
+                        <Button
                           variant="secondary"
                           size="sm"
                           className="w-full"
@@ -510,9 +539,9 @@ export default function ProdutosVenda() {
                           <Trash className="h-4 w-4 mr-1" />
                           Perdas
                         </Button>
-                        
+
                         {/* Sell button - primary/blue */}
-                        <Button 
+                        <Button
                           className="flex-1 bg-blue-600 hover:bg-blue-700"
                           size="sm"
                           onClick={() => quickSale.mutate(product.id)}
@@ -526,109 +555,14 @@ export default function ProdutosVenda() {
 
                       {/* Edit/Delete actions */}
                       <div className="flex gap-2 pt-2 mt-2 border-t">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="flex-1"
-                            onClick={() => openEditDialog(product)}
-                          >
-                            <Edit className="h-4 w-4 mr-1" />
-                            Editar
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="outline" size="sm" className="text-destructive">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Remover produto?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Esta ação irá remover "{product.name}" permanentemente.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => deleteSaleProduct.mutate(product.id)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
-                                  Remover
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* Register Tab - For all users to create products */}
-        <TabsContent value="register" className="space-y-4">
-            <>
-              {/* Action Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-2xl mx-auto">
-                <Card 
-                  className="cursor-pointer hover:border-primary hover:shadow-lg transition-all group"
-                  onClick={() => setVoiceDialogOpen(true)}
-                >
-                  <CardHeader className="text-center p-4">
-                    <div className="mx-auto w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2 group-hover:bg-primary/20 transition-colors">
-                      <Mic className="h-5 w-5 text-primary" />
-                    </div>
-                    <CardTitle className="text-sm">Falar Produtos</CardTitle>
-                  </CardHeader>
-                </Card>
-
-                <Card 
-                  className="cursor-pointer hover:border-primary hover:shadow-lg transition-all group"
-                  onClick={() => setAiImportDialogOpen(true)}
-                >
-                  <CardHeader className="text-center p-4">
-                    <div className="mx-auto w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center mb-2 group-hover:bg-orange-500/20 transition-colors">
-                      <FileText className="h-5 w-5 text-orange-500" />
-                    </div>
-                    <CardTitle className="text-sm">Importar Arquivo</CardTitle>
-                  </CardHeader>
-                </Card>
-
-                <Card 
-                  className="cursor-pointer hover:border-primary hover:shadow-lg transition-all group"
-                  onClick={() => { resetForm(); setIsAddDialogOpen(true); }}
-                >
-                  <CardHeader className="text-center p-4">
-                    <div className="mx-auto w-10 h-10 rounded-full bg-secondary/50 flex items-center justify-center mb-2 group-hover:bg-secondary transition-colors">
-                      <Plus className="h-5 w-5 text-foreground" />
-                    </div>
-                    <CardTitle className="text-sm">Cadastro Manual</CardTitle>
-                  </CardHeader>
-                </Card>
-              </div>
-
-              {/* Products list for management */}
-              <div className="space-y-2">
-                <h3 className="font-semibold text-lg">Produtos Cadastrados ({saleProducts.length})</h3>
-                {saleProducts.map((product) => (
-                  <Card key={product.id} className="p-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">{product.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {product.sale_price ? `R$ ${Number(product.sale_price).toFixed(2)}` : 'Sem preço'} • {product.components?.length || 0} componentes
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
                         <Button
                           variant="outline"
                           size="sm"
+                          className="flex-1"
                           onClick={() => openEditDialog(product)}
                         >
-                          <Edit className="h-4 w-4" />
+                          <Edit className="h-4 w-4 mr-1" />
+                          Editar
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
@@ -655,11 +589,106 @@ export default function ProdutosVenda() {
                           </AlertDialogContent>
                         </AlertDialog>
                       </div>
-                    </div>
+                    </CardContent>
                   </Card>
-                ))}
-              </div>
-            </>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Register Tab - For all users to create products */}
+        <TabsContent value="register" className="space-y-4">
+          <>
+            {/* Action Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-2xl mx-auto">
+              <Card
+                className="cursor-pointer hover:border-primary hover:shadow-lg transition-all group"
+                onClick={() => setVoiceDialogOpen(true)}
+              >
+                <CardHeader className="text-center p-4">
+                  <div className="mx-auto w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2 group-hover:bg-primary/20 transition-colors">
+                    <Mic className="h-5 w-5 text-primary" />
+                  </div>
+                  <CardTitle className="text-sm">Falar Produtos</CardTitle>
+                </CardHeader>
+              </Card>
+
+              <Card
+                className="cursor-pointer hover:border-primary hover:shadow-lg transition-all group"
+                onClick={() => setAiImportDialogOpen(true)}
+              >
+                <CardHeader className="text-center p-4">
+                  <div className="mx-auto w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center mb-2 group-hover:bg-orange-500/20 transition-colors">
+                    <FileText className="h-5 w-5 text-orange-500" />
+                  </div>
+                  <CardTitle className="text-sm">Importar Arquivo</CardTitle>
+                </CardHeader>
+              </Card>
+
+              <Card
+                className="cursor-pointer hover:border-primary hover:shadow-lg transition-all group"
+                onClick={() => { resetForm(); setIsAddDialogOpen(true); }}
+              >
+                <CardHeader className="text-center p-4">
+                  <div className="mx-auto w-10 h-10 rounded-full bg-secondary/50 flex items-center justify-center mb-2 group-hover:bg-secondary transition-colors">
+                    <Plus className="h-5 w-5 text-foreground" />
+                  </div>
+                  <CardTitle className="text-sm">Cadastro Manual</CardTitle>
+                </CardHeader>
+              </Card>
+            </div>
+
+            {/* Products list for management */}
+            <div className="space-y-2">
+              <h3 className="font-semibold text-lg">Produtos Cadastrados ({saleProducts.length})</h3>
+              {saleProducts.map((product) => (
+                <Card key={product.id} className="p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{product.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {product.sale_price ? `R$ ${Number(product.sale_price).toFixed(2)}` : 'Sem preço'} • {product.components?.length || 0} componentes
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openEditDialog(product)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="outline" size="sm" className="text-destructive">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Remover produto?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Esta ação irá remover "{product.name}" permanentemente.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => deleteSaleProduct.mutate(product.id)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Remover
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </>
         </TabsContent>
       </Tabs>
 
@@ -674,7 +703,7 @@ export default function ProdutosVenda() {
             <Button variant="outline" onClick={() => { setIsAddDialogOpen(false); resetForm(); }}>
               Cancelar
             </Button>
-            <Button 
+            <Button
               onClick={handleAdd}
               disabled={!formData.name || createSaleProduct.isPending}
             >
@@ -695,7 +724,7 @@ export default function ProdutosVenda() {
             <Button variant="outline" onClick={() => { setEditingProduct(null); resetForm(); }}>
               Cancelar
             </Button>
-            <Button 
+            <Button
               onClick={handleUpdate}
               disabled={!formData.name || updateSaleProduct.isPending}
             >
