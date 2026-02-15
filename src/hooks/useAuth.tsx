@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!email || !password) {
       return { error: 'Por favor, preencha todos os campos' };
     }
-    
+
     if (password.length < 6) {
       return { error: 'Senha deve ter pelo menos 6 caracteres' };
     }
@@ -70,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!email || !password || !name) {
       return { error: 'Por favor, preencha todos os campos' };
     }
-    
+
     if (password.length < 6) {
       return { error: 'Senha deve ter pelo menos 6 caracteres' };
     }
@@ -95,7 +95,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: error.message };
     }
 
-    return {};
+    if (data.session) {
+      return { error: undefined }; // Account created and logged in automatically
+    }
+
+    return { error: 'Conta criada com sucesso! Verifique seu email para confirmar o cadastro (se necessário).' };
   };
 
   const logout = async () => {
