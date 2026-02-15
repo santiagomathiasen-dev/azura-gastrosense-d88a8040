@@ -10,6 +10,7 @@ import { usePurchaseCalculationByPeriod } from '@/hooks/usePurchaseCalculationBy
 import { usePendingDeliveries } from '@/hooks/usePendingDeliveries';
 import { usePurchaseSchedule } from '@/hooks/usePurchaseSchedule';
 import { useProductions, ProductionWithSheet } from '@/hooks/useProductions';
+import { usePurchaseList } from '@/hooks/usePurchaseList';
 import { PurchasePeriodSelector } from '@/components/purchases/PurchasePeriodSelector';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -67,44 +68,93 @@ export default function Compras() {
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
   const [newScheduleDay, setNewScheduleDay] = useState('1');
   const [filteredProductions, setFilteredProductions] = useState<ProductionWithSheet[]>([]);
-  
+
   // Get all productions
   const { productions, isLoading: productionsLoading } = useProductions();
-  
+
+  // Custom shopping list items (manual/auto added)
+  const { pendingItems: shoppingListItems, isLoading: shoppingListLoading } = usePurchaseList();
+
+  // Pending deliveries (ordered items)
+  const { pendingItems, markAsOrdered } = usePendingDeliveries();
+
+  // Purchase schedules
+  const {
+    schedules,
+    suggestedPurchaseDays,
+    isTodayPurchaseDay,
+    getNextPurchaseDay,
+    createSchedule,
+    deleteSchedule,
+    DAY_NAMES
+  } = usePurchaseSchedule();
+
   // Handle period change from selector
   const handlePeriodChange = useCallback((startDate: Date, endDate: Date, productions: ProductionWithSheet[]) => {
     setFilteredProductions(productions);
   }, []);
-  
+
   // Calculate purchase needs based on filtered productions
-  const { 
-    purchaseNeeds, 
-    urgentCount, 
-    totalEstimatedCost, 
+  const {
+    purchaseNeeds,
+    urgentCount,
+    totalEstimatedCost,
     isLoading: calculationLoading,
-    plannedProductionsCount 
+    plannedProductionsCount
   } = usePurchaseCalculationByPeriod({ productions: filteredProductions });
-  
-  const isLoading = calculationLoading || productionsLoading;
-  
-  const { pendingItems, markAsOrdered } = usePendingDeliveries();
-  const { 
-    schedules, 
-    suggestedPurchaseDays, 
-    isTodayPurchaseDay, 
-    getNextPurchaseDay,
-    createSchedule,
-    deleteSchedule,
-    DAY_NAMES 
-  } = usePurchaseSchedule();
+
+  const isLoading = calculationLoading || productionsLoading || shoppingListLoading;
 
   // Merge purchase needs with pending deliveries to show purchased status
-  const mergedPurchaseList = useMemo((): PurchaseListItem[] => {
-    return purchaseNeeds.map(item => {
+  // AND with the manual shopping list (pendingItems from usePurchaseList)
+  const mergedPurchaseList = useMemo((): (PurchaseListItem & { isManual?: boolean })[] => {
+    const list: (PurchaseListItem & { isManual?: boolean })[] = [
+      ...purchaseNeeds.map(item => ({
+        ...item,
+        isPurchased: false,
+        orderedQuantity: 0
+      }))
+    ];
+
+    // Add or Update items from the manual shopping list
+    shoppingListItems.forEach(manualItem => {
+      const existingItem = list.find(i => i.stockItemId === manualItem.stock_item_id);
+
+      if (existingItem) {
+        // If it already exists, ensure we use the highest quantity
+        if (Number(manualItem.suggested_quantity) > existingItem.suggestedQuantity) {
+          existingItem.suggestedQuantity = Number(manualItem.suggested_quantity);
+          existingItem.estimatedCost = existingItem.suggestedQuantity * existingItem.unitPrice;
+        }
+        existingItem.isManual = true;
+      } else if (manualItem.stock_item) {
+        // Add new item if not in calculated needs
+        list.push({
+          stockItemId: manualItem.stock_item_id,
+          name: manualItem.stock_item.name,
+          category: manualItem.stock_item.category,
+          unit: manualItem.stock_item.unit,
+          currentQuantity: 0, // Not explicitly needed here as it's a manual add
+          minimumQuantity: 0,
+          productionNeed: 0,
+          suggestedQuantity: Number(manualItem.suggested_quantity),
+          supplierId: manualItem.supplier_id,
+          supplierName: manualItem.supplier?.name || null,
+          unitPrice: 0, // We could fetch this but it's okay for now
+          estimatedCost: 0,
+          isUrgent: true,
+          isPurchased: false,
+          orderedQuantity: 0,
+          isManual: true,
+        });
+      }
+    });
+
+    return list.map(item => {
       const pendingItem = pendingItems.find(p => p.stock_item_id === item.stockItemId);
       const orderedQty = pendingItem?.ordered_quantity || 0;
       const isPurchased = !!pendingItem && orderedQty >= item.suggestedQuantity;
-      
+
       return {
         ...item,
         isPurchased,
@@ -112,7 +162,7 @@ export default function Compras() {
         pendingDeliveryId: pendingItem?.id,
       };
     });
-  }, [purchaseNeeds, pendingItems]);
+  }, [purchaseNeeds, pendingItems, shoppingListItems]);
 
   // Filter items - exclude items that are already in stock (delivered status handled by usePurchaseCalculation)
   const filteredItems = mergedPurchaseList.filter(item =>
@@ -143,7 +193,7 @@ export default function Compras() {
     }
   };
 
-  
+
 
   const openOrderDialog = () => {
     // Pre-fill quantities with suggested values
@@ -189,11 +239,11 @@ export default function Compras() {
       toast.info('Nenhum item na lista de compras.');
       return;
     }
-    
-    const lista = filteredItems.map(item => 
+
+    const lista = filteredItems.map(item =>
       `• ${item.suggestedQuantity} ${item.unit} de ${item.name}${item.supplierName ? ` - ${item.supplierName}` : ''}`
     ).join('\n');
-    
+
     navigator.clipboard.writeText(lista);
     toast.success('Lista copiada para a área de transferência!');
   };
@@ -322,9 +372,9 @@ export default function Compras() {
       />
 
       {/* Period Selector - NEW! */}
-      <PurchasePeriodSelector 
-        productions={productions.filter(p => p.status === 'planned')} 
-        onPeriodChange={handlePeriodChange} 
+      <PurchasePeriodSelector
+        productions={productions.filter(p => p.status === 'planned')}
+        onPeriodChange={handlePeriodChange}
       />
 
       {/* Stats - Mobile Friendly */}
@@ -426,7 +476,7 @@ export default function Compras() {
               <span className="text-xs text-muted-foreground">Selecionar todos pendentes</span>
             </div>
           )}
-          
+
           {filteredItems.map((item) => (
             <MobileListItem
               key={item.stockItemId}
@@ -447,7 +497,7 @@ export default function Compras() {
                 ) : (
                   <CheckCircle2 className="h-4 w-4 text-emerald-600 flex-shrink-0" />
                 )}
-                <MobileListTitle 
+                <MobileListTitle
                   className={cn(
                     "flex-1",
                     item.isPurchased && "line-through text-muted-foreground"
@@ -461,6 +511,10 @@ export default function Compras() {
                   </MobileListBadge>
                 ) : item.isUrgent ? (
                   <MobileListBadge variant="warning">Urgente</MobileListBadge>
+                ) : item.isManual ? (
+                  <MobileListBadge variant="default" className="bg-blue-100 text-blue-700 border-blue-200">
+                    Na Lista
+                  </MobileListBadge>
                 ) : null}
                 {item.estimatedCost > 0 && !item.isPurchased && (
                   <span className="text-sm font-medium text-primary">
@@ -468,7 +522,7 @@ export default function Compras() {
                   </span>
                 )}
               </div>
-              
+
               {/* Linha 2: Detalhes */}
               <MobileListDetails className={cn("ml-6", item.isPurchased && "text-muted-foreground")}>
                 {item.supplierName && <span>{item.supplierName}</span>}
