@@ -7,6 +7,7 @@ import { useProductions } from '@/hooks/useProductions';
 import { useStockItems } from '@/hooks/useStockItems';
 import { useFinishedProductionsStock } from '@/hooks/useFinishedProductionsStock';
 import { useSaleProducts } from '@/hooks/useSaleProducts';
+import { usePendingDeliveries } from '@/hooks/usePendingDeliveries';
 import { AIAssistant } from '@/components/dashboard/AIAssistant';
 import { usePreparationAlerts } from '@/hooks/usePreparationAlerts';
 import { CheckCircle2, XCircle } from 'lucide-react';
@@ -18,6 +19,7 @@ export default function Dashboard() {
   const { finishedStock, isLoading: finishedLoading } = useFinishedProductionsStock();
   const { saleProducts, isLoading: saleProductsLoading } = useSaleProducts();
   const { alerts: preparationAlerts, isLoading: alertsLoading, resolveAlert } = usePreparationAlerts();
+  const { pendingItems } = usePendingDeliveries();
 
   // Filter productions by status
   const plannedProductions = productions.filter((p) => p.status === 'planned');
@@ -25,11 +27,13 @@ export default function Dashboard() {
 
   // Filter low stock items (current <= minimum)
   const lowStockItems = stockItems.filter(
-    (item) => item.current_quantity <= item.minimum_quantity
+    (item) => item.current_quantity <= item.minimum_quantity &&
+      !pendingItems.some(p => p.stock_item_id === item.id)
   );
 
   const lowFinishedStock = finishedStock.filter(
-    (item) => item.quantity <= (item.technical_sheet?.minimum_stock || 0)
+    (item) => item.quantity <= (item.technical_sheet?.minimum_stock || 0) &&
+      !pendingItems.some(p => p.stock_item_id === item.id) // Assuming pendingItems can track finished goods too? Probably not directly, but good safety.
   );
 
   const lowSaleProducts = saleProducts.filter(

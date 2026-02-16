@@ -523,7 +523,7 @@ export default function Compras() {
             </div>
           )}
 
-          {filteredItems.map((item) => (
+          {filteredItems.filter(item => !item.isPurchased).map((item) => (
             <MobileListItem
               key={item.stockItemId}
               className={cn(

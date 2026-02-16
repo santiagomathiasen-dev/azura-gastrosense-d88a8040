@@ -20,6 +20,7 @@ export interface PurchaseNeedItem {
   suggestedQuantity: number;
   supplierId: string | null;
   supplierName: string | null;
+  supplierPhone: string | null;
   unitPrice: number;
   estimatedCost: number;
   isUrgent: boolean;
@@ -154,6 +155,7 @@ export function usePurchaseCalculationByPeriod({ productions }: UsePurchaseCalcu
           suggestedQuantity: Math.ceil(totalNeed), // Round up to ensure enough
           supplierId: item.supplier_id,
           supplierName: supplier?.name || null,
+          supplierPhone: supplier?.whatsapp_number || null,
           unitPrice,
           estimatedCost: Math.ceil(totalNeed) * unitPrice,
           isUrgent,
