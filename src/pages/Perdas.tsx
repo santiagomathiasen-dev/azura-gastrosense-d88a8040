@@ -107,8 +107,8 @@ export default function Perdas() {
             className="pl-9"
           />
         </div>
-        <Button onClick={() => setIsDialogOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
+        <Button onClick={() => setIsDialogOpen(true)} size="lg" className="w-full sm:w-auto">
+          <Plus className="h-5 w-5 mr-2" />
           Registrar Perda
         </Button>
       </div>

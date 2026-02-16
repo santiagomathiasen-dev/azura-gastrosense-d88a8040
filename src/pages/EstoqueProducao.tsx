@@ -34,9 +34,9 @@ import { toast } from 'sonner';
 
 export default function EstoqueProducao() {
   const { items: centralItems, isLoading: centralLoading } = useStockItems();
-  const { 
-    productionStock, 
-    isLoading: productionLoading, 
+  const {
+    productionStock,
+    isLoading: productionLoading,
     transferToCentral,
     updateQuantity,
   } = useProductionStock();
@@ -80,12 +80,12 @@ export default function EstoqueProducao() {
   });
 
   // Filter production stock by search
-  const filteredProductionStock = productionStock.filter(ps => 
+  const filteredProductionStock = productionStock.filter(ps =>
     ps.stock_item?.name.toLowerCase().includes(search.toLowerCase())
   );
 
   // Get all items for request (from central stock)
-  const availableItems = centralItems.filter(item => 
+  const availableItems = centralItems.filter(item =>
     item.name.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -201,9 +201,38 @@ export default function EstoqueProducao() {
         </Card>
       </div>
 
-      {/* Search + Voice Control */}
-      <div className="flex gap-2 mb-2">
-        <div className="relative flex-1">
+      {/* Voice Control - Prominent */}
+      {voiceControl.isSupported && (
+        <div className="mb-3 flex flex-col items-center gap-2">
+          <Button
+            variant={voiceControl.isListening ? 'destructive' : 'default'}
+            size="lg"
+            className="h-16 w-16 rounded-full shadow-lg"
+            onClick={() => voiceControl.toggleListening()}
+            title={voiceControl.isListening ? 'Parar de ouvir' : 'Contagem por voz'}
+          >
+            {voiceControl.isListening ? (
+              <MicOff className="h-8 w-8" />
+            ) : (
+              <Mic className="h-8 w-8" />
+            )}
+          </Button>
+          {voiceControl.isListening && (
+            <div className="w-full max-w-md p-3 bg-muted rounded-lg text-center">
+              <p className="text-sm text-muted-foreground animate-pulse">
+                🎤 Ouvindo... Diga o nome do ingrediente e a quantidade
+              </p>
+              {voiceControl.transcript && (
+                <p className="text-sm mt-1 font-medium">"{voiceControl.transcript}"</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Search */}
+      <div className="mb-2">
+        <div className="relative">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
           <Input
             placeholder="Buscar..."
@@ -212,34 +241,7 @@ export default function EstoqueProducao() {
             className="pl-7 h-8 text-xs"
           />
         </div>
-        {voiceControl.isSupported && (
-          <Button
-            variant={voiceControl.isListening ? 'destructive' : 'outline'}
-            size="sm"
-            className="h-8 px-3"
-            onClick={() => voiceControl.toggleListening()}
-            title={voiceControl.isListening ? 'Parar de ouvir' : 'Contagem por voz'}
-          >
-            {voiceControl.isListening ? (
-              <MicOff className="h-4 w-4" />
-            ) : (
-              <Mic className="h-4 w-4" />
-            )}
-          </Button>
-        )}
       </div>
-
-      {/* Voice feedback */}
-      {voiceControl.isListening && (
-        <div className="mb-2 p-2 bg-muted rounded-lg text-center">
-          <p className="text-xs text-muted-foreground animate-pulse">
-            🎤 Ouvindo... Diga o nome do ingrediente e a quantidade
-          </p>
-          {voiceControl.transcript && (
-            <p className="text-xs mt-1 font-medium">"{voiceControl.transcript}"</p>
-          )}
-        </div>
-      )}
 
       <Tabs defaultValue="production" className="flex-1 flex flex-col overflow-hidden">
         <TabsList className="h-8">
@@ -340,7 +342,7 @@ export default function EstoqueProducao() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-xs truncate">{request.stock_item?.name || 'Item removido'}</span>
-                          <Badge 
+                          <Badge
                             variant={request.status === 'completed' ? 'default' : request.status === 'cancelled' ? 'secondary' : 'outline'}
                             className="text-[10px] px-1 py-0 h-4"
                           >
@@ -490,7 +492,7 @@ export default function EstoqueProducao() {
             <Button variant="outline" onClick={() => setRequestDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button 
+            <Button
               onClick={handleCreateRequest}
               disabled={!selectedItemId || !quantity || createRequest.isPending}
             >
@@ -562,7 +564,7 @@ export default function EstoqueProducao() {
             <Button variant="outline" onClick={() => setReturnDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button 
+            <Button
               onClick={handleReturn}
               disabled={!selectedItemId || !quantity || transferToCentral.isPending}
             >
