@@ -262,11 +262,23 @@ export function VoiceImportDialog({
         ? `Você é um assistente que extrai ingredientes de texto falado em português brasileiro.
 Retorne SOMENTE um array JSON válido com os ingredientes extraídos.
 Cada ingrediente deve ter: name, quantity (número), unit (kg, g, l, ml, unidade, caixa, dz), category (laticinios, secos_e_graos, hortifruti, carnes_e_peixes, embalagens, limpeza, outros).
+
+IMPORTANTE para números decimais:
+- Reconheça "vírgula" como separador decimal: "125 vírgula 033" = 125.033
+- Aceite formato brasileiro: "125,033" = 125.033
+- Exemplos: "dois vírgula cinco kg" = 2.5, "três vírgula dois litros" = 3.2
+
 Se não conseguir determinar quantidade, use 1. Se não conseguir determinar unidade, use "unidade".
 Exemplo: [{"name": "Farinha de trigo", "quantity": 5, "unit": "kg", "category": "secos_e_graos"}]`
         : `Você é um assistente que extrai ingredientes de receitas de texto falado em português brasileiro.
 Retorne SOMENTE um array JSON válido com os ingredientes extraídos.
 Cada ingrediente deve ter: name, quantity (número), unit (kg, g, l, ml, unidade, caixa, dz), category (laticinios, secos_e_graos, hortifruti, carnes_e_peixes, embalagens, limpeza, outros).
+
+IMPORTANTE para números decimais:
+- Reconheça "vírgula" como separador decimal: "125 vírgula 033" = 125.033
+- Aceite formato brasileiro: "125,033" = 125.033
+- Exemplos: "dois vírgula cinco kg" = 2.5, "três vírgula dois litros" = 3.2
+
 Se não conseguir determinar quantidade, use 1. Se não conseguir determinar unidade, use "unidade".`;
 
       const { data, error } = await supabase.functions.invoke('process-voice-text', {
