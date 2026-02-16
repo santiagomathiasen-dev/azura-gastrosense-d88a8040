@@ -256,22 +256,23 @@ export default function Compras() {
       return;
     }
 
-    const message = `Olá ${item.supplierName}, gostaria de fazer um pedido: ${item.suggestedQuantity} ${item.unit} de ${item.name}.`;
+    // Find all unpurchased items for this supplier
+    const supplierItems = filteredItems.filter(
+      i => i.supplierId === item.supplierId && !i.isPurchased
+    );
+
+    let message = `Olá ${item.supplierName}, gostaria de fazer um pedido:\n`;
+
+    supplierItems.forEach(i => {
+      message += `- ${i.suggestedQuantity} ${i.unit} de ${i.name}\n`;
+    });
 
     setWhatsAppDialogData({
       open: true,
       supplierName: item.supplierName,
       phoneNumber: item.supplierPhone,
       supplierId: item.supplierId,
-      initialMessage: message // Note: WhatsAppDialog needs to support initialMessage prop if it doesn't already, or we can just hope it's not strictly needed for MVP or we modify WhatsAppDialog. Wait, checking WhatsAppDialog code... it doesn't take initialMessage. I will need to modifying WhatsAppDialog or just let the user type. 
-      // Actually, looking at my previous view of WhatsAppDialog, it DOES NOT take an initialMessage prop. 
-      // I should update WhatsAppDialog to accept initialMessage or just let it be blank.
-      // The user request implies "new window to send message... directly from whatsapp web".
-      // If I want to pre-fill, I need to update WhatsAppDialog.
-      // let's stick to opening it for now, and I will update WhatsAppDialog in a separate step if strictly needed, BUT
-      // `WhatsAppDialog` has its own state `message`. I can't control it easily from outside unless I lift state up or add a prop.
-      // I will add the prop `initialMessage` to WhatsAppDialog in the next step.
-      // For now, let's pass it in data, but I'll need to update the component to use it.
+      initialMessage: message
     });
   };
 
