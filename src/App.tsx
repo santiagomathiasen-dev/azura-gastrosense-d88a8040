@@ -22,6 +22,7 @@ import Colaboradores from "@/pages/Colaboradores";
 import Gestores from "@/pages/Gestores";
 import Relatorios from "@/pages/Relatorios";
 import Perdas from "@/pages/Perdas";
+import PrevisaoVendas from "@/pages/PrevisaoVendas";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,7 +39,7 @@ const App = () => (
             <Routes>
               {/* Public Routes */}
               <Route path="/auth" element={<Auth />} />
-              
+
               {/* Protected Routes */}
               <Route
                 element={
@@ -60,9 +61,10 @@ const App = () => (
                 <Route path="/estoque-insumos-produzidos" element={<EstoqueInsumosProduzidos />} />
                 <Route path="/produtos-venda" element={<ProdutosVenda />} />
                 <Route path="/perdas" element={<Perdas />} />
+                <Route path="/previsao-vendas" element={<PrevisaoVendas />} />
                 <Route path="/relatorios" element={<Relatorios />} />
               </Route>
-              
+
               {/* 404 */}
               <Route path="*" element={<NotFound />} />
             </Routes>

@@ -1,9 +1,9 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Package, 
-  FileText, 
-  Factory, 
+import {
+  LayoutDashboard,
+  Package,
+  FileText,
+  Factory,
   ShoppingCart,
   LogOut,
   ChevronLeft,
@@ -14,7 +14,8 @@ import {
   UtensilsCrossed,
   Users,
   BarChart3,
-  TrendingDown
+  TrendingDown,
+  CalendarClock
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useCollaboratorContext } from '@/contexts/CollaboratorContext';
@@ -33,6 +34,7 @@ const navItems = [
   { to: '/estoque-insumos-produzidos', icon: UtensilsCrossed, label: 'Insumos Produzidos', permission: 'can_access_estoque_producao' },
   { to: '/fichas', icon: FileText, label: 'Fichas Técnicas', permission: 'can_access_fichas' },
   { to: '/producao', icon: Factory, label: 'Produções', permission: 'can_access_producao' },
+  { to: '/previsao-vendas', icon: CalendarClock, label: 'Previsão Vendas', permission: 'can_access_producao' },
   { to: '/compras', icon: ShoppingCart, label: 'Compras', permission: 'can_access_compras' },
   { to: '/estoque-finalizados', icon: PackageCheck, label: 'Prod. Finalizadas', permission: 'can_access_finalizados' },
   { to: '/produtos-venda', icon: ShoppingBag, label: 'Produtos p/ Venda', permission: 'can_access_produtos_venda' },
@@ -69,14 +71,14 @@ export function Sidebar() {
     ...(isAdmin ? [{ to: '/gestores', icon: Shield, label: 'Gestores', permission: null }] : []),
   ];
   return (
-    <aside 
+    <aside
       className={cn(
         "hidden md:flex flex-col bg-sidebar text-sidebar-foreground h-screen fixed left-0 top-0 z-50 transition-all duration-300",
         collapsed ? "w-16" : "w-56"
       )}
     >
       {/* Logo Azura - Fixed at top */}
-      <div 
+      <div
         className="p-3 border-b border-sidebar-border cursor-pointer hover:bg-sidebar-accent/50 transition-colors flex-shrink-0"
         onClick={() => navigate('/dashboard')}
       >

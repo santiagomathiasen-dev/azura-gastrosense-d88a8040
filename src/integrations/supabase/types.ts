@@ -1120,11 +1120,13 @@ export type Database = {
           description: string | null
           id: string
           image_url: string | null
+          lead_time_hours: number | null
           name: string
           minimum_stock: number | null
           preparation_method: string | null
           preparation_time: number | null
           production_type: Database["public"]["Enums"]["production_type"]
+          shelf_life_hours: number | null
           total_cost: number | null
           updated_at: string
           user_id: string
@@ -1137,11 +1139,13 @@ export type Database = {
           description?: string | null
           id?: string
           image_url?: string | null
+          lead_time_hours?: number | null
           minimum_stock?: number | null
           name: string
           preparation_method?: string | null
           preparation_time?: number | null
           production_type?: Database["public"]["Enums"]["production_type"]
+          shelf_life_hours?: number | null
           total_cost?: number | null
           updated_at?: string
           user_id: string
@@ -1154,11 +1158,13 @@ export type Database = {
           description?: string | null
           id?: string
           image_url?: string | null
+          lead_time_hours?: number | null
           minimum_stock?: number | null
           name?: string
           preparation_method?: string | null
           preparation_time?: number | null
           production_type?: Database["public"]["Enums"]["production_type"]
+          shelf_life_hours?: number | null
           total_cost?: number | null
           updated_at?: string
           user_id?: string
@@ -1187,6 +1193,117 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      sales_forecasts: {
+        Row: {
+          id: string
+          user_id: string
+          sale_product_id: string
+          target_date: string
+          forecasted_quantity: number
+          notes: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          sale_product_id: string
+          target_date: string
+          forecasted_quantity: number
+          notes?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          sale_product_id?: string
+          target_date?: string
+          forecasted_quantity?: number
+          notes?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_forecasts_sale_product_id_fkey"
+            columns: ["sale_product_id"]
+            isOneToOne: false
+            referencedRelation: "sale_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forecast_production_orders: {
+        Row: {
+          id: string
+          user_id: string
+          forecast_id: string | null
+          technical_sheet_id: string
+          production_date: string
+          target_consumption_date: string
+          required_quantity: number
+          existing_stock: number
+          net_quantity: number
+          praca: Database["public"]["Enums"]["production_praca"] | null
+          status: Database["public"]["Enums"]["forecast_order_status"]
+          linked_production_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          forecast_id?: string | null
+          technical_sheet_id: string
+          production_date: string
+          target_consumption_date: string
+          required_quantity: number
+          existing_stock?: number
+          net_quantity: number
+          praca?: Database["public"]["Enums"]["production_praca"] | null
+          status?: Database["public"]["Enums"]["forecast_order_status"]
+          linked_production_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          forecast_id?: string | null
+          technical_sheet_id?: string
+          production_date?: string
+          target_consumption_date?: string
+          required_quantity?: number
+          existing_stock?: number
+          net_quantity?: number
+          praca?: Database["public"]["Enums"]["production_praca"] | null
+          status?: Database["public"]["Enums"]["forecast_order_status"]
+          linked_production_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forecast_production_orders_forecast_id_fkey"
+            columns: ["forecast_id"]
+            isOneToOne: false
+            referencedRelation: "sales_forecasts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "forecast_production_orders_technical_sheet_id_fkey"
+            columns: ["technical_sheet_id"]
+            isOneToOne: false
+            referencedRelation: "technical_sheets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "forecast_production_orders_linked_production_id_fkey"
+            columns: ["linked_production_id"]
+            isOneToOne: false
+            referencedRelation: "productions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -1244,6 +1361,7 @@ export type Database = {
       | "padaria"
       | "praca_quente"
       | "bar"
+      forecast_order_status: "pending" | "in_progress" | "completed" | "cancelled"
       production_status: "planned" | "in_progress" | "completed" | "cancelled" | "paused"
       production_type: "insumo" | "final"
       purchase_status: "pending" | "ordered" | "delivered" | "cancelled"
@@ -1396,6 +1514,7 @@ export const Constants = {
         "praca_quente",
         "bar",
       ],
+      forecast_order_status: ["pending", "in_progress", "completed", "cancelled"],
       production_status: ["planned", "in_progress", "completed", "cancelled", "paused"],
       production_type: ["insumo", "final"],
       purchase_status: ["pending", "ordered", "delivered", "cancelled"],
