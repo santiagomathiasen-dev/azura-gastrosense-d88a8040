@@ -457,12 +457,19 @@ export default function ProdutosVenda() {
                             <CardDescription className="mt-1 text-xs line-clamp-1">{product.description}</CardDescription>
                           )}
                         </div>
-                        <Badge
-                          variant={product.ready_quantity > 0 ? 'default' : 'secondary'}
-                          className="text-sm font-bold shrink-0"
-                        >
-                          {formatQuantity(product.ready_quantity || 0)} prontos
-                        </Badge>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <Badge
+                            variant={product.ready_quantity > 0 ? 'default' : 'secondary'}
+                            className="text-sm font-bold"
+                          >
+                            {formatQuantity(product.ready_quantity || 0)} prontos
+                          </Badge>
+                          {(product.minimum_stock || 0) > (product.ready_quantity || 0) && (
+                            <div className="text-xs text-orange-600 font-medium bg-orange-50 px-2 py-0.5 rounded">
+                              Faltam {formatQuantity((product.minimum_stock || 0) - (product.ready_quantity || 0))}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent className="flex-1 flex flex-col p-4 pt-0">
