@@ -79,6 +79,7 @@ export function useProductions() {
       return data as ProductionWithSheet[];
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
+    refetchInterval: 30_000,
   });
 
   const createProduction = useMutation({

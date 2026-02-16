@@ -58,6 +58,7 @@ export function useStockItems() {
       return data as StockItem[];
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
+    refetchInterval: 30_000,
   });
 
   const createItem = useMutation({

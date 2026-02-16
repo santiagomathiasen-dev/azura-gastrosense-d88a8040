@@ -51,6 +51,7 @@ export function useFinishedProductionsStock() {
       return (data as any) as FinishedProductionStock[];
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
+    refetchInterval: 30_000,
   });
 
   const addFinishedProduction = useMutation({

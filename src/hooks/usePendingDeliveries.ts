@@ -35,25 +35,26 @@ export function usePendingDeliveries() {
       return data as PendingDeliveryItem[];
     },
     enabled: !!user?.id || !!ownerId,
+    refetchInterval: 30_000,
   });
 
   // Mark an item as "ordered" with quantity (from Compras page)
   const markAsOrdered = useMutation({
-    mutationFn: async ({ 
-      stockItemId, 
+    mutationFn: async ({
+      stockItemId,
       orderedQuantity,
       supplierId,
       suggestedQuantity,
-      expectedDeliveryDate 
-    }: { 
-      stockItemId: string; 
+      expectedDeliveryDate
+    }: {
+      stockItemId: string;
       orderedQuantity: number;
       supplierId?: string | null;
       suggestedQuantity: number;
       expectedDeliveryDate?: string;
     }) => {
       if (!ownerId) throw new Error('Usuário não autenticado');
-      
+
       // Create or update purchase list item with "ordered" status
       const { data: existing } = await supabase
         .from('purchase_list_items')
@@ -102,12 +103,12 @@ export function usePendingDeliveries() {
 
   // Confirm delivery and add to stock (entry movement)
   const confirmDelivery = useMutation({
-    mutationFn: async ({ 
-      itemId, 
+    mutationFn: async ({
+      itemId,
       receivedQuantity,
       stockItemId
-    }: { 
-      itemId: string; 
+    }: {
+      itemId: string;
       receivedQuantity: number;
       stockItemId: string;
     }) => {
