@@ -47,6 +47,7 @@ export default function ProdutosVenda() {
     name: '',
     description: '',
     sale_price: '',
+    minimum_stock: '0',
   });
   const [components, setComponents] = useState<ComponentInput[]>([]);
   const [newComponent, setNewComponent] = useState({
@@ -105,7 +106,7 @@ export default function ProdutosVenda() {
   };
 
   const resetForm = () => {
-    setFormData({ name: '', description: '', sale_price: '' });
+    setFormData({ name: '', description: '', sale_price: '', minimum_stock: '0' });
     setComponents([]);
     setNewComponent({ component_type: '', component_id: '', quantity: '', unit: '' });
   };
@@ -115,6 +116,7 @@ export default function ProdutosVenda() {
       name: formData.name,
       description: formData.description || undefined,
       sale_price: formData.sale_price ? Number(formData.sale_price) : undefined,
+      minimum_stock: formData.minimum_stock ? Number(formData.minimum_stock) : 0,
       components,
     }, {
       onSuccess: () => {
@@ -132,6 +134,7 @@ export default function ProdutosVenda() {
       name: formData.name,
       description: formData.description || undefined,
       sale_price: formData.sale_price ? Number(formData.sale_price) : undefined,
+      minimum_stock: formData.minimum_stock ? Number(formData.minimum_stock) : 0,
       components,
     }, {
       onSuccess: () => {
@@ -147,6 +150,7 @@ export default function ProdutosVenda() {
       name: product.name,
       description: product.description || '',
       sale_price: product.sale_price?.toString() || '',
+      minimum_stock: product.minimum_stock?.toString() || '0',
     });
     setComponents(product.components?.map(c => ({
       component_type: c.component_type,
@@ -281,6 +285,21 @@ export default function ProdutosVenda() {
           onChange={(e) => setFormData(prev => ({ ...prev, sale_price: e.target.value }))}
           placeholder="0.00"
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="product-min-stock">Estoque Mínimo (Alerta)</Label>
+        <Input
+          id="product-min-stock"
+          type="number"
+          min="0"
+          value={formData.minimum_stock}
+          onChange={(e) => setFormData(prev => ({ ...prev, minimum_stock: e.target.value }))}
+          placeholder="0"
+        />
+        <p className="text-[10px] text-muted-foreground">
+          Quantidade mínima em estoque pronto para venda para gerar alerta.
+        </p>
       </div>
 
       {/* Components Section */}

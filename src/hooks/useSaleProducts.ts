@@ -27,6 +27,7 @@ export interface SaleProduct {
   image_url: string | null;
   is_active: boolean;
   ready_quantity: number;
+  minimum_stock: number;
   created_at: string;
   updated_at: string;
   components?: SaleProductComponent[];
@@ -59,7 +60,10 @@ export function useSaleProducts() {
         .order('name', { ascending: true });
       if (error) throw error;
 
-      return data as SaleProduct[];
+      return (data || []).map(p => ({
+        ...p,
+        minimum_stock: Number((p as any).minimum_stock || 0),
+      })) as SaleProduct[];
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
   });
@@ -70,6 +74,7 @@ export function useSaleProducts() {
       description?: string;
       sale_price?: number;
       image_url?: string;
+      minimum_stock?: number;
       components: ComponentInput[];
     }) => {
       if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
@@ -83,6 +88,7 @@ export function useSaleProducts() {
           description: data.description,
           sale_price: data.sale_price,
           image_url: data.image_url,
+          minimum_stock: data.minimum_stock || 0,
         })
         .select()
         .single();
@@ -122,6 +128,7 @@ export function useSaleProducts() {
       sale_price?: number;
       image_url?: string;
       is_active?: boolean;
+      minimum_stock?: number;
       components?: ComponentInput[];
     }) => {
       const { id, components, ...updates } = data;

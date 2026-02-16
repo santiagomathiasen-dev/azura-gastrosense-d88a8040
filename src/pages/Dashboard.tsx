@@ -6,12 +6,15 @@ import { Badge } from '@/components/ui/badge';
 import { useProductions } from '@/hooks/useProductions';
 import { useStockItems } from '@/hooks/useStockItems';
 import { useFinishedProductionsStock } from '@/hooks/useFinishedProductionsStock';
+import { useSaleProducts } from '@/hooks/useSaleProducts';
+import { AIAssistant } from '@/components/dashboard/AIAssistant';
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { productions, isLoading: productionsLoading } = useProductions();
   const { items: stockItems, isLoading: stockLoading } = useStockItems();
   const { finishedStock, isLoading: finishedLoading } = useFinishedProductionsStock();
+  const { saleProducts, isLoading: saleProductsLoading } = useSaleProducts();
 
   // Filter productions by status
   const plannedProductions = productions.filter((p) => p.status === 'planned');
@@ -25,6 +28,19 @@ export default function Dashboard() {
   const lowFinishedStock = finishedStock.filter(
     (item) => item.quantity <= (item.technical_sheet?.minimum_stock || 0)
   );
+
+  const lowSaleProducts = saleProducts.filter(
+    (item) => item.ready_quantity <= (item.minimum_stock || 0)
+  );
+
+  // Debug logging
+  console.log('=== DASHBOARD DEBUG ===');
+  console.log('Stock Items:', stockItems.length);
+  console.log('Finished Stock:', finishedStock.length, finishedStock);
+  console.log('Sale Products:', saleProducts.length, saleProducts);
+  console.log('Low Stock Items:', lowStockItems.length);
+  console.log('Low Finished Stock:', lowFinishedStock.length, lowFinishedStock);
+  console.log('Low Sale Products:', lowSaleProducts.length, lowSaleProducts);
 
   const combinedAlerts = [
     ...lowStockItems.map(item => ({
@@ -42,11 +58,19 @@ export default function Dashboard() {
       min: item.technical_sheet?.minimum_stock || 0,
       unit: item.unit,
       type: 'producao' as const
+    })),
+    ...lowSaleProducts.map(item => ({
+      id: item.id,
+      name: item.name,
+      current: item.ready_quantity,
+      min: item.minimum_stock || 0,
+      unit: 'un', // Sale products are usually in units
+      type: 'venda' as const
     }))
   ];
 
   const totalAlerts = combinedAlerts.length;
-  const isLoadingAlerts = stockLoading || finishedLoading;
+  const isLoadingAlerts = stockLoading || finishedLoading || saleProductsLoading;
 
   return (
     <div className="animate-fade-in">
@@ -54,6 +78,11 @@ export default function Dashboard() {
         title="Painel"
         description="Visão geral da sua gestão gastronômica"
       />
+
+      {/* Smart Analysis Block */}
+      <div className="mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
+        <AIAssistant />
+      </div>
 
       {/* Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -166,7 +195,7 @@ export default function Dashboard() {
                     <div className="flex items-center gap-2">
                       <p className="font-medium text-sm truncate">{item.name}</p>
                       <Badge variant="outline" className="text-[10px] h-4 px-1 uppercase shrink-0">
-                        {item.type === 'insumo' ? 'Insumo' : 'Produção'}
+                        {item.type === 'insumo' ? 'Insumo' : item.type === 'producao' ? 'Produção' : 'Venda'}
                       </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">
