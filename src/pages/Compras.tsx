@@ -551,6 +551,23 @@ export default function Compras() {
                 >
                   {item.name}
                 </MobileListTitle>
+
+                {/* WhatsApp Button next to name */}
+                {item.supplierName && item.supplierPhone && !item.isPurchased && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-green-600 hover:text-green-700 hover:bg-green-50 mr-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenWhatsApp(item);
+                    }}
+                    title={`Enviar pedido para ${item.supplierName}`}
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                  </Button>
+                )}
+
                 {item.isPurchased ? (
                   <MobileListBadge variant="default" className="bg-emerald-100 text-emerald-700 border-emerald-200">
                     Comprado
@@ -575,20 +592,6 @@ export default function Compras() {
                   {item.supplierName && (
                     <div className="flex items-center gap-1">
                       <span>{item.supplierName}</span>
-                      {item.supplierPhone && !item.isPurchased && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-green-600 hover:text-green-700 hover:bg-green-50"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenWhatsApp(item);
-                          }}
-                          title="Enviar pedido por WhatsApp"
-                        >
-                          <MessageCircle className="h-4 w-4" />
-                        </Button>
-                      )}
                     </div>
                   )}
 
