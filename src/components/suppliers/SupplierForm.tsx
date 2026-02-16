@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Phone, Mail, Star, Truck } from 'lucide-react';
+import { Plus, Phone, Mail, Star, Truck, MapPin, CreditCard, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { formatBrazilianNumber } from '@/lib/utils';
 import type { Supplier } from '@/hooks/useSuppliers';
 
 interface SupplierFormProps {
@@ -39,6 +40,14 @@ const CATEGORIES = [
   'Outros',
 ];
 
+const PAYMENT_METHODS = [
+  'Boleto',
+  'Pix',
+  'Cartão de Crédito',
+  'Transferência',
+  'Dinheiro',
+];
+
 export function SupplierForm({
   open,
   onOpenChange,
@@ -48,23 +57,40 @@ export function SupplierForm({
 }: SupplierFormProps) {
   const [name, setName] = useState(initialData?.name || '');
   const [category, setCategory] = useState(initialData?.category || '');
+  const [cnpjCpf, setCnpjCpf] = useState(initialData?.cnpj_cpf || '');
   const [phone, setPhone] = useState(initialData?.phone || '');
   const [whatsapp, setWhatsapp] = useState(initialData?.whatsapp || '');
   const [email, setEmail] = useState(initialData?.email || '');
   const [deliveryDays, setDeliveryDays] = useState(String(initialData?.average_delivery_days || 3));
   const [rating, setRating] = useState(String(initialData?.quality_rating || 3));
+  const [paymentMethod, setPaymentMethod] = useState(initialData?.payment_method || '');
+  const [zipCode, setZipCode] = useState(initialData?.zip_code || '');
+  const [address, setAddress] = useState(initialData?.address || '');
+  const [city, setCity] = useState(initialData?.city || '');
+  const [state, setState] = useState(initialData?.state || '');
   const [notes, setNotes] = useState(initialData?.notes || '');
 
   const handleSubmit = () => {
     if (!name.trim()) return;
+
+    // Clean WhatsApp number for database
+    const whatsappNumber = whatsapp?.replace(/\D/g, '') || null;
+
     onSubmit({
       name: name.trim(),
       category: category || null,
+      cnpj_cpf: cnpjCpf || null,
       phone: phone || null,
       whatsapp: whatsapp || null,
+      whatsapp_number: whatsappNumber,
       email: email || null,
       average_delivery_days: parseInt(deliveryDays) || 3,
       quality_rating: parseInt(rating) || 3,
+      payment_method: paymentMethod || null,
+      zip_code: zipCode || null,
+      address: address || null,
+      city: city || null,
+      state: state || null,
       notes: notes || null,
     });
   };
@@ -73,11 +99,17 @@ export function SupplierForm({
     if (!isOpen) {
       setName(initialData?.name || '');
       setCategory(initialData?.category || '');
+      setCnpjCpf(initialData?.cnpj_cpf || '');
       setPhone(initialData?.phone || '');
       setWhatsapp(initialData?.whatsapp || '');
       setEmail(initialData?.email || '');
       setDeliveryDays(String(initialData?.average_delivery_days || 3));
       setRating(String(initialData?.quality_rating || 3));
+      setPaymentMethod(initialData?.payment_method || '');
+      setZipCode(initialData?.zip_code || '');
+      setAddress(initialData?.address || '');
+      setCity(initialData?.city || '');
+      setState(initialData?.state || '');
       setNotes(initialData?.notes || '');
     }
     onOpenChange(isOpen);
@@ -85,7 +117,7 @@ export function SupplierForm({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {initialData ? 'Editar Fornecedor' : 'Novo Fornecedor'}
@@ -93,33 +125,72 @@ export function SupplierForm({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Nome *</Label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Nome do fornecedor"
-            />
+          {/* Dados Básicos */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Nome *</Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Nome do fornecedor"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="cnpjCpf">CNPJ / CPF</Label>
+              <div className="relative">
+                <FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="cnpjCpf"
+                  value={cnpjCpf}
+                  onChange={(e) => setCnpjCpf(e.target.value)}
+                  placeholder="00.000.000/0000-00"
+                  className="pl-10"
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="category">Categoria</Label>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione uma categoria" />
-              </SelectTrigger>
-              <SelectContent>
-                {CATEGORIES.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="category">Categoria</Label>
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione uma categoria" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {cat}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="paymentMethod">Forma de Pagamento</Label>
+              <div className="relative">
+                <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                  <SelectTrigger className="pl-10">
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAYMENT_METHODS.map((method) => (
+                      <SelectItem key={method} value={method}>
+                        {method}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          {/* Contato */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="phone">Telefone</Label>
               <div className="relative">
@@ -164,6 +235,45 @@ export function SupplierForm({
             </div>
           </div>
 
+          {/* Endereço */}
+          <div className="space-y-2">
+            <Label>Endereço</Label>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-1">
+                <Input
+                  placeholder="CEP"
+                  value={zipCode}
+                  onChange={(e) => setZipCode(e.target.value)}
+                />
+              </div>
+              <div className="col-span-2">
+                <Input
+                  placeholder="Logradouro, Nº"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mt-2">
+              <div className="col-span-2">
+                <Input
+                  placeholder="Cidade"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                />
+              </div>
+              <div className="col-span-1">
+                <Input
+                  placeholder="UF"
+                  maxLength={2}
+                  value={state}
+                  onChange={(e) => setState(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Avaliação */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="deliveryDays">Prazo de Entrega (dias)</Label>

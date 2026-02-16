@@ -54,6 +54,7 @@ import { VoiceImportDialog, type ExtractedItem } from '@/components/VoiceImportD
 import { IngredientFileImportDialog, type ExtractedIngredient } from '@/components/IngredientFileImportDialog';
 import { toast } from 'sonner';
 import { formatQuantity } from '@/lib/utils';
+import { SupplierManagement } from '@/components/suppliers/SupplierManagement';
 
 type TransferDestination = 'production' | 'sale';
 
@@ -73,22 +74,22 @@ export default function Estoque() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<StockItem | null>(null);
   const [pendingQuantities, setPendingQuantities] = useState<Record<string, string>>({});
-  
+
   // Voice and file import dialogs
   const [voiceDialogOpen, setVoiceDialogOpen] = useState(false);
   const [fileImportDialogOpen, setFileImportDialogOpen] = useState(false);
-  
+
   // Transfer dialog state
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [transferItem, setTransferItem] = useState<StockItem | null>(null);
   const [transferQuantity, setTransferQuantity] = useState('');
   const [transferDestination, setTransferDestination] = useState<TransferDestination>('production');
-  
+
   // Fulfill request dialog state
   const [fulfillDialogOpen, setFulfillDialogOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
   const [fulfillQuantity, setFulfillQuantity] = useState('');
-  
+
   // Stock count mode
   const [countingMode, setCountingMode] = useState(false);
 
@@ -110,6 +111,17 @@ export default function Estoque() {
     );
   }, [createMovement]);
 
+  const handleExpiryUpdate = useCallback((itemId: string, expirationDate: string) => {
+    updateItem.mutate(
+      { id: itemId, expiration_date: expirationDate },
+      {
+        onSuccess: () => {
+          toast.success('Data de validade atualizada!');
+        },
+      }
+    );
+  }, [updateItem]);
+
   const {
     isSupported: voiceSupported,
     isListening,
@@ -119,6 +131,7 @@ export default function Estoque() {
   } = useStockVoiceControl({
     stockItems: items,
     onQuantityUpdate: handleQuantityUpdate,
+    onExpiryUpdate: handleExpiryUpdate,
   });
 
   const filteredItems = items.filter((item) => {
@@ -274,13 +287,13 @@ export default function Estoque() {
 
   const handleTransfer = async () => {
     if (!transferItem) return;
-    
+
     const qty = parseFloat(transferQuantity);
     if (isNaN(qty) || qty <= 0) {
       toast.error('Informe uma quantidade válida');
       return;
     }
-    
+
     if (qty > Number(transferItem.current_quantity)) {
       toast.error('Quantidade insuficiente no estoque');
       return;
@@ -294,7 +307,7 @@ export default function Estoque() {
           quantity: qty,
           notes: 'Transferência para Estoque de Produção',
         });
-        
+
         toast.success(`${formatQuantity(qty)} ${transferItem.unit} transferido(s) para Estoque de Produção`);
       } else {
         // Saída do estoque central para produtos de venda
@@ -305,10 +318,10 @@ export default function Estoque() {
           source: 'manual',
           notes: 'Transferência para Produtos para Venda',
         });
-        
+
         toast.success(`${formatQuantity(qty)} ${transferItem.unit} transferido(s) para Produtos para Venda`);
       }
-      
+
       setTransferDialogOpen(false);
       setTransferItem(null);
       setTransferQuantity('');
@@ -327,13 +340,13 @@ export default function Estoque() {
 
   const handleFulfillRequest = async () => {
     if (!selectedRequest || !fulfillQuantity) return;
-    
+
     const qty = parseFloat(fulfillQuantity);
     if (isNaN(qty) || qty <= 0) {
       toast.error('Informe uma quantidade válida');
       return;
     }
-    
+
     const centralItem = items.find(i => i.id === selectedRequest.stock_item_id);
     if (!centralItem || Number(centralItem.current_quantity) < qty) {
       toast.error('Quantidade insuficiente no estoque central');
@@ -377,15 +390,16 @@ export default function Estoque() {
       />
 
       <Tabs defaultValue="stock" className="flex-1 flex flex-col overflow-hidden">
-        <TabsList className="grid w-full grid-cols-2 mb-3">
+        <TabsList className="grid w-full grid-cols-3 mb-3">
           <TabsTrigger value="stock">Estoque</TabsTrigger>
           <TabsTrigger value="register">Cadastro</TabsTrigger>
+          <TabsTrigger value="suppliers">Fornecedores</TabsTrigger>
         </TabsList>
 
         {/* Stock Tab - Main tab for counting and managing stock */}
         <TabsContent value="stock" className="flex-1 flex flex-col overflow-hidden space-y-3">
           {/* Big Stock Update Button - Opens microphone immediately */}
-          <Card 
+          <Card
             className={`cursor-pointer hover:border-primary transition-all ${isListening ? 'border-primary bg-primary/5' : ''}`}
             onClick={() => {
               if (!isListening && voiceSupported) {
@@ -409,7 +423,7 @@ export default function Estoque() {
                   {isListening ? 'Ouvindo...' : 'Atualizar Estoque'}
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  {isListening 
+                  {isListening
                     ? (transcript || 'Diga o ingrediente, quantidade e unidade')
                     : 'Diga o ingrediente, quantidade e unidade'}
                 </p>
@@ -443,8 +457,8 @@ export default function Estoque() {
                   const centralItem = items.find(i => i.id === request.stock_item_id);
                   const hasEnough = centralItem && Number(centralItem.current_quantity) >= remaining;
                   return (
-                    <div 
-                      key={request.id} 
+                    <div
+                      key={request.id}
                       className="flex items-center gap-2 p-2 bg-background rounded-lg border"
                     >
                       <div className="flex-1 min-w-0">
@@ -491,8 +505,8 @@ export default function Estoque() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {pendingItems.map(item => (
-                  <div 
-                    key={item.id} 
+                  <div
+                    key={item.id}
                     className="flex items-center gap-2 p-2 bg-background rounded-lg border"
                   >
                     <div className="flex-1 min-w-0">
@@ -589,7 +603,7 @@ export default function Estoque() {
         <TabsContent value="register" className="flex-1 overflow-auto space-y-4">
           {/* Action Cards */}
           <div className="grid grid-cols-3 gap-2">
-            <Card 
+            <Card
               className="cursor-pointer hover:border-primary transition-all group"
               onClick={() => setVoiceDialogOpen(true)}
             >
@@ -601,7 +615,7 @@ export default function Estoque() {
               </CardHeader>
             </Card>
 
-            <Card 
+            <Card
               className="cursor-pointer hover:border-primary transition-all group"
               onClick={() => setFileImportDialogOpen(true)}
             >
@@ -613,7 +627,7 @@ export default function Estoque() {
               </CardHeader>
             </Card>
 
-            <Card 
+            <Card
               className="cursor-pointer hover:border-primary transition-all group"
               onClick={() => { setSelectedItem(null); setFormOpen(true); }}
             >
@@ -651,6 +665,12 @@ export default function Estoque() {
               </Card>
             ))}
           </div>
+        </TabsContent>
+
+
+        {/* Suppliers Tab */}
+        <TabsContent value="suppliers" className="flex-1 overflow-auto">
+          <SupplierManagement />
         </TabsContent>
       </Tabs>
 
@@ -704,7 +724,7 @@ export default function Estoque() {
               {transferItem?.name}
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <div className="p-3 rounded-lg bg-muted">
               <p className="text-sm text-muted-foreground">Estoque atual</p>
@@ -712,11 +732,11 @@ export default function Estoque() {
                 {formatQuantity(Number(transferItem?.current_quantity || 0))} {transferItem?.unit}
               </p>
             </div>
-            
+
             <div className="space-y-2">
               <Label>Destino</Label>
-              <Select 
-                value={transferDestination} 
+              <Select
+                value={transferDestination}
                 onValueChange={(v) => setTransferDestination(v as TransferDestination)}
               >
                 <SelectTrigger>
@@ -738,7 +758,7 @@ export default function Estoque() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="transfer-quantity">Quantidade ({transferItem?.unit})</Label>
               <Input
@@ -751,7 +771,7 @@ export default function Estoque() {
               />
             </div>
           </div>
-          
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setTransferDialogOpen(false)}>
               Cancelar
@@ -772,7 +792,7 @@ export default function Estoque() {
               {selectedRequest?.stock_item?.name}
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 rounded-lg bg-muted">
@@ -788,7 +808,7 @@ export default function Estoque() {
                 </p>
               </div>
             </div>
-            
+
             {(() => {
               const centralItem = items.find(i => i.id === selectedRequest?.stock_item_id);
               return (
@@ -800,7 +820,7 @@ export default function Estoque() {
                 </div>
               );
             })()}
-            
+
             <div className="space-y-2">
               <Label htmlFor="fulfill-quantity">
                 Quantidade a entregar ({selectedRequest?.stock_item?.unit ? UNIT_LABELS[selectedRequest.stock_item.unit as keyof typeof UNIT_LABELS] : ''})
@@ -819,13 +839,13 @@ export default function Estoque() {
               </p>
             </div>
           </div>
-          
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setFulfillDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button 
-              onClick={handleFulfillRequest} 
+            <Button
+              onClick={handleFulfillRequest}
               disabled={!fulfillQuantity || fulfillRequest.isPending}
             >
               <Send className="h-4 w-4 mr-1" />
@@ -855,6 +875,6 @@ export default function Estoque() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </div >
   );
 }

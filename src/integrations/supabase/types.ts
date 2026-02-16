@@ -823,48 +823,120 @@ export type Database = {
       }
       suppliers: {
         Row: {
+          address: string | null
           average_delivery_days: number | null
           category: string | null
+          city: string | null
+          cnpj_cpf: string | null
           created_at: string
+          delivery_time_days: number | null
           email: string | null
           id: string
           name: string
           notes: string | null
+          payment_method: string | null
           phone: string | null
           quality_rating: number | null
+          state: string | null
           updated_at: string
           user_id: string
           whatsapp: string | null
+          whatsapp_number: string | null
+          zip_code: string | null
         }
         Insert: {
+          address?: string | null
           average_delivery_days?: number | null
           category?: string | null
+          city?: string | null
+          cnpj_cpf?: string | null
           created_at?: string
+          delivery_time_days?: number | null
           email?: string | null
           id?: string
           name: string
           notes?: string | null
+          payment_method?: string | null
           phone?: string | null
           quality_rating?: number | null
+          state?: string | null
           updated_at?: string
           user_id: string
           whatsapp?: string | null
+          whatsapp_number?: string | null
+          zip_code?: string | null
         }
         Update: {
+          address?: string | null
           average_delivery_days?: number | null
           category?: string | null
+          city?: string | null
+          cnpj_cpf?: string | null
           created_at?: string
+          delivery_time_days?: number | null
           email?: string | null
           id?: string
           name?: string
           notes?: string | null
+          payment_method?: string | null
           phone?: string | null
           quality_rating?: number | null
+          state?: string | null
           updated_at?: string
           user_id?: string
           whatsapp?: string | null
+          whatsapp_number?: string | null
+          zip_code?: string | null
         }
         Relationships: []
+      }
+      supplier_messages: {
+        Row: {
+          created_at: string
+          id: string
+          message_text: string
+          purchase_list_id: string | null
+          sent_at: string | null
+          supplier_id: string
+          user_id: string
+          whatsapp_status: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message_text: string
+          purchase_list_id?: string | null
+          sent_at?: string | null
+          supplier_id: string
+          user_id: string
+          whatsapp_status?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message_text?: string
+          purchase_list_id?: string | null
+          sent_at?: string | null
+          supplier_id?: string
+          user_id?: string
+          whatsapp_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_messages_purchase_list_id_fkey"
+            columns: ["purchase_list_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_list_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_messages_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       technical_sheet_ingredients: {
         Row: {
