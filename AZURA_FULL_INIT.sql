@@ -304,6 +304,7 @@ CREATE TABLE public.technical_sheets (
   preparation_method TEXT,
   total_cost NUMERIC DEFAULT 0,
   cost_per_unit NUMERIC DEFAULT 0,
+  minimum_stock NUMERIC DEFAULT 0,
   image_url TEXT,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()

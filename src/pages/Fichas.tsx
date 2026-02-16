@@ -49,7 +49,7 @@ const calcularCustoPorcao = (sheet: TechnicalSheetWithIngredients) => {
 export default function Fichas() {
   const { sheets, isLoading, isOwnerLoading, createSheet, updateSheet, deleteSheet, addIngredient, removeIngredient } = useTechnicalSheets();
   const { items: stockItems, isOwnerLoading: stockOwnerLoading, createItem: createStockItem } = useStockItems();
-  
+
   const [search, setSearch] = useState('');
   const [selectedSheet, setSelectedSheet] = useState<TechnicalSheetWithIngredients | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
@@ -70,6 +70,7 @@ export default function Fichas() {
     unidadeRendimento: 'un',
     image_url: '',
     productionType: 'final' as 'insumo' | 'final',
+    minimumStock: '0',
   });
 
   // Stages for form
@@ -89,6 +90,7 @@ export default function Fichas() {
       unidadeRendimento: 'un',
       image_url: '',
       productionType: 'final',
+      minimumStock: '0',
     });
     setStages([]);
     setEditingSheet(null);
@@ -101,15 +103,15 @@ export default function Fichas() {
       return;
     }
     setIsSaving(true);
-    
+
     try {
       const ingredientStockIds: Map<string, string> = new Map();
-      
+
       for (const ing of items) {
         const existing = stockItems.find(
           item => item.name.toLowerCase() === ing.name.toLowerCase()
         );
-        
+
         if (existing) {
           ingredientStockIds.set(ing.name, existing.id);
         } else {
@@ -175,15 +177,15 @@ export default function Fichas() {
       return;
     }
     setIsSaving(true);
-    
+
     try {
       const ingredientStockIds: Map<string, string> = new Map();
-      
+
       for (const ing of items) {
         const existing = stockItems.find(
           item => item.name.toLowerCase() === ing.name.toLowerCase()
         );
-        
+
         if (existing) {
           ingredientStockIds.set(ing.name, existing.id);
         } else {
@@ -273,11 +275,12 @@ export default function Fichas() {
       unidadeRendimento: sheet.yield_unit || 'un',
       image_url: sheet.image_url || '',
       productionType: sheet.production_type || 'final',
+      minimumStock: (sheet.minimum_stock || 0).toString(),
     });
-    
+
     // Convert existing stages and ingredients to form format
     const stageMap = new Map<string, StageFormData>();
-    
+
     // First, create stages from sheetStages
     sheetStages.forEach((stage, index) => {
       stageMap.set(stage.id, {
@@ -324,7 +327,7 @@ export default function Fichas() {
       const sortedStages = Array.from(stageMap.values()).sort((a, b) => a.order_index - b.order_index);
       setStages(sortedStages);
     }
-    
+
     setDetailDialogOpen(false);
     setFormDialogOpen(true);
   };
@@ -356,7 +359,7 @@ export default function Fichas() {
     setIsSaving(true);
     try {
       let sheetId: string;
-      
+
       if (editingSheet) {
         // Update existing sheet
         await updateSheet.mutateAsync({
@@ -368,7 +371,8 @@ export default function Fichas() {
           yield_quantity: formData.rendimento ? parseFloat(formData.rendimento) : 1,
           yield_unit: formData.unidadeRendimento,
           image_url: formData.image_url || null,
-        });
+          minimum_stock: formData.minimumStock ? parseFloat(formData.minimumStock) : 0,
+        } as any);
         sheetId = editingSheet.id;
 
         // Remove all existing ingredients (we'll re-add them with stages)
@@ -390,7 +394,8 @@ export default function Fichas() {
           yield_quantity: formData.rendimento ? parseFloat(formData.rendimento) : 1,
           yield_unit: formData.unidadeRendimento,
           image_url: formData.image_url || null,
-        });
+          minimum_stock: formData.minimumStock ? parseFloat(formData.minimumStock) : 0,
+        } as any);
         sheetId = newSheet.id;
       }
 
@@ -416,7 +421,7 @@ export default function Fichas() {
           });
         }
       }
-      
+
       toast.success(editingSheet ? 'Ficha técnica atualizada!' : 'Ficha técnica criada!');
       setFormDialogOpen(false);
       resetForm();
@@ -485,7 +490,7 @@ export default function Fichas() {
               {filteredSheets.map((sheet) => {
                 const custoTotal = calcularCustoTotal(sheet);
                 const custoPorcao = calcularCustoPorcao(sheet);
-                
+
                 return (
                   <MobileListItem
                     key={sheet.id}
@@ -497,7 +502,7 @@ export default function Fichas() {
                         R$ {custoTotal.toFixed(2)}
                       </span>
                     </div>
-                    
+
                     <MobileListDetails>
                       <span className="flex items-center gap-1">
                         <Calculator className="h-3 w-3" />
@@ -525,7 +530,7 @@ export default function Fichas() {
         {/* Cadastro Tab */}
         <TabsContent value="cadastro">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto">
-            <Card 
+            <Card
               className="cursor-pointer hover:border-primary hover:shadow-lg transition-all group"
               onClick={() => setVoiceDialogOpen(true)}
             >
@@ -540,7 +545,7 @@ export default function Fichas() {
               </CardHeader>
             </Card>
 
-            <Card 
+            <Card
               className="cursor-pointer hover:border-primary hover:shadow-lg transition-all group"
               onClick={() => setFileImportDialogOpen(true)}
             >
@@ -555,7 +560,7 @@ export default function Fichas() {
               </CardHeader>
             </Card>
 
-            <Card 
+            <Card
               className="cursor-pointer hover:border-primary hover:shadow-lg transition-all group"
               onClick={openNewDialog}
             >
@@ -663,9 +668,9 @@ export default function Fichas() {
                 </div>
 
                 {/* Stage Display with ingredients organized by stage */}
-                <StageDisplay 
-                  stages={sheetStages} 
-                  ingredients={selectedSheet.ingredients || []} 
+                <StageDisplay
+                  stages={sheetStages}
+                  ingredients={selectedSheet.ingredients || []}
                 />
 
                 {/* Legacy preparation method display */}
@@ -716,7 +721,7 @@ export default function Fichas() {
                   />
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="descricao">Descrição</Label>
                 <Input
@@ -743,12 +748,12 @@ export default function Fichas() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  {formData.productionType === 'insumo' 
-                    ? 'Insumo: Gera estoque intermediário (ex: Poolish, Molhos base)' 
+                  {formData.productionType === 'insumo'
+                    ? 'Insumo: Gera estoque intermediário (ex: Poolish, Molhos base)'
                     : 'Final: Vai para o estoque de produções finalizadas'}
                 </p>
               </div>
-              
+
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="tempo">Tempo (min)</Label>
@@ -791,6 +796,20 @@ export default function Fichas() {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="minimumStock">Estoque Mínimo ({formData.unidadeRendimento})</Label>
+                <Input
+                  id="minimumStock"
+                  type="number"
+                  value={formData.minimumStock}
+                  onChange={(e) => setFormData({ ...formData, minimumStock: e.target.value })}
+                  placeholder="0"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Alerta no painel quando o estoque desta produção for menor ou igual a este valor.
+                </p>
+              </div>
+
               {/* Stage Form - Multi-part recipe */}
               <StageForm
                 stages={stages}
@@ -816,6 +835,6 @@ export default function Fichas() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </div >
   );
 }

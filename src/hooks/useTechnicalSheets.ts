@@ -15,6 +15,7 @@ export type { TechnicalSheet, TechnicalSheetInsert, TechnicalSheetUpdate, Techni
 
 export interface TechnicalSheetWithIngredients extends TechnicalSheet {
   production_type: ProductionType;
+  minimum_stock: number;
   ingredients: (TechnicalSheetIngredient & {
     stock_item: { name: string; unit: string } | null;
     stage_id?: string | null;
@@ -46,6 +47,7 @@ export function useTechnicalSheets() {
       return (data || []).map(sheet => ({
         ...sheet,
         production_type: (sheet as any).production_type || 'final',
+        minimum_stock: Number((sheet as any).minimum_stock || 0),
       })) as TechnicalSheetWithIngredients[];
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,

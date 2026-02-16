@@ -20,6 +20,7 @@ export interface FinishedProductionStock {
     name: string;
     yield_unit: string;
     image_url: string | null;
+    minimum_stock: number;
   };
 }
 
@@ -41,27 +42,28 @@ export function useFinishedProductionsStock() {
             id,
             name,
             yield_unit,
-            image_url
+            image_url,
+            minimum_stock
           )
         `)
         .order('updated_at', { ascending: false });
       if (error) throw error;
-      return data as FinishedProductionStock[];
+      return (data as any) as FinishedProductionStock[];
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
   });
 
   const addFinishedProduction = useMutation({
-    mutationFn: async (data: { 
-      technical_sheet_id: string; 
-      quantity: number; 
+    mutationFn: async (data: {
+      technical_sheet_id: string;
+      quantity: number;
       unit: string;
       notes?: string;
       image_url?: string;
     }) => {
       if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
       if (!ownerId) throw new Error('Usuário não autenticado');
-      
+
       // Check if entry already exists for this technical sheet
       const { data: existing } = await supabase
         .from('finished_productions_stock')
@@ -71,12 +73,12 @@ export function useFinishedProductionsStock() {
 
       if (existing) {
         // Update existing entry
-        const updateData: any = { 
+        const updateData: any = {
           quantity: Number(existing.quantity) + data.quantity,
           notes: data.notes,
         };
         if (data.image_url) updateData.image_url = data.image_url;
-        
+
         const { error } = await supabase
           .from('finished_productions_stock')
           .update(updateData)
@@ -92,7 +94,7 @@ export function useFinishedProductionsStock() {
           notes: data.notes,
         };
         if (data.image_url) insertData.image_url = data.image_url;
-        
+
         const { error } = await supabase
           .from('finished_productions_stock')
           .insert(insertData);
@@ -113,7 +115,7 @@ export function useFinishedProductionsStock() {
       const updateData: any = { quantity, notes };
       if (unit) updateData.unit = unit;
       if (image_url !== undefined) updateData.image_url = image_url || null;
-      
+
       const { error } = await supabase
         .from('finished_productions_stock')
         .update(updateData)
@@ -151,10 +153,10 @@ export function useFinishedProductionsStock() {
     mutationFn: async ({ id, quantity = 1 }: { id: string; quantity?: number }) => {
       if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
       if (!ownerId) throw new Error('Usuário não autenticado');
-      
+
       const item = finishedStock.find(s => s.id === id);
       if (!item) throw new Error('Item não encontrado');
-      
+
       if (Number(item.quantity) < quantity) {
         throw new Error('Quantidade insuficiente para registrar perda.');
       }
@@ -215,14 +217,14 @@ export function useFinishedProductionsStock() {
     if (!item || Number(item.quantity) < quantity) {
       return false;
     }
-    
+
     const newQuantity = Number(item.quantity) - quantity;
     if (newQuantity <= 0) {
       await supabase.from('finished_productions_stock').delete().eq('id', item.id);
     } else {
       await supabase.from('finished_productions_stock').update({ quantity: newQuantity }).eq('id', item.id);
     }
-    
+
     return true;
   };
 
