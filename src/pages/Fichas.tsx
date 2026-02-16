@@ -372,6 +372,7 @@ export default function Fichas() {
           yield_unit: formData.unidadeRendimento,
           image_url: formData.image_url || null,
           minimum_stock: formData.minimumStock ? parseFloat(formData.minimumStock) : 0,
+          production_type: formData.productionType,
         } as any);
         sheetId = editingSheet.id;
 
@@ -395,6 +396,7 @@ export default function Fichas() {
           yield_unit: formData.unidadeRendimento,
           image_url: formData.image_url || null,
           minimum_stock: formData.minimumStock ? parseFloat(formData.minimumStock) : 0,
+          production_type: formData.productionType,
         } as any);
         sheetId = newSheet.id;
       }

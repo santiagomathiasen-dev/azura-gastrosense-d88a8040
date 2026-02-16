@@ -1,4 +1,4 @@
--- Adicionar coluna de estoque mÃ­nimo nas fichas tÃ©cnicas
+    -- Adicionar coluna de estoque mÃ­nimo nas fichas tÃ©cnicas
 ALTER TABLE public.technical_sheets 
 ADD COLUMN IF NOT EXISTS minimum_stock NUMERIC DEFAULT 0;
 

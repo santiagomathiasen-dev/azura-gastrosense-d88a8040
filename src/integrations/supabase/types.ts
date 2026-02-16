@@ -1005,6 +1005,7 @@ export type Database = {
           id: string
           image_url: string | null
           name: string
+          minimum_stock: number | null
           preparation_method: string | null
           preparation_time: number | null
           production_type: Database["public"]["Enums"]["production_type"]
@@ -1020,6 +1021,7 @@ export type Database = {
           description?: string | null
           id?: string
           image_url?: string | null
+          minimum_stock?: number | null
           name: string
           preparation_method?: string | null
           preparation_time?: number | null
@@ -1036,6 +1038,7 @@ export type Database = {
           description?: string | null
           id?: string
           image_url?: string | null
+          minimum_stock?: number | null
           name?: string
           preparation_method?: string | null
           preparation_time?: number | null
