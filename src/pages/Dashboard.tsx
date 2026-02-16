@@ -49,14 +49,6 @@ export default function Dashboard() {
     (item) => item.ready_quantity <= (item.minimum_stock || 0)
   );
 
-  // Debug logging
-  console.log('=== DASHBOARD DEBUG ===');
-  console.log('Stock Items:', stockItems.length);
-  console.log('Finished Stock:', finishedStock.length, finishedStock);
-  console.log('Sale Products:', saleProducts.length, saleProducts);
-  console.log('Low Stock Items:', lowStockItems.length);
-  console.log('Low Finished Stock:', lowFinishedStock.length, lowFinishedStock);
-  console.log('Low Sale Products:', lowSaleProducts.length, lowSaleProducts);
 
   const combinedAlerts = [
     ...lowStockItems.map(item => ({

@@ -257,8 +257,8 @@ export default function Compras() {
     }
 
     // Find all unpurchased items for this supplier
-    const supplierItems = filteredItems.filter(
-      i => i.supplierId === item.supplierId && !i.isPurchased
+    const supplierItems = unpurchasedItems.filter(
+      i => i.supplierId === item.supplierId
     );
 
     let message = `Olá ${item.supplierName}, gostaria de fazer um pedido:\n`;
