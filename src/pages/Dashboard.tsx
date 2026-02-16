@@ -32,8 +32,17 @@ export default function Dashboard() {
   );
 
   const lowFinishedStock = finishedStock.filter(
-    (item) => item.quantity <= (item.technical_sheet?.minimum_stock || 0) &&
-      !pendingItems.some(p => p.stock_item_id === item.id) // Assuming pendingItems can track finished goods too? Probably not directly, but good safety.
+    (item) => {
+      // Calculate expected output from in-progress productions for this item
+      // We match production.technical_sheet_id with item.technical_sheet_id
+      const incomingFromProduction = inProgressProductions
+        .filter(p => p.technical_sheet_id === item.technical_sheet_id)
+        .reduce((sum, p) => sum + (Number(p.planned_quantity) || 0), 0);
+
+      const totalAvailable = item.quantity + incomingFromProduction;
+
+      return totalAvailable <= (item.technical_sheet?.minimum_stock || 0);
+    }
   );
 
   const lowSaleProducts = saleProducts.filter(

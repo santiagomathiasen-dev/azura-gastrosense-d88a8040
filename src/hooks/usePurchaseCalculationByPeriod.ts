@@ -155,7 +155,7 @@ export function usePurchaseCalculationByPeriod({ productions }: UsePurchaseCalcu
           suggestedQuantity: Math.ceil(totalNeed), // Round up to ensure enough
           supplierId: item.supplier_id,
           supplierName: supplier?.name || null,
-          supplierPhone: supplier?.whatsapp_number || null,
+          supplierPhone: supplier?.whatsapp_number || supplier?.whatsapp || supplier?.phone || null,
           unitPrice,
           estimatedCost: Math.ceil(totalNeed) * unitPrice,
           isUrgent,

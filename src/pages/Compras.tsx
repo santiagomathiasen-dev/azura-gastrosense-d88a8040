@@ -154,7 +154,7 @@ export default function Compras() {
           suggestedQuantity: Number(manualItem.suggested_quantity),
           supplierId: manualItem.supplier_id,
           supplierName: manualItem.supplier?.name || null,
-          supplierPhone: manualItem.supplier?.whatsapp_number || null,
+          supplierPhone: manualItem.supplier?.whatsapp_number || manualItem.supplier?.whatsapp || manualItem.supplier?.phone || null,
           unitPrice: 0, // We could fetch this but it's okay for now
 
           estimatedCost: 0,
