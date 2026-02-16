@@ -167,10 +167,7 @@ export default function Dashboard() {
         </Card>
 
         {/* Low Stock Alert */}
-        <Card
-          className="cursor-pointer hover:shadow-md transition-shadow"
-          onClick={() => navigate('/estoque')}
-        >
+        <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-warning" />
@@ -189,7 +186,12 @@ export default function Dashboard() {
               combinedAlerts.slice(0, 5).map((item) => (
                 <div
                   key={`${item.type}-${item.id}`}
-                  className="flex items-center justify-between p-3 rounded-lg bg-warning/5 border border-warning/20"
+                  className="flex items-center justify-between p-3 rounded-lg bg-warning/5 border border-warning/20 cursor-pointer hover:bg-warning/10 transition-colors"
+                  onClick={() => {
+                    if (item.type === 'insumo') navigate('/estoque');
+                    else if (item.type === 'producao') navigate('/estoque-finalizados');
+                    else if (item.type === 'venda') navigate('/produtos-venda');
+                  }}
                 >
                   <div className="flex-1 min-w-0 mr-2">
                     <div className="flex items-center gap-2">
