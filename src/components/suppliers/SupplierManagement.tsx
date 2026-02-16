@@ -29,6 +29,7 @@ import {
 import { useSuppliers, type Supplier } from '@/hooks/useSuppliers';
 import { SupplierForm } from './SupplierForm';
 import { formatBrazilianNumber } from '@/lib/utils'; // Assuming this exists or standard utils
+import { WhatsAppDialog } from './WhatsAppDialog';
 
 export function SupplierManagement() {
     const { suppliers, isLoading, createSupplier, updateSupplier, deleteSupplier } = useSuppliers();
@@ -37,6 +38,8 @@ export function SupplierManagement() {
     const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [supplierToDelete, setSupplierToDelete] = useState<Supplier | null>(null);
+    const [whatsAppDialogOpen, setWhatsAppDialogOpen] = useState(false);
+    const [selectedSupplierForWhatsApp, setSelectedSupplierForWhatsApp] = useState<Supplier | null>(null);
 
     const filteredSuppliers = suppliers.filter(supplier =>
         supplier.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -76,10 +79,11 @@ export function SupplierManagement() {
         if (!open) setEditingSupplier(null);
     };
 
-    const openWhatsApp = (number: string | null) => {
+    const openWhatsApp = (supplier: Supplier) => {
+        const number = supplier.whatsapp_number || supplier.whatsapp;
         if (!number) return;
-        const cleanNumber = number.replace(/\D/g, '');
-        window.open(`https://wa.me/55${cleanNumber}`, '_blank');
+        setSelectedSupplierForWhatsApp(supplier);
+        setWhatsAppDialogOpen(true);
     };
 
     if (isLoading) {
@@ -152,7 +156,7 @@ export function SupplierManagement() {
                                             variant="ghost"
                                             size="sm"
                                             className="h-6 px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                            onClick={() => openWhatsApp(supplier.whatsapp_number || supplier.whatsapp)}
+                                            onClick={() => openWhatsApp(supplier)}
                                         >
                                             <MessageCircle className="h-4 w-4 mr-1" />
                                             WhatsApp
@@ -199,6 +203,19 @@ export function SupplierManagement() {
                 initialData={editingSupplier}
                 isLoading={false} // You might want to pass actual loading state from mutations
             />
+
+            {selectedSupplierForWhatsApp && (
+                <WhatsAppDialog
+                    open={whatsAppDialogOpen}
+                    onOpenChange={(open) => {
+                        setWhatsAppDialogOpen(open);
+                        if (!open) setSelectedSupplierForWhatsApp(null);
+                    }}
+                    supplierName={selectedSupplierForWhatsApp.name}
+                    phoneNumber={selectedSupplierForWhatsApp.whatsapp_number || selectedSupplierForWhatsApp.whatsapp || ''}
+                    supplierId={selectedSupplierForWhatsApp.id}
+                />
+            )}
 
             <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                 <AlertDialogContent>

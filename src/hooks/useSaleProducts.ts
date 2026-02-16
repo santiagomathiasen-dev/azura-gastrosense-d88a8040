@@ -284,6 +284,27 @@ export function useSaleProducts() {
       }
 
       if (insufficientItems.length > 0) {
+        // Record alerts in the database
+        const alertsToInsert = insufficientItems.map(item => ({
+          user_id: ownerId,
+          sale_product_id: sale_product_id,
+          missing_component_id: item.id,
+          missing_component_type: item.type,
+          missing_quantity: item.amount,
+          resolved: false,
+        }));
+
+        const { error: alertError } = await supabase
+          .from('preparation_alerts')
+          .insert(alertsToInsert);
+
+        if (alertError) {
+          console.error('Error recording preparation alerts:', alertError);
+        } else {
+          // Invalidate alerts query to update dashboard immediately
+          queryClient.invalidateQueries({ queryKey: ['preparation_alerts'] });
+        }
+
         const error = new Error(`Estoque insuficiente`);
         (error as any).insufficientItems = insufficientItems;
         throw error;

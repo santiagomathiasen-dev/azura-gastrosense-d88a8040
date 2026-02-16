@@ -21,7 +21,7 @@ export const PURCHASE_STATUS_LABELS: Record<PurchaseStatus, string> = {
 
 export interface PurchaseListItemWithDetails extends PurchaseListItem {
   stock_item: { name: string; unit: string; category: string } | null;
-  supplier: { name: string } | null;
+  supplier: { name: string; whatsapp_number: string | null } | null;
 }
 
 export function usePurchaseList() {
@@ -39,7 +39,7 @@ export function usePurchaseList() {
         .select(`
           *,
           stock_item:stock_items(name, unit, category),
-          supplier:suppliers(name)
+          supplier:suppliers(name, whatsapp_number)
         `)
         .order('created_at', { ascending: false });
       if (error) throw error;

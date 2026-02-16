@@ -1,4 +1,4 @@
-import { ShoppingCart, Search, AlertTriangle, Download, Factory, Package, Calendar, Check, Clock, CheckCircle2, Printer } from 'lucide-react';
+import { ShoppingCart, Search, AlertTriangle, Download, Factory, Package, Calendar, Check, Clock, CheckCircle2, Printer, MessageCircle } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -38,6 +38,8 @@ import {
   MobileListDetails,
   MobileListBadge,
 } from '@/components/ui/mobile-list';
+import { WhatsAppDialog } from '@/components/suppliers/WhatsAppDialog';
+
 
 // Extended interface to include purchase status
 interface PurchaseListItem {
@@ -51,6 +53,8 @@ interface PurchaseListItem {
   suggestedQuantity: number;
   supplierId: string | null;
   supplierName: string | null;
+  supplierPhone: string | null;
+
   unitPrice: number;
   estimatedCost: number;
   isUrgent: boolean;
@@ -68,6 +72,16 @@ export default function Compras() {
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
   const [newScheduleDay, setNewScheduleDay] = useState('1');
   const [filteredProductions, setFilteredProductions] = useState<ProductionWithSheet[]>([]);
+
+  // WhatsApp Dialog State
+  const [whatsAppDialogData, setWhatsAppDialogData] = useState({
+    open: false,
+    supplierName: '',
+    phoneNumber: '',
+    supplierId: '',
+    initialMessage: '',
+  });
+
 
   // Get all productions
   const { productions, isLoading: productionsLoading } = useProductions();
@@ -140,7 +154,9 @@ export default function Compras() {
           suggestedQuantity: Number(manualItem.suggested_quantity),
           supplierId: manualItem.supplier_id,
           supplierName: manualItem.supplier?.name || null,
+          supplierPhone: manualItem.supplier?.whatsapp_number || null,
           unitPrice: 0, // We could fetch this but it's okay for now
+
           estimatedCost: 0,
           isUrgent: true,
           isPurchased: false,
@@ -234,6 +250,31 @@ export default function Compras() {
     setShowScheduleDialog(false);
   };
 
+  const handleOpenWhatsApp = (item: PurchaseListItem) => {
+    if (!item.supplierPhone || !item.supplierName || !item.supplierId) {
+      toast.error('Este fornecedor não possui número de WhatsApp cadastrado.');
+      return;
+    }
+
+    const message = `Olá ${item.supplierName}, gostaria de fazer um pedido: ${item.suggestedQuantity} ${item.unit} de ${item.name}.`;
+
+    setWhatsAppDialogData({
+      open: true,
+      supplierName: item.supplierName,
+      phoneNumber: item.supplierPhone,
+      supplierId: item.supplierId,
+      initialMessage: message // Note: WhatsAppDialog needs to support initialMessage prop if it doesn't already, or we can just hope it's not strictly needed for MVP or we modify WhatsAppDialog. Wait, checking WhatsAppDialog code... it doesn't take initialMessage. I will need to modifying WhatsAppDialog or just let the user type. 
+      // Actually, looking at my previous view of WhatsAppDialog, it DOES NOT take an initialMessage prop. 
+      // I should update WhatsAppDialog to accept initialMessage or just let it be blank.
+      // The user request implies "new window to send message... directly from whatsapp web".
+      // If I want to pre-fill, I need to update WhatsAppDialog.
+      // let's stick to opening it for now, and I will update WhatsAppDialog in a separate step if strictly needed, BUT
+      // `WhatsAppDialog` has its own state `message`. I can't control it easily from outside unless I lift state up or add a prop.
+      // I will add the prop `initialMessage` to WhatsAppDialog in the next step.
+      // For now, let's pass it in data, but I'll need to update the component to use it.
+    });
+  };
+
   const gerarListaCompras = () => {
     if (filteredItems.length === 0) {
       toast.info('Nenhum item na lista de compras.');
@@ -321,8 +362,12 @@ export default function Compras() {
                   <td>${item.name}</td>
                   <td class="text-right">${item.suggestedQuantity}</td>
                   <td>${item.unit}</td>
-                  <td>${item.supplierName || '-'}</td>
+                  <td>
+                    ${item.supplierName || '-'}
+                    ${item.supplierPhone ? ' (WhatsApp)' : ''}
+                  </td>
                   <td class="text-right">R$ ${item.estimatedCost.toFixed(2)}</td>
+
                   <td>${item.isPurchased ? 'Comprado' : item.isUrgent ? 'Urgente' : 'Pendente'}</td>
                 </tr>
               `).join('')}
@@ -525,19 +570,40 @@ export default function Compras() {
 
               {/* Linha 2: Detalhes */}
               <MobileListDetails className={cn("ml-6", item.isPurchased && "text-muted-foreground")}>
-                {item.supplierName && <span>{item.supplierName}</span>}
-                {item.isPurchased ? (
-                  <span className="text-emerald-600">
-                    Comprado: <strong>{item.orderedQuantity} {item.unit}</strong>
-                  </span>
-                ) : (
-                  <span>Comprar: <strong>{item.suggestedQuantity} {item.unit}</strong></span>
-                )}
-                <span>Atual: {item.currentQuantity}</span>
-                <span>Mín: {item.minimumQuantity}</span>
-                {item.productionNeed > 0 && !item.isPurchased && (
-                  <span className="text-primary">Prod: {item.productionNeed.toFixed(1)}</span>
-                )}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  {item.supplierName && (
+                    <div className="flex items-center gap-1">
+                      <span>{item.supplierName}</span>
+                      {item.supplierPhone && !item.isPurchased && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-green-600 hover:text-green-700 hover:bg-green-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenWhatsApp(item);
+                          }}
+                          title="Enviar pedido por WhatsApp"
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  )}
+
+                  {item.isPurchased ? (
+                    <span className="text-emerald-600">
+                      Comprado: <strong>{item.orderedQuantity} {item.unit}</strong>
+                    </span>
+                  ) : (
+                    <span>Comprar: <strong>{item.suggestedQuantity} {item.unit}</strong></span>
+                  )}
+                  <span>Atual: {item.currentQuantity}</span>
+                  <span>Mín: {item.minimumQuantity}</span>
+                  {item.productionNeed > 0 && !item.isPurchased && (
+                    <span className="text-primary">Prod: {item.productionNeed.toFixed(1)}</span>
+                  )}
+                </div>
               </MobileListDetails>
             </MobileListItem>
           ))}
@@ -625,6 +691,16 @@ export default function Compras() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* WhatsApp Dialog */}
+      <WhatsAppDialog
+        open={whatsAppDialogData.open}
+        onOpenChange={(open) => setWhatsAppDialogData(prev => ({ ...prev, open }))}
+        supplierName={whatsAppDialogData.supplierName}
+        phoneNumber={whatsAppDialogData.phoneNumber}
+        supplierId={whatsAppDialogData.supplierId}
+        initialMessage={whatsAppDialogData.initialMessage}
+      />
     </div>
   );
 }

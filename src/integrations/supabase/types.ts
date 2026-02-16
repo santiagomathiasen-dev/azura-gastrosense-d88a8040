@@ -181,6 +181,47 @@ export type Database = {
         }
         Relationships: []
       }
+      preparation_alerts: {
+        Row: {
+          created_at: string
+          id: string
+          missing_component_id: string
+          missing_component_type: string
+          missing_quantity: number
+          resolved: boolean | null
+          sale_product_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          missing_component_id: string
+          missing_component_type: string
+          missing_quantity: number
+          resolved?: boolean | null
+          sale_product_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          missing_component_id?: string
+          missing_component_type?: string
+          missing_quantity?: number
+          resolved?: boolean | null
+          sale_product_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "preparation_alerts_sale_product_id_fkey"
+            columns: ["sale_product_id"]
+            isOneToOne: false
+            referencedRelation: "sale_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       produced_inputs_stock: {
         Row: {
           batch_code: string

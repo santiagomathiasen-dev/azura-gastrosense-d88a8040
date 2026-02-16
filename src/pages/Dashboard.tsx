@@ -8,6 +8,8 @@ import { useStockItems } from '@/hooks/useStockItems';
 import { useFinishedProductionsStock } from '@/hooks/useFinishedProductionsStock';
 import { useSaleProducts } from '@/hooks/useSaleProducts';
 import { AIAssistant } from '@/components/dashboard/AIAssistant';
+import { usePreparationAlerts } from '@/hooks/usePreparationAlerts';
+import { CheckCircle2, XCircle } from 'lucide-react';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -15,6 +17,7 @@ export default function Dashboard() {
   const { items: stockItems, isLoading: stockLoading } = useStockItems();
   const { finishedStock, isLoading: finishedLoading } = useFinishedProductionsStock();
   const { saleProducts, isLoading: saleProductsLoading } = useSaleProducts();
+  const { alerts: preparationAlerts, isLoading: alertsLoading, resolveAlert } = usePreparationAlerts();
 
   // Filter productions by status
   const plannedProductions = productions.filter((p) => p.status === 'planned');
@@ -84,8 +87,49 @@ export default function Dashboard() {
         <AIAssistant />
       </div>
 
-      {/* Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Preparation Alerts */}
+        {(preparationAlerts.length > 0) && (
+          <Card className="col-span-full border-destructive/30 bg-destructive/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2 text-destructive">
+                <XCircle className="h-5 w-5" />
+                Falhas na Preparação (Estoque Insuficiente)
+                <Badge variant="destructive" className="ml-auto">
+                  {preparationAlerts.length}
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {preparationAlerts.map((alert) => (
+                <div
+                  key={alert.id}
+                  className="flex items-center justify-between p-3 rounded-lg bg-background border border-destructive/20"
+                >
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">
+                      Não foi possível preparar: <span className="font-bold">{alert.sale_product?.name}</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Faltou: <span className="text-destructive font-semibold">{alert.missing_quantity} {alert.missing_component_name}</span>
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      {new Date(alert.created_at).toLocaleString('pt-BR')}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => resolveAlert.mutate(alert.id)}
+                    className="p-2 hover:bg-muted rounded-full text-muted-foreground hover:text-green-600 transition-colors"
+                    title="Marcar como resolvido"
+                  >
+                    <CheckCircle2 className="h-5 w-5" />
+                  </button>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Planned Productions */}
         <Card
           className="cursor-pointer hover:shadow-md transition-shadow"
