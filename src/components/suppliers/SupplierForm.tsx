@@ -29,16 +29,7 @@ interface SupplierFormProps {
   isLoading?: boolean;
 }
 
-const CATEGORIES = [
-  'Laticínios',
-  'Secos e Grãos',
-  'Hortifruti',
-  'Carnes e Peixes',
-  'Embalagens',
-  'Limpeza',
-  'Bebidas',
-  'Outros',
-];
+
 
 const PAYMENT_METHODS = [
   'Boleto',
@@ -56,7 +47,7 @@ export function SupplierForm({
   isLoading,
 }: SupplierFormProps) {
   const [name, setName] = useState(initialData?.name || '');
-  const [category, setCategory] = useState(initialData?.category || '');
+
   const [cnpjCpf, setCnpjCpf] = useState(initialData?.cnpj_cpf || '');
   const [phone, setPhone] = useState(initialData?.phone || '');
   const [whatsapp, setWhatsapp] = useState(initialData?.whatsapp || '');
@@ -78,7 +69,7 @@ export function SupplierForm({
 
     onSubmit({
       name: name.trim(),
-      category: category || null,
+
       cnpj_cpf: cnpjCpf || null,
       phone: phone || null,
       whatsapp: whatsapp || null,
@@ -98,7 +89,7 @@ export function SupplierForm({
   const handleOpenChange = (isOpen: boolean) => {
     if (!isOpen) {
       setName(initialData?.name || '');
-      setCategory(initialData?.category || '');
+
       setCnpjCpf(initialData?.cnpj_cpf || '');
       setPhone(initialData?.phone || '');
       setWhatsapp(initialData?.whatsapp || '');
@@ -152,40 +143,22 @@ export function SupplierForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="category">Categoria</Label>
-              <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione uma categoria" />
+          <div className="space-y-2">
+            <Label htmlFor="paymentMethod">Forma de Pagamento</Label>
+            <div className="relative">
+              <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                <SelectTrigger className="pl-10">
+                  <SelectValue placeholder="Selecione..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {CATEGORIES.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
+                  {PAYMENT_METHODS.map((method) => (
+                    <SelectItem key={method} value={method}>
+                      {method}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="paymentMethod">Forma de Pagamento</Label>
-              <div className="relative">
-                <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                  <SelectTrigger className="pl-10">
-                    <SelectValue placeholder="Selecione..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PAYMENT_METHODS.map((method) => (
-                      <SelectItem key={method} value={method}>
-                        {method}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
           </div>
 
