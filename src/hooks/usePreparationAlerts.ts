@@ -76,6 +76,8 @@ export function usePreparationAlerts() {
             return alertsWithNames as PreparationAlert[];
         },
         enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
+        refetchInterval: 15_000, // Auto-refresh every 15 seconds
+        staleTime: 10_000,
     });
 
     const resolveAlert = useMutation({
