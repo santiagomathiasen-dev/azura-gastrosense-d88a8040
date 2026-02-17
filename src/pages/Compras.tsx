@@ -39,6 +39,7 @@ import {
   MobileListBadge,
 } from '@/components/ui/mobile-list';
 import { WhatsAppDialog } from '@/components/suppliers/WhatsAppDialog';
+import { useSuppliers } from '@/hooks/useSuppliers';
 
 
 // Extended interface to include purchase status
@@ -81,6 +82,19 @@ export default function Compras() {
     supplierId: '',
     initialMessage: '',
   });
+
+  // Supplier picker state (for items without a linked supplier)
+  const [supplierPickerData, setSupplierPickerData] = useState<{
+    open: boolean;
+    item: PurchaseListItem | null;
+  }>({ open: false, item: null });
+  const [pickedSupplierId, setPickedSupplierId] = useState('');
+
+  // All suppliers for the picker
+  const { suppliers: allSuppliers = [] } = useSuppliers();
+  const suppliersWithPhone = allSuppliers.filter(
+    (s: any) => s.whatsapp_number || s.whatsapp || s.phone
+  );
 
 
   // Get all productions
@@ -251,29 +265,58 @@ export default function Compras() {
   };
 
   const handleOpenWhatsApp = (item: PurchaseListItem) => {
-    if (!item.supplierPhone || !item.supplierName || !item.supplierId) {
+    // If item has a linked supplier with phone, use it directly
+    if (item.supplierPhone && item.supplierName && item.supplierId) {
+      // Find all unpurchased items for this supplier
+      const supplierItems = unpurchasedItems.filter(
+        i => i.supplierId === item.supplierId
+      );
+
+      let message = `Olá ${item.supplierName}, gostaria de fazer um pedido:\n`;
+      supplierItems.forEach(i => {
+        message += `- ${i.suggestedQuantity} ${i.unit} de ${i.name}\n`;
+      });
+
+      setWhatsAppDialogData({
+        open: true,
+        supplierName: item.supplierName,
+        phoneNumber: item.supplierPhone,
+        supplierId: item.supplierId,
+        initialMessage: message
+      });
+    } else {
+      // No supplier linked — open the supplier picker dialog
+      if (suppliersWithPhone.length === 0) {
+        toast.error('Nenhum fornecedor com WhatsApp cadastrado. Cadastre um fornecedor primeiro.');
+        return;
+      }
+      setSupplierPickerData({ open: true, item });
+      setPickedSupplierId('');
+    }
+  };
+
+  const handleConfirmSupplierPick = () => {
+    const supplier = allSuppliers.find((s: any) => s.id === pickedSupplierId) as any;
+    if (!supplier || !supplierPickerData.item) return;
+
+    const phone = supplier.whatsapp_number || supplier.whatsapp || supplier.phone;
+    if (!phone) {
       toast.error('Este fornecedor não possui número de WhatsApp cadastrado.');
       return;
     }
 
-    // Find all unpurchased items for this supplier
-    const supplierItems = unpurchasedItems.filter(
-      i => i.supplierId === item.supplierId
-    );
-
-    let message = `Olá ${item.supplierName}, gostaria de fazer um pedido:\n`;
-
-    supplierItems.forEach(i => {
-      message += `- ${i.suggestedQuantity} ${i.unit} de ${i.name}\n`;
-    });
+    const item = supplierPickerData.item;
+    let message = `Olá ${supplier.name}, gostaria de solicitar:\n`;
+    message += `- ${item.suggestedQuantity} ${item.unit} de ${item.name}\n`;
 
     setWhatsAppDialogData({
       open: true,
-      supplierName: item.supplierName,
-      phoneNumber: item.supplierPhone,
-      supplierId: item.supplierId,
+      supplierName: supplier.name,
+      phoneNumber: phone,
+      supplierId: supplier.id,
       initialMessage: message
     });
+    setSupplierPickerData({ open: false, item: null });
   };
 
   const gerarListaCompras = () => {
@@ -552,17 +595,22 @@ export default function Compras() {
                   {item.name}
                 </MobileListTitle>
 
-                {/* WhatsApp Button next to name */}
-                {item.supplierName && item.supplierPhone && !item.isPurchased && (
+                {/* WhatsApp Button next to name - shown for ALL unpurchased items */}
+                {!item.isPurchased && (
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 text-green-600 hover:text-green-700 hover:bg-green-50 mr-1"
+                    className={cn(
+                      "h-6 w-6 mr-1",
+                      item.supplierPhone
+                        ? "text-green-600 hover:text-green-700 hover:bg-green-50"
+                        : "text-muted-foreground hover:text-green-600 hover:bg-green-50"
+                    )}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleOpenWhatsApp(item);
                     }}
-                    title={`Enviar pedido para ${item.supplierName}`}
+                    title={item.supplierName ? `Enviar pedido para ${item.supplierName}` : 'Selecionar fornecedor e enviar pedido'}
                   >
                     <MessageCircle className="h-4 w-4" />
                   </Button>
@@ -691,6 +739,48 @@ export default function Compras() {
             </Button>
             <Button onClick={handleAddScheduleDay}>
               Adicionar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Supplier Picker Dialog (for items without a linked supplier) */}
+      <Dialog
+        open={supplierPickerData.open}
+        onOpenChange={(open) => setSupplierPickerData(prev => ({ ...prev, open }))}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Selecionar Fornecedor</DialogTitle>
+            <DialogDescription>
+              Escolha o fornecedor para enviar o pedido de{' '}
+              <strong>{supplierPickerData.item?.name}</strong> via WhatsApp.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label>Fornecedor</Label>
+            <Select value={pickedSupplierId} onValueChange={setPickedSupplierId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione um fornecedor" />
+              </SelectTrigger>
+              <SelectContent>
+                {suppliersWithPhone.map((s: any) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setSupplierPickerData({ open: false, item: null })}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmSupplierPick} disabled={!pickedSupplierId}>
+              Abrir WhatsApp
             </Button>
           </DialogFooter>
         </DialogContent>
