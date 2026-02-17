@@ -71,6 +71,8 @@ export default function Fichas() {
     image_url: '',
     productionType: 'final' as 'insumo' | 'final',
     minimumStock: '0',
+    shelfLife: '',
+    leadTime: '',
   });
 
   // Stages for form
@@ -91,6 +93,8 @@ export default function Fichas() {
       image_url: '',
       productionType: 'final',
       minimumStock: '0',
+      shelfLife: '',
+      leadTime: '',
     });
     setStages([]);
     setEditingSheet(null);
@@ -276,6 +280,8 @@ export default function Fichas() {
       image_url: sheet.image_url || '',
       productionType: sheet.production_type || 'final',
       minimumStock: (sheet.minimum_stock || 0).toString(),
+      shelfLife: sheet.shelf_life_hours?.toString() || '',
+      leadTime: sheet.lead_time_hours?.toString() || '',
     });
 
     // Convert existing stages and ingredients to form format
@@ -373,6 +379,8 @@ export default function Fichas() {
           image_url: formData.image_url || null,
           minimum_stock: formData.minimumStock ? parseFloat(formData.minimumStock) : 0,
           production_type: formData.productionType,
+          shelf_life_hours: formData.shelfLife ? parseInt(formData.shelfLife) : null,
+          lead_time_hours: formData.leadTime ? parseInt(formData.leadTime) : null,
         } as any);
         sheetId = editingSheet.id;
 
@@ -397,6 +405,8 @@ export default function Fichas() {
           image_url: formData.image_url || null,
           minimum_stock: formData.minimumStock ? parseFloat(formData.minimumStock) : 0,
           production_type: formData.productionType,
+          shelf_life_hours: formData.shelfLife ? parseInt(formData.shelfLife) : null,
+          lead_time_hours: formData.leadTime ? parseInt(formData.leadTime) : null,
         } as any);
         sheetId = newSheet.id;
       }
@@ -810,6 +820,35 @@ export default function Fichas() {
                 <p className="text-xs text-muted-foreground">
                   Alerta no painel quando o estoque desta produção for menor ou igual a este valor.
                 </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="shelfLife">Validade (horas)</Label>
+                  <Input
+                    id="shelfLife"
+                    type="number"
+                    value={formData.shelfLife}
+                    onChange={(e) => setFormData({ ...formData, shelfLife: e.target.value })}
+                    placeholder="Ex: 48"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Tempo de validade após produzido.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="leadTime">Lead Time (horas)</Label>
+                  <Input
+                    id="leadTime"
+                    type="number"
+                    value={formData.leadTime}
+                    onChange={(e) => setFormData({ ...formData, leadTime: e.target.value })}
+                    placeholder="Ex: 4"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Tempo de antecedência para produção.
+                  </p>
+                </div>
               </div>
 
               {/* Stage Form - Multi-part recipe */}
