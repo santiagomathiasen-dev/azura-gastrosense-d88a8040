@@ -55,6 +55,7 @@ import {
     FORECAST_STATUS_LABELS,
 } from '@/hooks/useForecastProductionOrders';
 import { useSaleProducts } from '@/hooks/useSaleProducts';
+import { ProductionSheetDialog } from '@/components/production/ProductionSheetDialog';
 
 // ---- Forecast Input Tab ----
 
@@ -236,6 +237,8 @@ function ForecastInputTab() {
 function ProductionOrdersTab() {
     const [selectedDate, setSelectedDate] = useState<Date>(new Date());
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
+    const [selectedOrder, setSelectedOrder] = useState<any>(null);
+    const [sheetDialogOpen, setSheetDialogOpen] = useState(false);
 
     const { orders, ordersByPraca, summary, isLoading, updateOrderStatus } =
         useForecastProductionOrders(dateStr);
@@ -349,9 +352,13 @@ function ProductionOrdersTab() {
                                     <div
                                         key={order.id}
                                         className={cn(
-                                            'flex items-center justify-between p-3 rounded-lg border transition-all',
+                                            'flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer hover:shadow-md',
                                             statusColor(order.status)
                                         )}
+                                        onClick={() => {
+                                            setSelectedOrder(order);
+                                            setSheetDialogOpen(true);
+                                        }}
                                     >
                                         <div className="flex items-center gap-3 min-w-0 flex-1">
                                             <div className="flex-shrink-0">
@@ -386,12 +393,13 @@ function ProductionOrdersTab() {
                                                 size="sm"
                                                 variant="outline"
                                                 className="ml-2 flex-shrink-0 gap-1"
-                                                onClick={() =>
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
                                                     updateOrderStatus.mutate({
                                                         id: order.id,
                                                         status: nextStatus(order.status),
-                                                    })
-                                                }
+                                                    });
+                                                }}
                                             >
                                                 {order.status === 'pending' ? (
                                                     <>
@@ -411,6 +419,12 @@ function ProductionOrdersTab() {
                     ))}
                 </div>
             )}
+
+            <ProductionSheetDialog
+                open={sheetDialogOpen}
+                onOpenChange={setSheetDialogOpen}
+                order={selectedOrder}
+            />
         </div>
     );
 }
@@ -423,7 +437,6 @@ export default function PrevisaoVendas() {
             <PageHeader
                 title="Previsão de Vendas & Produção"
                 description="Defina previsões de vendas e gere automaticamente as ordens de produção por praça."
-                icon={CalendarClock}
             />
             <Tabs defaultValue="previsao" className="w-full">
                 <TabsList className="grid w-full grid-cols-2 max-w-md">

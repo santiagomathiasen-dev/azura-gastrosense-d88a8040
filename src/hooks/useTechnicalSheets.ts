@@ -17,7 +17,7 @@ export interface TechnicalSheetWithIngredients extends TechnicalSheet {
   production_type: ProductionType;
   minimum_stock: number;
   ingredients: (TechnicalSheetIngredient & {
-    stock_item: { name: string; unit: string } | null;
+    stock_item: { name: string; unit: string; unit_price: number | null } | null;
     stage_id?: string | null;
   })[];
 }

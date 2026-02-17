@@ -73,16 +73,72 @@ export function useForecastProductionOrders(productionDate?: string) {
         refetchInterval: 15_000,
     });
 
+    const addToFinishedStock = async (order: any) => {
+        if (!ownerId || !order.technical_sheet) return;
+
+        const technicalSheetId = order.technical_sheet.id;
+        const unit = order.technical_sheet.yield_unit;
+        const praca = order.praca || null;
+        const quantity = order.net_quantity;
+
+        // Check if entry already exists for this known sheet + praca
+        let query = supabase
+            .from('finished_productions_stock')
+            .select('id, quantity')
+            .eq('technical_sheet_id', technicalSheetId);
+
+        if (praca) {
+            query = query.eq('praca', praca);
+        } else {
+            query = query.is('praca', null);
+        }
+
+        const { data: existing } = await query.single();
+
+        if (existing) {
+            await supabase
+                .from('finished_productions_stock')
+                .update({
+                    quantity: Number(existing.quantity) + Number(quantity),
+                })
+                .eq('id', existing.id);
+        } else {
+            const insertData: any = {
+                user_id: ownerId,
+                technical_sheet_id: technicalSheetId,
+                quantity: Number(quantity),
+                unit: unit,
+                notes: `Produção (Previsão): ${new Date().toLocaleDateString()}`,
+            };
+            if (praca) insertData.praca = praca;
+
+            await supabase
+                .from('finished_productions_stock')
+                .insert(insertData);
+        }
+    };
+
     const updateOrderStatus = useMutation({
-        mutationFn: async ({ id, status }: { id: string; status: string }) => {
-            const { error } = await supabase
+        mutationFn: async ({ id, status }: { id: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }) => {
+            const { data: order, error } = await supabase
                 .from('forecast_production_orders')
                 .update({ status })
-                .eq('id', id);
+                .eq('id', id)
+                .select(`
+                    *,
+                    technical_sheet:technical_sheets(id, name, yield_unit, production_type)
+                `)
+                .single();
+
             if (error) throw error;
+
+            if (status === 'completed' && order) {
+                await addToFinishedStock(order);
+            }
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['forecast_production_orders'] });
+            queryClient.invalidateQueries({ queryKey: ['finished_productions_stock'] });
             toast.success('Status atualizado!');
         },
         onError: (err: Error) => {
