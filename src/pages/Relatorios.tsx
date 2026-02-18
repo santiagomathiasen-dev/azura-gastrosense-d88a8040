@@ -8,11 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Skeleton } from '@/components/ui/skeleton';
-import { 
-  FileText, 
-  DollarSign, 
-  Package, 
-  ShoppingCart, 
+import {
+  FileText,
+  DollarSign,
+  Package,
+  ShoppingCart,
   TrendingDown,
   Calendar as CalendarIcon,
   Download,
@@ -31,8 +31,46 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
+function DatePickerWithState({ date, setDate, placeholder }: { date: Date | undefined, setDate: (d: Date | undefined) => void, placeholder: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn(
+            "w-[130px] justify-start text-left font-normal",
+            !date && "text-muted-foreground"
+          )}
+        >
+          <CalendarIcon className="mr-2 h-4 w-4" />
+          {date ? format(date, 'dd/MM/yyyy') : placeholder}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={date}
+          onSelect={(selectedDate) => {
+            if (selectedDate) {
+              // Adjust time to 12:00 to avoid timezone rollback issues (UTC vs Local)
+              selectedDate.setHours(12, 0, 0, 0);
+            }
+            setDate(selectedDate);
+            setOpen(false);
+          }}
+          initialFocus
+          locale={ptBR}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export default function Relatorios() {
-  const [dateRange, setDateRange] = useState<DateRangeType>('month');
+  const [dateRange, setDateRange] = useState<DateRangeType>('today');
   const [customStart, setCustomStart] = useState<Date | undefined>();
   const [customEnd, setCustomEnd] = useState<Date | undefined>();
   const [activeTab, setActiveTab] = useState('vendas');
@@ -140,41 +178,19 @@ export default function Relatorios() {
         </Select>
 
         {dateRange === 'custom' && (
-          <>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className={cn(!customStart && "text-muted-foreground")}>
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {customStart ? format(customStart, 'dd/MM/yyyy') : 'Data inicial'}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={customStart}
-                  onSelect={setCustomStart}
-                  locale={ptBR}
-                />
-              </PopoverContent>
-            </Popover>
+          <div className="flex items-center gap-2">
+            <DatePickerWithState
+              date={customStart}
+              setDate={setCustomStart}
+              placeholder="Data inicial"
+            />
             <span className="text-muted-foreground">até</span>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className={cn(!customEnd && "text-muted-foreground")}>
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {customEnd ? format(customEnd, 'dd/MM/yyyy') : 'Data final'}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={customEnd}
-                  onSelect={setCustomEnd}
-                  locale={ptBR}
-                />
-              </PopoverContent>
-            </Popover>
-          </>
+            <DatePickerWithState
+              date={customEnd}
+              setDate={setCustomEnd}
+              placeholder="Data final"
+            />
+          </div>
         )}
       </div>
 
@@ -220,7 +236,7 @@ export default function Relatorios() {
             <TabsTrigger value="utilizados" className="text-xs">Insumos Utilizados</TabsTrigger>
             <TabsTrigger value="compras" className="text-xs">Compras</TabsTrigger>
           </TabsList>
-          
+
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => handleExport(activeTab)}>
               <Download className="h-4 w-4 mr-1" />
@@ -316,8 +332,8 @@ export default function Relatorios() {
                           <TableCell className="font-medium">{loss.productName}</TableCell>
                           <TableCell>
                             <Badge variant="outline" className="text-xs">
-                              {loss.sourceType === 'sale_product' ? 'Venda' : 
-                               loss.sourceType === 'finished_production' ? 'Produção' : 'Estoque'}
+                              {loss.sourceType === 'sale_product' ? 'Venda' :
+                                loss.sourceType === 'finished_production' ? 'Produção' : 'Estoque'}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">{loss.quantity}</TableCell>
@@ -483,7 +499,7 @@ export default function Relatorios() {
                           <TableCell>{item.unit}</TableCell>
                           <TableCell>{item.supplierName || '-'}</TableCell>
                           <TableCell>
-                            <Badge 
+                            <Badge
                               variant={item.status === 'Entregue' ? 'default' : item.status === 'Comprado' ? 'secondary' : 'outline'}
                               className="text-xs"
                             >

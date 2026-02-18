@@ -116,11 +116,31 @@ export function useSalesForecasts(targetDate?: string) {
         },
     });
 
+    const generateForecast = useMutation({
+        mutationFn: async ({ targetDate, baseDate, bufferPercent }: { targetDate: string, baseDate: string, bufferPercent: number }) => {
+            // @ts-ignore
+            const { error } = await supabase.rpc('generate_sales_forecast', {
+                target_date: targetDate,
+                base_date: baseDate,
+                buffer_percent: bufferPercent
+            });
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['sales_forecasts'] });
+            toast.success('Sugestão gerada com sucesso! Verifique os itens abaixo.');
+        },
+        onError: (err: Error) => {
+            toast.error(`Erro ao gerar sugestão: ${err.message}`);
+        },
+    });
+
     return {
         forecasts,
         isLoading,
         createForecast,
         updateForecast,
         deleteForecast,
+        generateForecast,
     };
 }

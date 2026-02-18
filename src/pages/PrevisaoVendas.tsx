@@ -11,6 +11,7 @@ import {
     AlertTriangle,
     Calendar as CalendarIcon,
     ArrowRight,
+    History,
 } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
@@ -42,7 +43,7 @@ import {
 } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
-import { format, addDays } from 'date-fns';
+import { format, addDays, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -62,11 +63,13 @@ import { ProductionSheetDialog } from '@/components/production/ProductionSheetDi
 function ForecastInputTab() {
     const [targetDate, setTargetDate] = useState<Date>(addDays(new Date(), 1));
     const [showDialog, setShowDialog] = useState(false);
+    const [showSuggestDialog, setShowSuggestDialog] = useState(false);
+    const [baseDate, setBaseDate] = useState<Date>(subDays(new Date(), 7));
     const [selectedProductId, setSelectedProductId] = useState('');
     const [quantity, setQuantity] = useState('');
 
     const dateStr = format(targetDate, 'yyyy-MM-dd');
-    const { forecasts, isLoading, createForecast, deleteForecast } = useSalesForecasts(dateStr);
+    const { forecasts, isLoading, createForecast, deleteForecast, generateForecast } = useSalesForecasts(dateStr);
     const { saleProducts = [] } = useSaleProducts();
     const { explode } = useForecastExplosion();
 
@@ -91,6 +94,15 @@ function ForecastInputTab() {
             return;
         }
         explode.mutate(dateStr);
+    };
+
+    const handleGenerateSuggestion = () => {
+        generateForecast.mutate({
+            targetDate: dateStr,
+            baseDate: format(baseDate, 'yyyy-MM-dd'),
+            bufferPercent: 10
+        });
+        setShowSuggestDialog(false);
     };
 
     return (
@@ -125,7 +137,10 @@ function ForecastInputTab() {
             {/* Actions */}
             <div className="flex gap-2 flex-wrap">
                 <Button onClick={() => setShowDialog(true)} className="gap-2">
-                    <Plus className="h-4 w-4" /> Adicionar Previsão
+                    <Plus className="h-4 w-4" /> Adicionar Manualmente
+                </Button>
+                <Button onClick={() => setShowSuggestDialog(true)} variant="secondary" className="gap-2">
+                    <History className="h-4 w-4" /> Sugerir do Histórico
                 </Button>
                 <Button
                     onClick={handleExplode}
@@ -224,6 +239,50 @@ function ForecastInputTab() {
                         </Button>
                         <Button onClick={handleAddForecast} disabled={createForecast.isPending}>
                             {createForecast.isPending ? 'Salvando...' : 'Salvar'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Suggestion Dialog */}
+            <Dialog open={showSuggestDialog} onOpenChange={setShowSuggestDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Gerar Sugestão Baseada em Histórico</DialogTitle>
+                        <DialogDescription>
+                            O sistema analisará as vendas e perdas do dia selecionado e aplicará uma margem de segurança de 10%.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label>Usar dados de:</Label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className="w-full justify-start text-left font-normal">
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {baseDate ? format(baseDate, "EEEE, dd 'de' MMMM", { locale: ptBR }) : <span>Selecione uma data</span>}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar
+                                        mode="single"
+                                        selected={baseDate}
+                                        onSelect={(d) => d && setBaseDate(d)}
+                                        locale={ptBR}
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                            <p className="text-xs text-muted-foreground">
+                                Recomendação: Selecione o mesmo dia da semana anterior
+                            </p>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowSuggestDialog(false)}>
+                            Cancelar
+                        </Button>
+                        <Button onClick={handleGenerateSuggestion} disabled={generateForecast.isPending}>
+                            {generateForecast.isPending ? 'Gerando...' : 'Gerar Sugestão'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

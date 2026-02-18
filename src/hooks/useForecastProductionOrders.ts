@@ -25,6 +25,12 @@ export interface ForecastProductionOrder {
         yield_unit: string;
         yield_quantity: number;
         image_url: string | null;
+        ingredients?: {
+            stock_item_id: string;
+            quantity: number;
+            unit: string;
+            stock_item: { name: string } | null;
+        }[];
     };
 }
 
@@ -57,7 +63,19 @@ export function useForecastProductionOrders(productionDate?: string) {
                 .from('forecast_production_orders')
                 .select(`
           *,
-          technical_sheet:technical_sheets(id, name, yield_unit, yield_quantity, image_url)
+          technical_sheet:technical_sheets(
+            id, 
+            name, 
+            yield_unit, 
+            yield_quantity, 
+            image_url,
+            ingredients:technical_sheet_ingredients(
+              stock_item_id,
+              quantity,
+              unit,
+              stock_item:stock_items(name)
+            )
+          )
         `)
                 .order('production_date', { ascending: true });
 
@@ -72,6 +90,115 @@ export function useForecastProductionOrders(productionDate?: string) {
         enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
         refetchInterval: 15_000,
     });
+
+    // Function to subtract stock when production starts
+    const subtractStockForProduction = async (order: ForecastProductionOrder) => {
+        if (!ownerId || !order.technical_sheet || !order.technical_sheet.ingredients) return;
+
+        const yieldQty = Number(order.technical_sheet.yield_quantity);
+        const plannedQty = Number(order.net_quantity);
+        const multiplier = plannedQty / yieldQty;
+
+        const insufficientItems: { name: string; needed: number; available: number; unit: string }[] = [];
+
+        for (const ingredient of order.technical_sheet.ingredients) {
+            const stockItemId = ingredient.stock_item_id;
+            // Apply waste factor from stock item
+            const wasteFactorResult = await supabase
+                .from('stock_items')
+                .select('waste_factor, current_quantity, name, unit')
+                .eq('id', stockItemId)
+                .single();
+
+            const wasteFactor = Number(wasteFactorResult.data?.waste_factor || 0) / 100;
+            const baseQty = Number(ingredient.quantity) * multiplier;
+            const neededQty = baseQty * (1 + wasteFactor); // Apply waste factor
+
+            let remainingQty = neededQty;
+
+            // 1. First, try to use from production stock
+            const { data: prodStock } = await supabase
+                .from('production_stock')
+                .select('id, quantity')
+                .eq('stock_item_id', stockItemId)
+                .single();
+
+            if (prodStock && Number(prodStock.quantity) > 0) {
+                const useFromProd = Math.min(Number(prodStock.quantity), remainingQty);
+                const newProdQty = Number(prodStock.quantity) - useFromProd;
+
+                if (newProdQty <= 0) {
+                    await supabase.from('production_stock').delete().eq('id', prodStock.id);
+                } else {
+                    await supabase.from('production_stock').update({ quantity: newProdQty }).eq('id', prodStock.id);
+                }
+
+                remainingQty -= useFromProd;
+            }
+
+            // 2. If still need more, use from central stock
+            if (remainingQty > 0) {
+                const centralQty = Number(wasteFactorResult.data?.current_quantity || 0);
+
+                if (centralQty > 0) {
+                    const useFromCentral = Math.min(centralQty, remainingQty);
+
+                    // Create exit movement from central stock
+                    await supabase.from('stock_movements').insert({
+                        stock_item_id: stockItemId,
+                        user_id: ownerId,
+                        type: 'exit',
+                        quantity: useFromCentral,
+                        source: 'production',
+                        // related_production_id: order.id, // Forecast orders might not link directly to productions table yet
+                        notes: `Baixa automática - Ordem Previsão: ${order.technical_sheet.name}`,
+                    });
+
+                    remainingQty -= useFromCentral;
+                }
+            }
+
+            // 3. If still insufficient, track for purchase order
+            if (remainingQty > 0) {
+                insufficientItems.push({
+                    name: wasteFactorResult.data?.name || ingredient.stock_item?.name || 'Item',
+                    needed: neededQty,
+                    available: (Number(prodStock?.quantity || 0) + Number(wasteFactorResult.data?.current_quantity || 0)),
+                    unit: wasteFactorResult.data?.unit || ingredient.unit,
+                });
+
+                // Auto-generate purchase order for missing quantity
+                const { data: existingPurchase } = await supabase
+                    .from('purchase_list_items')
+                    .select('id, suggested_quantity')
+                    .eq('stock_item_id', stockItemId)
+                    .eq('status', 'pending')
+                    .single();
+
+                if (existingPurchase) {
+                    await supabase
+                        .from('purchase_list_items')
+                        .update({
+                            suggested_quantity: Number(existingPurchase.suggested_quantity) + remainingQty
+                        })
+                        .eq('id', existingPurchase.id);
+                } else {
+                    await supabase.from('purchase_list_items').insert({
+                        user_id: ownerId,
+                        stock_item_id: stockItemId,
+                        suggested_quantity: remainingQty,
+                        status: 'pending',
+                        notes: `Gerado automaticamente - Ordem Previsão: ${order.technical_sheet.name}`,
+                    });
+                }
+            }
+        }
+
+        if (insufficientItems.length > 0) {
+            const itemsList = insufficientItems.map(i => `${i.name} (falta ${(i.needed - i.available).toFixed(2)} ${i.unit})`).join(', ');
+            toast.warning(`Estoque insuficiente para: ${itemsList}. Pedidos de compra gerados.`);
+        }
+    };
 
     const addToFinishedStock = async (order: any) => {
         if (!ownerId || !order.technical_sheet) return;
@@ -134,6 +261,34 @@ export function useForecastProductionOrders(productionDate?: string) {
 
             if (status === 'completed' && order) {
                 await addToFinishedStock(order);
+            }
+
+            // If starting production, deduct ingredients
+            if (status === 'in_progress' && order) {
+                // Fetch full order with ingredients since update return might be partial depending on RLS/Query
+                // Re-fetch to be safe or type check 'order'
+                // The update returns technical_sheet but we need ingredients.
+                // It's safer to use the 'order' from the query cache or fetch it again with ingredients.
+                // However, 'order' variable from update response has minimal technical_sheet fields.
+
+                // Let's refetch the full order with ingredients
+                const { data: fullOrder } = await supabase
+                    .from('forecast_production_orders')
+                    .select(`
+                        *,
+                        technical_sheet:technical_sheets(
+                            id, name, yield_unit, yield_quantity, image_url,
+                            ingredients:technical_sheet_ingredients(
+                                stock_item_id, quantity, unit, stock_item:stock_items(name)
+                            )
+                        )
+                    `)
+                    .eq('id', id)
+                    .single();
+
+                if (fullOrder) {
+                    await subtractStockForProduction(fullOrder as any);
+                }
             }
         },
         onSuccess: () => {

@@ -81,7 +81,7 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
     queryKey: ['reports', 'sales', ownerId, startDate, endDate],
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
-      
+
       const { data, error } = await supabase
         .from('sales')
         .select(`
@@ -93,9 +93,9 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
         .gte('sale_date', `${startDate}T00:00:00`)
         .lte('sale_date', `${endDate}T23:59:59`)
         .order('sale_date', { ascending: false });
-      
+
       if (error) throw error;
-      
+
       return data.map(sale => ({
         date: format(new Date(sale.sale_date), 'dd/MM/yyyy HH:mm'),
         productName: (sale.sale_product as any)?.name || 'Produto desconhecido',
@@ -112,7 +112,7 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
     queryKey: ['reports', 'losses', ownerId, startDate, endDate],
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
-      
+
       // Get losses from the new unified losses table
       const { data: lossesData, error: lossesError } = await supabase
         .from('losses')
@@ -120,7 +120,7 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
         .gte('created_at', `${startDate}T00:00:00`)
         .lte('created_at', `${endDate}T23:59:59`)
         .order('created_at', { ascending: false });
-      
+
       if (lossesError) throw lossesError;
 
       // Also get legacy losses from stock_movements (for backwards compatibility)
@@ -138,7 +138,7 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
         .gte('created_at', `${startDate}T00:00:00`)
         .lte('created_at', `${endDate}T23:59:59`)
         .order('created_at', { ascending: false });
-      
+
       if (legacyError) throw legacyError;
 
       // Combine both sources
@@ -160,8 +160,8 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
         estimatedValue: Number(movement.quantity) * ((movement.stock_item as any)?.unit_price || 0),
       }));
 
-      return [...newLosses, ...legacyLosses].sort((a, b) => 
-        new Date(b.date.split(' ')[0].split('/').reverse().join('-')).getTime() - 
+      return [...newLosses, ...legacyLosses].sort((a, b) =>
+        new Date(b.date.split(' ')[0].split('/').reverse().join('-')).getTime() -
         new Date(a.date.split(' ')[0].split('/').reverse().join('-')).getTime()
       ) as LossReportItem[];
     },
@@ -173,7 +173,7 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
     queryKey: ['reports', 'purchased', ownerId, startDate, endDate],
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
-      
+
       const { data, error } = await supabase
         .from('purchase_list_items')
         .select(`
@@ -188,9 +188,9 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
         .gte('actual_delivery_date', startDate)
         .lte('actual_delivery_date', endDate)
         .order('actual_delivery_date', { ascending: false });
-      
+
       if (error) throw error;
-      
+
       return data.map(item => ({
         date: item.actual_delivery_date ? format(new Date(item.actual_delivery_date), 'dd/MM/yyyy') : '-',
         itemName: (item.stock_item as any)?.name || 'Item desconhecido',
@@ -208,7 +208,7 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
     queryKey: ['reports', 'used', ownerId, startDate, endDate],
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
-      
+
       const { data, error } = await supabase
         .from('stock_movements')
         .select(`
@@ -223,9 +223,9 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
         .gte('created_at', `${startDate}T00:00:00`)
         .lte('created_at', `${endDate}T23:59:59`)
         .order('created_at', { ascending: false });
-      
+
       if (error) throw error;
-      
+
       return data.map(movement => ({
         date: format(new Date(movement.created_at), 'dd/MM/yyyy HH:mm'),
         itemName: (movement.stock_item as any)?.name || 'Item desconhecido',
@@ -243,7 +243,7 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
     queryKey: ['reports', 'purchase_list', ownerId, startDate, endDate],
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
-      
+
       const { data, error } = await supabase
         .from('purchase_list_items')
         .select(`
@@ -259,18 +259,18 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
         .gte('created_at', `${startDate}T00:00:00`)
         .lte('created_at', `${endDate}T23:59:59`)
         .order('created_at', { ascending: false });
-      
+
       if (error) throw error;
-      
+
       const statusLabels: Record<string, string> = {
         pending: 'Pendente',
         ordered: 'Comprado',
         delivered: 'Entregue',
         cancelled: 'Cancelado',
       };
-      
+
       return data.map(item => ({
-        date: item.order_date 
+        date: item.order_date
           ? format(new Date(item.order_date), 'dd/MM/yyyy')
           : format(new Date(item.created_at), 'dd/MM/yyyy'),
         itemName: (item.stock_item as any)?.name || 'Item desconhecido',
