@@ -60,7 +60,7 @@ interface VoiceImportDialogProps {
 
 type Step = 'listening' | 'processing' | 'done';
 
-const SILENCE_TIMEOUT_MS = 2500; // Stop after 2.5 seconds of silence
+const SILENCE_TIMEOUT_MS = 30000; // Stop after 30 seconds of silence
 
 export function VoiceImportDialog({
   open,

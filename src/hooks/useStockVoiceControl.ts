@@ -46,14 +46,34 @@ interface UseStockVoiceControlProps {
   onExpiryUpdate?: (itemId: string, expirationDate: string) => void;
 }
 
+const VOICE_TIMEOUT_MS = 30000; // 30 seconds before auto-stop
+
 export function useStockVoiceControl({ stockItems, onQuantityUpdate, onExpiryUpdate }: UseStockVoiceControlProps) {
   const [isListening, setIsListening] = useState(false);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
   const [transcript, setTranscript] = useState('');
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const isSupported = typeof window !== 'undefined' &&
     !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+
+  const clearVoiceTimeout = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  }, []);
+
+  const resetVoiceTimeout = useCallback(() => {
+    clearVoiceTimeout();
+    timeoutRef.current = setTimeout(() => {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (e) { }
+      }
+      setIsListening(false);
+    }, VOICE_TIMEOUT_MS);
+  }, [clearVoiceTimeout]);
 
   // Parse quantity from voice input
   const parseQuantity = useCallback((text: string): number | null => {
@@ -193,16 +213,17 @@ export function useStockVoiceControl({ stockItems, onQuantityUpdate, onExpiryUpd
     if (!SpeechRecognitionClass) return;
 
     const recognition = new SpeechRecognitionClass();
-    recognition.continuous = false;
+    recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'pt-BR';
 
     recognitionRef.current = recognition;
 
     return () => {
+      clearVoiceTimeout();
       recognition.abort();
     };
-  }, [isSupported]);
+  }, [isSupported, clearVoiceTimeout]);
 
   // Setup event handlers separately to avoid recreating recognition
   useEffect(() => {
@@ -222,6 +243,9 @@ export function useStockVoiceControl({ stockItems, onQuantityUpdate, onExpiryUpd
         }
       }
 
+      // Reset timeout on every speech event (user is still talking)
+      resetVoiceTimeout();
+
       setTranscript(finalTranscript || interimTranscript);
 
       if (finalTranscript) {
@@ -232,7 +256,6 @@ export function useStockVoiceControl({ stockItems, onQuantityUpdate, onExpiryUpd
           const item = stockItems.find(i => i.id === activeItemId);
           if (!item) return;
 
-          // Check if it's a date update (keywords: validade, vencimento, vence, dia)
           if (cleanFinal.includes('validade') || cleanFinal.includes('vencimento') || cleanFinal.includes('vence') || cleanFinal.includes('dia')) {
             const date = parseDate(cleanFinal);
             if (date && onExpiryUpdate) {
@@ -243,7 +266,6 @@ export function useStockVoiceControl({ stockItems, onQuantityUpdate, onExpiryUpd
               toast.error('Não entendi a data de validade.');
             }
           } else {
-            // Assume quantity update
             const quantity = parseQuantity(cleanFinal);
             const unit = parseUnit(cleanFinal);
             if (quantity !== null) {
@@ -255,10 +277,8 @@ export function useStockVoiceControl({ stockItems, onQuantityUpdate, onExpiryUpd
             }
           }
         } else {
-          // Try to find item and then action
           const item = findItemByVoice(cleanFinal);
           if (item) {
-            // If keywords for date present
             if (cleanFinal.includes('validade') || cleanFinal.includes('vencimento') || cleanFinal.includes('vence')) {
               const date = parseDate(cleanFinal);
               if (date && onExpiryUpdate) {
@@ -270,7 +290,6 @@ export function useStockVoiceControl({ stockItems, onQuantityUpdate, onExpiryUpd
                 toast.info(`${item.name} selecionado. Diga a data de validade.`);
               }
             } else {
-              // Assume quantity
               const quantity = parseQuantity(cleanFinal);
               const unit = parseUnit(cleanFinal);
               if (quantity !== null) {
@@ -286,7 +305,7 @@ export function useStockVoiceControl({ stockItems, onQuantityUpdate, onExpiryUpd
             toast.error('Não entendi. Diga o nome do ingrediente e a quantidade ou validade.');
           }
         }
-        setIsListening(false);
+        // Don't stop listening in continuous mode - let the timeout handle it
         setActiveItemId(null);
         setTranscript('');
       }
@@ -294,14 +313,18 @@ export function useStockVoiceControl({ stockItems, onQuantityUpdate, onExpiryUpd
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.error('Speech recognition error:', event.error);
-      setIsListening(false);
-      setActiveItemId(null);
+      clearVoiceTimeout();
+      if (event.error !== 'no-speech' && event.error !== 'aborted') {
+        setIsListening(false);
+        setActiveItemId(null);
+      }
     };
 
     recognition.onend = () => {
+      clearVoiceTimeout();
       setIsListening(false);
     };
-  }, [activeItemId, parseQuantity, parseDate, parseUnit, findItemByVoice, stockItems, onQuantityUpdate, onExpiryUpdate]);
+  }, [activeItemId, parseQuantity, parseDate, parseUnit, findItemByVoice, stockItems, onQuantityUpdate, onExpiryUpdate, resetVoiceTimeout, clearVoiceTimeout]);
 
   const startListening = useCallback((itemId?: string) => {
     if (!recognitionRef.current) return;
@@ -315,18 +338,20 @@ export function useStockVoiceControl({ stockItems, onQuantityUpdate, onExpiryUpd
     try {
       recognitionRef.current.start();
       setIsListening(true);
+      resetVoiceTimeout(); // Start 30s timeout
       if (itemId) {
         const item = stockItems.find(i => i.id === itemId);
-        toast.info(item ? `Ouvindo para ${item.name}...` : 'Ouvindo...');
+        toast.info(item ? `Ouvindo para ${item.name}... (30s)` : 'Ouvindo... (30s)');
       } else {
-        toast.info('Ouvindo... Diga ingrediente e quantidade/validade.');
+        toast.info('Ouvindo... Diga ingrediente e quantidade/validade. (30s)');
       }
     } catch (error) {
       setIsListening(false);
     }
-  }, [stockItems]);
+  }, [stockItems, resetVoiceTimeout]);
 
   const stopListening = useCallback(() => {
+    clearVoiceTimeout();
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
@@ -335,7 +360,7 @@ export function useStockVoiceControl({ stockItems, onQuantityUpdate, onExpiryUpd
     setIsListening(false);
     setActiveItemId(null);
     setTranscript('');
-  }, []);
+  }, [clearVoiceTimeout]);
 
   const toggleListening = useCallback((itemId?: string) => {
     if (isListening) {

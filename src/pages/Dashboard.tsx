@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Calendar, Clock, Bot, XCircle, CheckCircle2, Sparkles, ShoppingCart, TrendingUp, ChefHat } from 'lucide-react';
+import { AlertTriangle, Calendar, Clock, Bot, XCircle, CheckCircle2, Sparkles, ShoppingCart, TrendingUp, ChefHat, CalendarClock } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,7 @@ import { usePreparationAlerts } from '@/hooks/usePreparationAlerts';
 import { usePurchaseCalculationByPeriod } from '@/hooks/usePurchaseCalculationByPeriod';
 import { useMemo } from 'react';
 import { getTodayStr } from '@/lib/utils';
+import { useAllExpiryAlerts } from '@/hooks/useExpiryDates';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -22,6 +23,7 @@ export default function Dashboard() {
   const { alerts: preparationAlerts, isLoading: alertsLoading, resolveAlert } = usePreparationAlerts();
   const { pendingItems } = usePendingDeliveries();
   const { totalEstimatedCost, urgentCount } = usePurchaseCalculationByPeriod({ productions });
+  const { alerts: expiryAlerts, totalAlerts: totalExpiryAlerts, expiredCount, nearExpiryCount, isLoading: expiryLoading } = useAllExpiryAlerts(7);
 
   const plannedProductions = productions.filter((p) => p.status === 'planned');
   const inProgressProductions = productions.filter((p) => p.status === 'in_progress');
@@ -169,13 +171,13 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Row 3: Em Processo + Programadas */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Row 3: Em Processo + Programadas + Validade */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card className={`${cardClass} cursor-pointer hover:shadow-md transition-shadow`} onClick={() => navigate('/producao')}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
                 <Clock className="h-4 w-4 text-success" />
-                Produções em Processo
+                Em Processo
                 <Badge variant="secondary" className="ml-auto text-[10px] h-5">{inProgressProductions.length}</Badge>
               </CardTitle>
             </CardHeader>
@@ -198,7 +200,7 @@ export default function Dashboard() {
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-primary" />
-                Produções Programadas
+                Programadas
                 <Badge variant="secondary" className="ml-auto text-[10px] h-5">{plannedProductions.length}</Badge>
               </CardTitle>
             </CardHeader>
@@ -212,6 +214,49 @@ export default function Dashboard() {
                         <p className="text-[10px] text-muted-foreground">{new Date(prod.scheduled_date).toLocaleDateString('pt-BR')}</p>
                       </div>
                       <Badge variant="secondary" className="text-[10px] shrink-0">{prod.planned_quantity} un</Badge>
+                    </div>
+                  ))}
+            </CardContent>
+          </Card>
+
+          {/* Alertas de Validade */}
+          <Card className={`${cardClass} cursor-pointer hover:shadow-md transition-shadow ${expiredCount > 0 ? 'border-destructive/30 bg-destructive/5' : nearExpiryCount > 0 ? 'border-yellow-500/30 bg-yellow-500/5' : ''}`} onClick={() => navigate('/estoque')}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <CalendarClock className="h-4 w-4 text-orange-500" />
+                Validades
+                {totalExpiryAlerts > 0 && (
+                  <Badge variant={expiredCount > 0 ? 'destructive' : 'secondary'} className="ml-auto text-[10px] h-5">
+                    {totalExpiryAlerts}
+                  </Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className={cardContentClass}>
+              {expiryLoading ? <p className="text-xs text-muted-foreground">Carregando...</p>
+                : totalExpiryAlerts === 0 ? <p className="text-xs text-muted-foreground">Nenhum alerta de validade ✅</p>
+                  : expiryAlerts.slice(0, 6).map((alert) => (
+                    <div
+                      key={alert.id}
+                      className={`flex items-center justify-between p-2 rounded-lg border ${alert.isExpired ? 'bg-destructive/10 border-destructive/20' : 'bg-yellow-500/5 border-yellow-500/20'
+                        }`}
+                    >
+                      <div className="flex-1 min-w-0 mr-1">
+                        <p className="font-medium text-xs truncate">
+                          {(alert as any).stock_item?.name || 'Item'}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {new Date(alert.expiry_date).toLocaleDateString('pt-BR')}
+                          {alert.batch_name && ` • Lote: ${alert.batch_name}`}
+                        </p>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] shrink-0 ${alert.isExpired ? 'text-destructive border-destructive' : 'text-yellow-600 border-yellow-500'
+                          }`}
+                      >
+                        {alert.isExpired ? 'Vencido' : `${alert.daysUntil}d`}
+                      </Badge>
                     </div>
                   ))}
             </CardContent>

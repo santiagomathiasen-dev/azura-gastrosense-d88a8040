@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -22,8 +22,10 @@ import {
 } from '@/components/ui/dialog';
 import { CATEGORY_LABELS, UNIT_LABELS, type StockItem, type StockCategory, type StockUnit } from '@/hooks/useStockItems';
 import { useSuppliers } from '@/hooks/useSuppliers';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import { getNow } from '@/lib/utils';
+import { useExpiryDates } from '@/hooks/useExpiryDates';
+import { Badge } from '@/components/ui/badge';
 
 const formSchema = z.object({
   name: z.string().min(1, 'Nome é obrigatório').max(100),
@@ -56,6 +58,10 @@ export function StockItemForm({
   isLoading,
 }: StockItemFormProps) {
   const { suppliers } = useSuppliers();
+  const { expiryDates, addExpiryDate, removeExpiryDate } = useExpiryDates(initialData?.id);
+  const [newExpiryDate, setNewExpiryDate] = useState('');
+  const [newBatch, setNewBatch] = useState('');
+  const [newQty, setNewQty] = useState('');
 
   const {
     register,
@@ -262,6 +268,119 @@ export function StockItemForm({
               </p>
             )}
           </div>
+
+          {/* Multiple Expiry Dates Section */}
+          {initialData?.id && (
+            <div className="space-y-2 border-t pt-3">
+              <Label className="flex items-center gap-2">
+                Datas de Validade
+                {expiryDates.length > 0 && (
+                  <Badge variant="secondary" className="text-[10px] h-5">{expiryDates.length}</Badge>
+                )}
+              </Label>
+
+              {/* Existing expiry dates */}
+              {expiryDates.length > 0 && (
+                <div className="space-y-1 max-h-32 overflow-auto">
+                  {expiryDates.map((ed) => {
+                    const expDate = new Date(ed.expiry_date);
+                    const now = getNow();
+                    const daysUntil = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                    const expired = daysUntil < 0;
+                    const nearExpiry = daysUntil >= 0 && daysUntil <= 7;
+                    return (
+                      <div
+                        key={ed.id}
+                        className={`flex items-center gap-2 p-2 rounded-lg text-xs border ${expired ? 'border-destructive/30 bg-destructive/5' :
+                            nearExpiry ? 'border-yellow-500/30 bg-yellow-500/5' : 'bg-muted/50'
+                          }`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium">
+                            {expDate.toLocaleDateString('pt-BR')}
+                          </span>
+                          {ed.batch_name && (
+                            <span className="text-muted-foreground ml-1">• Lote: {ed.batch_name}</span>
+                          )}
+                          {Number(ed.quantity) > 0 && (
+                            <span className="text-muted-foreground ml-1">• Qtd: {ed.quantity}</span>
+                          )}
+                          {expired && (
+                            <Badge variant="destructive" className="ml-1 text-[9px] h-4">Vencido</Badge>
+                          )}
+                          {nearExpiry && (
+                            <Badge variant="outline" className="ml-1 text-[9px] h-4 text-yellow-600 border-yellow-500">
+                              {daysUntil}d
+                            </Badge>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeExpiryDate.mutate(ed.id)}
+                          className="p-1 hover:bg-destructive/10 rounded text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Add new expiry date */}
+              <div className="flex gap-2 items-end">
+                <div className="flex-1">
+                  <Label className="text-[10px] text-muted-foreground">Data</Label>
+                  <Input
+                    type="date"
+                    className="h-8 text-xs"
+                    value={newExpiryDate}
+                    onChange={(e) => setNewExpiryDate(e.target.value)}
+                  />
+                </div>
+                <div className="w-24">
+                  <Label className="text-[10px] text-muted-foreground">Lote</Label>
+                  <Input
+                    className="h-8 text-xs"
+                    placeholder="Lote"
+                    value={newBatch}
+                    onChange={(e) => setNewBatch(e.target.value)}
+                  />
+                </div>
+                <div className="w-20">
+                  <Label className="text-[10px] text-muted-foreground">Qtd</Label>
+                  <Input
+                    type="number"
+                    className="h-8 text-xs"
+                    placeholder="0"
+                    value={newQty}
+                    onChange={(e) => setNewQty(e.target.value)}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8"
+                  disabled={!newExpiryDate}
+                  onClick={() => {
+                    if (!newExpiryDate || !initialData?.id) return;
+                    addExpiryDate.mutate({
+                      stock_item_id: initialData.id,
+                      expiry_date: newExpiryDate,
+                      batch_name: newBatch || undefined,
+                      quantity: newQty ? parseFloat(newQty) : undefined,
+                    });
+                    setNewExpiryDate('');
+                    setNewBatch('');
+                    setNewQty('');
+                  }}
+                >
+                  <Plus className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label>Fornecedor</Label>
