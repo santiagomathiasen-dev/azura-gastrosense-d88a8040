@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Search, ArrowLeft, Package, Boxes, ClipboardList, Send, Mic, MicOff } from 'lucide-react';
+import { Search, ArrowLeft, Package, Boxes, ClipboardList, Send, Mic, MicOff, RefreshCw } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -54,6 +54,9 @@ export default function EstoqueProducao() {
   const [selectedItemId, setSelectedItemId] = useState('');
   const [quantity, setQuantity] = useState('');
   const [notes, setNotes] = useState('');
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
+  const [updateItemId, setUpdateItemId] = useState('');
+  const [updateQuantityValue, setUpdateQuantityValue] = useState('');
 
   const isLoading = centralLoading || productionLoading || requestsLoading;
 
@@ -106,6 +109,21 @@ export default function EstoqueProducao() {
     setQuantity('');
     setNotes('');
     setReturnDialogOpen(true);
+  };
+
+  const openUpdateDialog = (itemId: string) => {
+    const item = productionStock.find(ps => ps.stock_item_id === itemId);
+    setUpdateItemId(itemId);
+    setUpdateQuantityValue(item ? Number(item.quantity).toString() : '0');
+    setUpdateDialogOpen(true);
+  };
+
+  const handleUpdateQuantity = async () => {
+    if (!updateItemId || !updateQuantityValue) return;
+    const qty = parseFloat(updateQuantityValue);
+    if (isNaN(qty) || qty < 0) return;
+    updateQuantity.mutate({ stockItemId: updateItemId, quantity: qty });
+    setUpdateDialogOpen(false);
   };
 
   const handleCreateRequest = async () => {
@@ -298,16 +316,27 @@ export default function EstoqueProducao() {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-6 text-[10px] px-2"
+                        className="h-7 text-[10px] px-2 min-w-[70px]"
                         onClick={() => openRequestDialog(ps.stock_item_id)}
                       >
+                        <Send className="h-3 w-3 mr-1" />
                         Solicitar
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-6 text-[10px] px-2"
+                        className="h-7 text-[10px] px-2 min-w-[70px]"
+                        onClick={() => openUpdateDialog(ps.stock_item_id)}
+                      >
+                        <RefreshCw className="h-3 w-3 mr-1" />
+                        Atualizar
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0"
                         onClick={() => openReturnDialog(ps.stock_item_id)}
+                        title="Devolver para o estoque central"
                       >
                         <ArrowLeft className="h-3 w-3" />
                       </Button>
@@ -570,6 +599,53 @@ export default function EstoqueProducao() {
             >
               <ArrowLeft className="h-4 w-4 mr-1" />
               Devolver
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Update Quantity Dialog */}
+      <Dialog open={updateDialogOpen} onOpenChange={setUpdateDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Atualizar Quantidade</DialogTitle>
+            <DialogDescription>
+              Atualize a quantidade do item no estoque de produção.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Item</Label>
+              <p className="text-sm font-medium">
+                {productionStock.find(ps => ps.stock_item_id === updateItemId)?.stock_item?.name || 'Item'}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="updateQty">Nova Quantidade</Label>
+              <Input
+                id="updateQty"
+                type="number"
+                step="0.001"
+                min="0"
+                value={updateQuantityValue}
+                onChange={(e) => setUpdateQuantityValue(e.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUpdateDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleUpdateQuantity}
+              disabled={!updateItemId || !updateQuantityValue}
+            >
+              <RefreshCw className="h-4 w-4 mr-1" />
+              Atualizar
             </Button>
           </DialogFooter>
         </DialogContent>
