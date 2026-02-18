@@ -43,7 +43,7 @@ serve(async (req) => {
     );
 
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
-    
+
     if (userError || !user) {
       return new Response(
         JSON.stringify({ error: "Token inválido ou expirado" }),
@@ -53,9 +53,9 @@ serve(async (req) => {
 
     const userId = user.id;
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured");
     }
 
     const { type, content, stockItems }: StockInputRequest = await req.json();
@@ -93,7 +93,7 @@ serve(async (req) => {
 
       const validIds = new Set(userItems?.map((item) => item.id) || []);
       const invalidItems = stockItems.filter((item) => !validIds.has(item.id));
-      
+
       if (invalidItems.length > 0) {
         return new Response(
           JSON.stringify({ error: "Acesso negado a alguns itens de estoque" }),
@@ -160,16 +160,16 @@ Retorne um JSON com as sugestões de movimentação.`,
       ];
     }
 
-    
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userContent },
