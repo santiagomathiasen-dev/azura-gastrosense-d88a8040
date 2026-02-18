@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { crypto } from "https://deno.land/std@0.177.0/crypto/mod.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -8,185 +7,195 @@ const corsHeaders = {
         "authorization, x-client-info, apikey, content-type, x-loyverse-signature",
 };
 
-// Helper to verify HMAC SHA1 signature
-async function verifySignature(secret: string, body: string, signature: string): Promise<boolean> {
-    const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-        "raw",
-        encoder.encode(secret),
-        { name: "HMAC", hash: "SHA-1" },
-        false,
-        ["verify", "sign"]
-    );
-
-    // Loyverse signatures are usually HMAC-SHA1 of the raw body
-    const signatureBytes = new Uint8Array(
-        signature.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16))
-    );
-
-    return await crypto.subtle.verify(
-        "HMAC",
-        key,
-        signatureBytes,
-        encoder.encode(body)
-    );
-}
-
 serve(async (req) => {
     if (req.method === "OPTIONS") {
         return new Response(null, { headers: corsHeaders });
     }
 
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
     try {
-        const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-        const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-        const loyverseSecret = Deno.env.get("LOYVERSE_CLIENT_SECRET");
-
-        const supabase = createClient(supabaseUrl, supabaseKey);
-
-        // 1. Get Raw Body, Method & Headers
+        // 1. Read body
         const rawBody = await req.text();
         const method = req.method;
-        const headers = {};
+        const headers: Record<string, string> = {};
         req.headers.forEach((value, key) => {
             headers[key] = value;
         });
 
-        let payload = {};
+        let payload: any = {};
         try {
             payload = JSON.parse(rawBody);
-        } catch (e) {
+        } catch (_e) {
             payload = { raw: rawBody, error: "Invalid JSON" };
         }
 
-        // --- DB LOGGING START ---
-        await supabase.from('webhook_logs').insert({
-            payload: {
-                method: method,
-                headers: headers,
-                body: payload
-            },
-            status: 'received',
-            error_message: null
+        // Log received webhook
+        await supabase.from("webhook_logs").insert({
+            payload: { method, headers, body: payload },
+            status: "received",
+            error_message: null,
         });
-        // --- DB LOGGING END ---
-
-        const signature = req.headers.get("x-loyverse-signature");
-
-        if (loyverseSecret && signature) {
-            // Secret validation logic (skipped for now as per previous code)
-        }
 
         if (!rawBody) {
-            return new Response("Empty body", { status: 400 });
+            return new Response("Empty body", { status: 400, headers: corsHeaders });
         }
 
-        // 2. Check Event Type
-        // We expect a receipt object.
+        // 2. Extract receipt from payload
+        // Loyverse sends { receipts: [...] } or a single receipt object
         const receipt = payload.receipts ? payload.receipts[0] : payload;
 
         if (!receipt || !receipt.line_items) {
-            console.log("Ignored event:", payload);
-            return new Response(JSON.stringify({ message: "Ignored event" }), {
-                headers: { ...corsHeaders, "Content-Type": "application/json" }
-            });
-        }
-
-        // 3. Map Items
-        const soldItems = [];
-        const { data: allProducts } = await supabase
-            .from("sale_products")
-            .select("id, name, is_active");
-
-        const productMap = new Map();
-        allProducts?.forEach(p => {
-            productMap.set(p.name.toLowerCase(), p.id);
-        });
-
-        for (const item of receipt.line_items) {
-            const itemName = (item.item_name || "").toLowerCase();
-            const azuraProductId = productMap.get(itemName);
-
-            if (azuraProductId) {
-                soldItems.push({
-                    product_id: azuraProductId,
-                    quantity: item.quantity || 1
-                });
-            } else {
-                console.warn(`Product not found in Azura: ${itemName}`);
-            }
-        }
-
-        if (soldItems.length === 0) {
-            await supabase.from('webhook_logs').insert({
+            await supabase.from("webhook_logs").insert({
                 payload: payload,
-                status: 'error',
-                error_message: "No matching products found"
+                status: "ignored",
+                error_message: "No line_items found in payload",
             });
-            return new Response(JSON.stringify({ message: "No matching products found" }), {
-                headers: { ...corsHeaders, "Content-Type": "application/json" }
-            });
+            return new Response(
+                JSON.stringify({ message: "Ignored event - no line_items" }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
         }
 
-        // 4. Create Sale via RPC
-        const { data: gestor } = await supabase
+        // 3. Find the gestor user (owner of the system)
+        const { data: gestor, error: gestorErr } = await supabase
             .from("profiles")
             .select("id")
             .eq("role", "gestor")
             .limit(1)
             .single();
 
-        const userId = gestor?.id;
-
-        if (!userId) {
-            throw new Error("No gestor found to attribute sale");
+        if (gestorErr || !gestor?.id) {
+            const errMsg = `No gestor found: ${gestorErr?.message || "empty result"}`;
+            await supabase.from("webhook_logs").insert({
+                payload, status: "error", error_message: errMsg,
+            });
+            throw new Error(errMsg);
         }
 
+        const userId = gestor.id;
+
+        // 4. Get all sale products for this user
+        const { data: allProducts, error: prodErr } = await supabase
+            .from("sale_products")
+            .select("id, name, is_active, user_id")
+            .eq("user_id", userId);
+
+        if (prodErr) {
+            throw new Error(`Failed to fetch sale_products: ${prodErr.message}`);
+        }
+
+        // Build a map: lowercase trimmed name -> product id
+        const productMap = new Map<string, string>();
+        allProducts?.forEach((p: any) => {
+            if (p.is_active !== false) {
+                productMap.set(p.name.toLowerCase().trim(), p.id);
+            }
+        });
+
+        // 5. Match line items to products
+        const soldItems: { product_id: string; quantity: number }[] = [];
+        const unmatchedItems: string[] = [];
+
+        for (const item of receipt.line_items) {
+            const itemName = (item.item_name || "").toLowerCase().trim();
+            const azuraProductId = productMap.get(itemName);
+
+            if (azuraProductId) {
+                soldItems.push({
+                    product_id: azuraProductId,
+                    quantity: item.quantity || 1,
+                });
+            } else {
+                unmatchedItems.push(item.item_name || "unknown");
+            }
+        }
+
+        if (soldItems.length === 0) {
+            const errMsg = `No matching products. Tried: ${unmatchedItems.join(", ")}. Available: ${Array.from(productMap.keys()).join(", ")}`;
+            await supabase.from("webhook_logs").insert({
+                payload, status: "error", error_message: errMsg,
+            });
+            return new Response(
+                JSON.stringify({ message: "No matching products found", details: errMsg }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+        }
+
+        // 6. Build sale payload and call RPC
+        const saleDate = receipt.created_at
+            ? new Date(receipt.created_at).toISOString()
+            : new Date().toISOString();
+
         const salePayload = {
-            date_time: receipt.created_at || new Date().toISOString(),
-            payment_method: "Loyverse",
+            date_time: saleDate,
+            payment_method: receipt.payment_type || "Loyverse",
             total_amount: receipt.total_money || 0,
-            sold_items: soldItems
+            sold_items: soldItems,
         };
 
-        const { data: result, error: rpcError } = await supabase.rpc("process_pos_sale", {
-            p_user_id: userId,
-            p_sale_payload: salePayload,
+        const { data: result, error: rpcError } = await supabase.rpc(
+            "process_pos_sale",
+            {
+                p_user_id: userId,
+                p_sale_payload: salePayload,
+            }
+        );
+
+        if (rpcError) {
+            const errMsg = `RPC error: ${rpcError.message}`;
+            await supabase.from("webhook_logs").insert({
+                payload: { salePayload, rpcError },
+                status: "error",
+                error_message: errMsg,
+            });
+            throw new Error(errMsg);
+        }
+
+        // 7. Log success with details
+        await supabase.from("webhook_logs").insert({
+            payload: {
+                result,
+                matched: soldItems.length,
+                unmatched: unmatchedItems,
+                sale_payload: salePayload,
+            },
+            status: "success",
+            error_message: unmatchedItems.length > 0
+                ? `Unmatched items: ${unmatchedItems.join(", ")}`
+                : null,
         });
 
-        if (rpcError) throw rpcError;
-
-        // Log Success
-        await supabase.from('webhook_logs').insert({
-            payload: { sale_id: result }, // simplify payload for second log or just log status
-            status: 'success',
-            error_message: null
-        });
-
-        return new Response(JSON.stringify(result), {
+        return new Response(JSON.stringify({
+            success: true,
+            matched: soldItems.length,
+            unmatched: unmatchedItems,
+            result,
+        }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
 
     } catch (error) {
-        console.error("Error:", error);
+        console.error("Webhook Error:", error);
 
-        // Log Error
         try {
-            const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-            const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-            const supabase = createClient(supabaseUrl, supabaseKey);
-            await supabase.from('webhook_logs').insert({
+            await supabase.from("webhook_logs").insert({
                 payload: { error_stack: error.stack },
-                status: 'error',
-                error_message: error.message
+                status: "error",
+                error_message: error.message,
             });
-        } catch (logError) {
-            console.error("Failed to log error to DB:", logError);
+        } catch (logErr) {
+            console.error("Failed to log error:", logErr);
         }
 
-        return new Response(JSON.stringify({ error: error.message }), {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(
+            JSON.stringify({ error: error.message }),
+            {
+                status: 500,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+            }
+        );
     }
 });
