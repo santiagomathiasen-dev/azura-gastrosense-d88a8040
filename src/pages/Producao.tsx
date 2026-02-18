@@ -50,7 +50,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
+import { cn, getNow } from '@/lib/utils';
 
 type PeriodType = 'day' | 'week' | 'month' | 'year';
 type PracaType = 'all' | 'gelateria' | 'confeitaria' | 'padaria' | 'praca_quente' | 'bar' | 'sem_praca';
@@ -87,7 +87,7 @@ export default function Producao() {
 
   // Period filter state
   const [periodType, setPeriodType] = useState<PeriodType>('week');
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState(getNow());
 
   const [formData, setFormData] = useState({
     technicalSheetId: '',
@@ -765,7 +765,7 @@ function ProductionPreviewSheet({
 
   const [year, month, day] = producao.scheduled_date.split('-').map(Number);
   const scheduledDate = new Date(year, month - 1, day);
-  const today = startOfDay(new Date());
+  const today = startOfDay(getNow());
   const isOverdue = producao.status === 'planned' && scheduledDate < today;
 
   const totalSteps = stages.reduce((sum, stage) => sum + stage.steps.length, 0);

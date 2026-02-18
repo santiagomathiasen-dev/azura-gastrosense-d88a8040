@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, format, subDays } from 'date-fns';
+import { getNow } from '@/lib/utils';
 
 export interface SalesReportItem {
   date: string;
@@ -57,7 +58,7 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
 
   // Calculate date range based on selection
   const getDateRange = () => {
-    const now = new Date();
+    const now = getNow();
     switch (dateRange) {
       case 'today':
         return { start: now, end: now };

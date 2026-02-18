@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
+import { getNow } from '@/lib/utils';
 
 export interface ProducedInputStock {
   id: string;
@@ -35,7 +36,7 @@ export function useProducedInputsStock() {
     queryKey: ['produced_inputs_stock', ownerId],
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
-      
+
       const { data, error } = await supabase
         .from('produced_inputs_stock')
         .select(`
@@ -43,7 +44,7 @@ export function useProducedInputsStock() {
           technical_sheet:technical_sheets(id, name, production_type)
         `)
         .order('production_date', { ascending: false });
-      
+
       if (error) throw error;
       return data as ProducedInputWithSheet[];
     },
@@ -54,13 +55,13 @@ export function useProducedInputsStock() {
     mutationFn: async (input: Omit<ProducedInputStock, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => {
       if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
       if (!ownerId) throw new Error('Usuário não autenticado');
-      
+
       const { data, error } = await supabase
         .from('produced_inputs_stock')
         .insert({ ...input, user_id: ownerId })
         .select()
         .single();
-      
+
       if (error) throw error;
       return data;
     },
@@ -81,7 +82,7 @@ export function useProducedInputsStock() {
         .eq('id', id)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data;
     },
@@ -100,7 +101,7 @@ export function useProducedInputsStock() {
         .from('produced_inputs_stock')
         .delete()
         .eq('id', id);
-      
+
       if (error) throw error;
     },
     onSuccess: () => {
@@ -117,13 +118,13 @@ export function useProducedInputsStock() {
     mutationFn: async ({ id, quantityToConsume }: { id: string; quantityToConsume: number }) => {
       const input = producedInputs.find(i => i.id === id);
       if (!input) throw new Error('Insumo não encontrado');
-      
+
       const newQuantity = Number(input.quantity) - quantityToConsume;
-      
+
       if (newQuantity < 0) {
         throw new Error('Quantidade insuficiente');
       }
-      
+
       if (newQuantity === 0) {
         // Delete if fully consumed
         const { error } = await supabase
@@ -157,7 +158,7 @@ export function useProducedInputsStock() {
 
   // Generate batch code
   const generateBatchCode = (sheetName: string): string => {
-    const date = new Date();
+    const date = getNow();
     const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
     const random = Math.random().toString(36).substring(2, 6).toUpperCase();
     const prefix = sheetName.substring(0, 3).toUpperCase();

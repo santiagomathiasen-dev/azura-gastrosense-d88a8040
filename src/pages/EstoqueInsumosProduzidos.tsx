@@ -28,16 +28,17 @@ import { useProducedInputsStock, ProducedInputWithSheet } from '@/hooks/useProdu
 import { useTechnicalSheets } from '@/hooks/useTechnicalSheets';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getNow, getTodayStr } from '@/lib/utils';
 import { toast } from 'sonner';
 
 export default function EstoqueInsumosProduzidos() {
   const { producedInputs, isLoading, createProducedInput, updateProducedInput, deleteProducedInput, generateBatchCode } = useProducedInputsStock();
   const { sheets } = useTechnicalSheets();
-  
+
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ProducedInputWithSheet | null>(null);
-  
+
   const [formData, setFormData] = useState({
     technicalSheetId: '',
     quantity: '',
@@ -48,7 +49,7 @@ export default function EstoqueInsumosProduzidos() {
   });
 
   // Filter only "insumo" type sheets
-  const insumoSheets = sheets.filter(sheet => 
+  const insumoSheets = sheets.filter(sheet =>
     (sheet as any).production_type === 'insumo'
   );
 
@@ -59,7 +60,7 @@ export default function EstoqueInsumosProduzidos() {
 
   const getExpirationStatus = (expirationDate: string | null): 'ok' | 'warning' | 'expired' => {
     if (!expirationDate) return 'ok';
-    const daysUntilExpiry = differenceInDays(parseISO(expirationDate), new Date());
+    const daysUntilExpiry = differenceInDays(parseISO(expirationDate), getNow());
     if (daysUntilExpiry < 0) return 'expired';
     if (daysUntilExpiry <= 3) return 'warning';
     return 'ok';
@@ -127,7 +128,7 @@ export default function EstoqueInsumosProduzidos() {
           quantity: parseFloat(formData.quantity),
           unit: formData.unit,
           batch_code: formData.batchCode || generateBatchCode('INS'),
-          production_date: new Date().toISOString().slice(0, 10),
+          production_date: getTodayStr(),
           expiration_date: formData.expirationDate || null,
           notes: formData.notes || null,
         });
@@ -214,7 +215,7 @@ export default function EstoqueInsumosProduzidos() {
         <MobileList>
           {filteredInputs.map((item) => {
             const status = getExpirationStatus(item.expiration_date);
-            
+
             return (
               <MobileListItem
                 key={item.id}
@@ -238,7 +239,7 @@ export default function EstoqueInsumosProduzidos() {
                     {Number(item.quantity).toFixed(1)} {item.unit}
                   </span>
                 </div>
-                
+
                 <MobileListDetails>
                   <span className="font-mono text-xs">{item.batch_code}</span>
                   <span className="flex items-center gap-1">
@@ -246,7 +247,7 @@ export default function EstoqueInsumosProduzidos() {
                     {format(parseISO(item.production_date), 'dd/MM/yyyy')}
                   </span>
                   {item.expiration_date && (
-                    <MobileListBadge 
+                    <MobileListBadge
                       variant={status === 'expired' ? 'destructive' : status === 'warning' ? 'warning' : 'default'}
                     >
                       {status === 'expired' && <AlertTriangle className="h-3 w-3 mr-1" />}
@@ -269,7 +270,7 @@ export default function EstoqueInsumosProduzidos() {
               Registre manualmente um insumo produzido
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Ficha Técnica (tipo insumo) *</Label>

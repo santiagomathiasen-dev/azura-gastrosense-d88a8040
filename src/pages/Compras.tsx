@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
+import { cn, getNow } from '@/lib/utils';
 import { useState, useMemo, useCallback } from 'react';
 import { usePurchaseCalculationByPeriod } from '@/hooks/usePurchaseCalculationByPeriod';
 import { usePendingDeliveries } from '@/hooks/usePendingDeliveries';
@@ -358,7 +358,7 @@ export default function Compras() {
     const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `lista_compras_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `lista_compras_${getNow().toISOString().split('T')[0]}.csv`;
     link.click();
     toast.success('Lista exportada com sucesso!');
   };
@@ -372,7 +372,7 @@ export default function Compras() {
     const printContent = `
       <html>
         <head>
-          <title>Lista de Compras - ${new Date().toLocaleDateString('pt-BR')}</title>
+          <title>Lista de Compras - ${getNow().toLocaleDateString('pt-BR')}</title>
           <style>
             body { font-family: Arial, sans-serif; padding: 20px; }
             h1 { font-size: 18px; margin-bottom: 5px; }
@@ -388,7 +388,7 @@ export default function Compras() {
         </head>
         <body>
           <h1>Lista de Compras</h1>
-          <p>Gerada em ${new Date().toLocaleString('pt-BR')}</p>
+          <p>Gerada em ${getNow().toLocaleString('pt-BR')}</p>
           <table>
             <thead>
               <tr>

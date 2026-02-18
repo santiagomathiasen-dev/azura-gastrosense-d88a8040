@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { getNow } from '@/lib/utils';
 
 interface SendMessageParams {
     supplierId: string;
@@ -50,7 +51,7 @@ export function useSupplierMessages() {
             // 3. Update message status to 'sent'
             await supabase
                 .from('supplier_messages')
-                .update({ whatsapp_status: 'sent', sent_at: new Date().toISOString() })
+                .update({ whatsapp_status: 'sent', sent_at: getNow().toISOString() })
                 .eq('id', messageRecord.id);
 
             toast.success('Mensagem enviada com sucesso!');

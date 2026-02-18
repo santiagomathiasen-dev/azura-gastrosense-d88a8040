@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import type { ProductionWithSheet } from '@/hooks/useProductions';
+import { getNow } from '@/lib/utils';
 
 export type PeriodType = 'day' | 'week' | 'month' | 'year';
 
@@ -30,7 +31,7 @@ const PERIOD_LABELS: Record<PeriodType, string> = {
 
 export function PurchasePeriodSelector({ productions, onPeriodChange }: PurchasePeriodSelectorProps) {
   const [periodType, setPeriodType] = useState<PeriodType>('week');
-  const [referenceDate, setReferenceDate] = useState(new Date());
+  const [referenceDate, setReferenceDate] = useState(getNow());
 
   // Calculate period bounds based on type and reference date
   const { startDate, endDate, periodLabel } = useMemo(() => {
@@ -79,17 +80,17 @@ export function PurchasePeriodSelector({ productions, onPeriodChange }: Purchase
   // Calculate suggested purchase date (2-3 days before first production)
   const suggestedPurchaseDate = useMemo(() => {
     if (filteredProductions.length === 0) return null;
-    
+
     // Sort by scheduled date
     const sorted = [...filteredProductions].sort(
       (a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime()
     );
-    
+
     const firstProductionDate = new Date(sorted[0].scheduled_date);
     // Suggest 2 days before, but not in the past
     const suggested = addDays(firstProductionDate, -2);
-    const today = startOfDay(new Date());
-    
+    const today = startOfDay(getNow());
+
     return suggested < today ? today : suggested;
   }, [filteredProductions]);
 
@@ -97,7 +98,7 @@ export function PurchasePeriodSelector({ productions, onPeriodChange }: Purchase
   const navigatePeriod = (direction: 'prev' | 'next') => {
     const multiplier = direction === 'prev' ? -1 : 1;
     let newDate: Date;
-    
+
     switch (periodType) {
       case 'day':
         newDate = addDays(referenceDate, 1 * multiplier);
@@ -116,7 +117,7 @@ export function PurchasePeriodSelector({ productions, onPeriodChange }: Purchase
       default:
         newDate = referenceDate;
     }
-    
+
     setReferenceDate(newDate);
   };
 
@@ -131,7 +132,7 @@ export function PurchasePeriodSelector({ productions, onPeriodChange }: Purchase
     }
     isInitialMount.current = false;
   }, [startDate, endDate, filteredProductions]);
-  
+
   // Initial call when productions first load
   useEffect(() => {
     if (productions.length > 0 && isInitialMount.current) {
@@ -141,7 +142,7 @@ export function PurchasePeriodSelector({ productions, onPeriodChange }: Purchase
   }, [productions]);
 
   const goToToday = () => {
-    setReferenceDate(new Date());
+    setReferenceDate(getNow());
   };
 
   return (
@@ -166,7 +167,7 @@ export function PurchasePeriodSelector({ productions, onPeriodChange }: Purchase
               <SelectItem value="year">{PERIOD_LABELS.year}</SelectItem>
             </SelectContent>
           </Select>
-          
+
           <div className="flex items-center gap-1 flex-1">
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigatePeriod('prev')}>
               <ChevronLeft className="h-4 w-4" />
@@ -178,7 +179,7 @@ export function PurchasePeriodSelector({ productions, onPeriodChange }: Purchase
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
-          
+
           <Button variant="outline" size="sm" className="h-8" onClick={goToToday}>
             Hoje
           </Button>

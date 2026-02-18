@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
+import { getNow } from '@/lib/utils';
 
 export interface ForecastProductionOrder {
     id: string;
@@ -235,7 +236,7 @@ export function useForecastProductionOrders(productionDate?: string) {
                 technical_sheet_id: technicalSheetId,
                 quantity: Number(quantity),
                 unit: unit,
-                notes: `Produção (Previsão): ${new Date().toLocaleDateString()}`,
+                notes: `Produção (Previsão): ${getNow().toLocaleDateString()}`,
             };
             if (praca) insertData.praca = praca;
 

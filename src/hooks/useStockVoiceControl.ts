@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import type { StockItem } from './useStockItems';
 import { addDays, format, isValid } from 'date-fns';
+import { getNow } from '@/lib/utils';
 
 // Speech Recognition types
 interface SpeechRecognitionEvent extends Event {
@@ -90,7 +91,7 @@ export function useStockVoiceControl({ stockItems, onQuantityUpdate, onExpiryUpd
   // Parse date from voice input
   const parseDate = useCallback((text: string): Date | null => {
     const cleanText = text.toLowerCase().trim();
-    const now = new Date();
+    const now = getNow();
 
     // Handles keywords
     if (cleanText.includes('amanhã') || cleanText.includes('amanha')) return addDays(now, 1);

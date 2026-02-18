@@ -42,7 +42,7 @@ import {
     PopoverTrigger,
 } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { cn } from '@/lib/utils';
+import { cn, getNow } from '@/lib/utils';
 import { format, addDays, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -61,10 +61,10 @@ import { ProductionSheetDialog } from '@/components/production/ProductionSheetDi
 // ---- Forecast Input Tab ----
 
 function ForecastInputTab() {
-    const [targetDate, setTargetDate] = useState<Date>(addDays(new Date(), 1));
+    const [targetDate, setTargetDate] = useState<Date>(addDays(getNow(), 1));
     const [showDialog, setShowDialog] = useState(false);
     const [showSuggestDialog, setShowSuggestDialog] = useState(false);
-    const [baseDate, setBaseDate] = useState<Date>(subDays(new Date(), 7));
+    const [baseDate, setBaseDate] = useState<Date>(subDays(getNow(), 7));
     const [selectedProductId, setSelectedProductId] = useState('');
     const [quantity, setQuantity] = useState('');
 
@@ -126,10 +126,10 @@ function ForecastInputTab() {
                     </PopoverContent>
                 </Popover>
 
-                <Button size="sm" variant="outline" onClick={() => setTargetDate(addDays(new Date(), 1))}>
+                <Button size="sm" variant="outline" onClick={() => setTargetDate(addDays(getNow(), 1))}>
                     Amanhã
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => setTargetDate(addDays(new Date(), 2))}>
+                <Button size="sm" variant="outline" onClick={() => setTargetDate(addDays(getNow(), 2))}>
                     Depois de amanhã
                 </Button>
             </div>
@@ -294,7 +294,7 @@ function ForecastInputTab() {
 // ---- Production Orders Tab (Kitchen Screen) ----
 
 function ProductionOrdersTab() {
-    const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+    const [selectedDate, setSelectedDate] = useState<Date>(getNow());
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
     const [sheetDialogOpen, setSheetDialogOpen] = useState(false);
@@ -335,15 +335,15 @@ function ProductionOrdersTab() {
             <div className="flex items-center gap-3 flex-wrap">
                 <Button
                     size="sm"
-                    variant={dateStr === format(new Date(), 'yyyy-MM-dd') ? 'default' : 'outline'}
-                    onClick={() => setSelectedDate(new Date())}
+                    variant={dateStr === format(getNow(), 'yyyy-MM-dd') ? 'default' : 'outline'}
+                    onClick={() => setSelectedDate(getNow())}
                 >
                     Hoje
                 </Button>
                 <Button
                     size="sm"
-                    variant={dateStr === format(addDays(new Date(), 1), 'yyyy-MM-dd') ? 'default' : 'outline'}
-                    onClick={() => setSelectedDate(addDays(new Date(), 1))}
+                    variant={dateStr === format(addDays(getNow(), 1), 'yyyy-MM-dd') ? 'default' : 'outline'}
+                    onClick={() => setSelectedDate(addDays(getNow(), 1))}
                 >
                     Amanhã
                 </Button>

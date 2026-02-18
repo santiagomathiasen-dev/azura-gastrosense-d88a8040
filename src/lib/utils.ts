@@ -92,3 +92,26 @@ export function formatCurrency(value: number): string {
     currency: 'BRL',
   }).format(value);
 }
+
+/**
+ * Get the current date/time in Buenos Aires timezone (America/Argentina/Buenos_Aires).
+ * This ensures consistent date handling regardless of the user's browser timezone.
+ */
+export function getNow(): Date {
+  const now = new Date();
+  const buenosAiresTime = new Date(
+    now.toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' })
+  );
+  return buenosAiresTime;
+}
+
+/**
+ * Get today's date as YYYY-MM-DD string in Buenos Aires timezone.
+ */
+export function getTodayStr(): string {
+  const now = getNow();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}

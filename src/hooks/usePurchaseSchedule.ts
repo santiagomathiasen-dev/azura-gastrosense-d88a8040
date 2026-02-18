@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
+import { getNow } from '@/lib/utils';
 import { useProductions } from './useProductions';
 import { useSuppliers } from './useSuppliers';
 import type { Database } from '@/integrations/supabase/types';
@@ -42,7 +43,7 @@ export function usePurchaseSchedule() {
   // Calculate suggested purchase days based on production schedule
   const suggestedPurchaseDays = (() => {
     const productionDays = new Set<number>();
-    
+
     plannedProductions.forEach(prod => {
       const date = new Date(prod.scheduled_date);
       productionDays.add(date.getDay());
@@ -123,18 +124,18 @@ export function usePurchaseSchedule() {
   });
 
   // Check if today is a purchase day
-  const isTodayPurchaseDay = schedules.some(s => s.day_of_week === new Date().getDay() && s.order_day);
+  const isTodayPurchaseDay = schedules.some(s => s.day_of_week === getNow().getDay() && s.order_day);
 
   // Get next purchase day
   const getNextPurchaseDay = (): { dayName: string; daysUntil: number } | null => {
-    const today = new Date().getDay();
+    const today = getNow().getDay();
     const purchaseDays = schedules.filter(s => s.order_day).map(s => s.day_of_week);
-    
+
     if (purchaseDays.length === 0) return null;
 
     let minDays = 8;
     let nextDay = 0;
-    
+
     purchaseDays.forEach(day => {
       let daysUntil = day - today;
       if (daysUntil <= 0) daysUntil += 7;

@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
+import { getTodayStr } from '@/lib/utils';
 import type { Database } from '@/integrations/supabase/types';
 
 type PurchaseListItem = Database['public']['Tables']['purchase_list_items']['Row'];
@@ -69,7 +70,7 @@ export function usePendingDeliveries() {
           .from('purchase_list_items')
           .update({
             ordered_quantity: orderedQuantity,
-            order_date: new Date().toISOString().split('T')[0],
+            order_date: getTodayStr(),
             expected_delivery_date: expectedDeliveryDate || null,
           })
           .eq('id', existing.id);
@@ -85,7 +86,7 @@ export function usePendingDeliveries() {
             ordered_quantity: orderedQuantity,
             supplier_id: supplierId || null,
             status: 'ordered',
-            order_date: new Date().toISOString().split('T')[0],
+            order_date: getTodayStr(),
             expected_delivery_date: expectedDeliveryDate || null,
           });
         if (error) throw error;
@@ -132,7 +133,7 @@ export function usePendingDeliveries() {
         .from('purchase_list_items')
         .update({
           status: 'delivered',
-          actual_delivery_date: new Date().toISOString().split('T')[0],
+          actual_delivery_date: getTodayStr(),
         })
         .eq('id', itemId);
       if (updateError) throw updateError;

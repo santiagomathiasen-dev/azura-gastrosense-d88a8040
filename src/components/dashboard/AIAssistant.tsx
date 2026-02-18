@@ -5,6 +5,7 @@ import { usePurchaseCalculationByPeriod } from '@/hooks/usePurchaseCalculationBy
 import { useProductions } from '@/hooks/useProductions';
 import { useSaleProducts } from '@/hooks/useSaleProducts';
 import { useMemo } from 'react';
+import { getTodayStr } from '@/lib/utils';
 
 export function AIAssistant() {
     const { productions } = useProductions();
@@ -46,7 +47,7 @@ export function AIAssistant() {
 
         // 4. Productivity Insight
         const todayProductions = productions.filter(p => {
-            const today = new Date().toISOString().split('T')[0];
+            const today = getTodayStr();
             return p.scheduled_date.startsWith(today) && p.status === 'planned';
         });
 
@@ -90,8 +91,8 @@ export function AIAssistant() {
                 {insights.map((insight, index) => (
                     <div key={index} className="flex gap-3 items-start p-3 rounded-lg bg-background/50 border border-border/50 shadow-sm animate-in fade-in slide-in-from-left-2 transition-all hover:shadow-md">
                         <div className={`mt-0.5 p-1.5 rounded-full ${insight.type === 'warning' ? 'bg-orange-100 text-orange-600' :
-                                insight.type === 'success' ? 'bg-green-100 text-green-600' :
-                                    'bg-blue-100 text-blue-600'
+                            insight.type === 'success' ? 'bg-green-100 text-green-600' :
+                                'bg-blue-100 text-blue-600'
                             }`}>
                             <insight.icon className="h-4 w-4" />
                         </div>

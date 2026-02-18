@@ -21,7 +21,7 @@ import {
 import { useReports, DateRangeType } from '@/hooks/useReports';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
+import { cn, getNow } from '@/lib/utils';
 import {
   Table,
   TableBody,
@@ -131,7 +131,7 @@ export default function Relatorios() {
     const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `${filename}_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    link.download = `${filename}_${format(getNow(), 'yyyy-MM-dd')}.csv`;
     link.click();
   };
 

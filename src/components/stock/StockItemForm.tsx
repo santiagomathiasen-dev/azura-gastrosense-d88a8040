@@ -23,6 +23,7 @@ import {
 import { CATEGORY_LABELS, UNIT_LABELS, type StockItem, type StockCategory, type StockUnit } from '@/hooks/useStockItems';
 import { useSuppliers } from '@/hooks/useSuppliers';
 import { AlertTriangle } from 'lucide-react';
+import { getNow } from '@/lib/utils';
 
 const formSchema = z.object({
   name: z.string().min(1, 'Nome é obrigatório').max(100),
@@ -115,8 +116,8 @@ export function StockItemForm({
   };
 
   const expirationDate = watch('expiration_date');
-  const isExpiringSoon = expirationDate && new Date(expirationDate) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  const isExpired = expirationDate && new Date(expirationDate) < new Date();
+  const isExpiringSoon = expirationDate && new Date(expirationDate) <= new Date(getNow().getTime() + 7 * 24 * 60 * 60 * 1000);
+  const isExpired = expirationDate && new Date(expirationDate) < getNow();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

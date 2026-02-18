@@ -30,6 +30,7 @@ import { useSuppliers, type Supplier } from '@/hooks/useSuppliers';
 import { SupplierForm } from './SupplierForm';
 import { formatBrazilianNumber } from '@/lib/utils'; // Assuming this exists or standard utils
 import { WhatsAppDialog } from './WhatsAppDialog';
+import { getNow } from '@/lib/utils';
 
 export function SupplierManagement() {
     const { suppliers, isLoading, createSupplier, updateSupplier, deleteSupplier } = useSuppliers();
@@ -66,7 +67,7 @@ export function SupplierManagement() {
 
     const handleFormSubmit = (data: Partial<Supplier>) => {
         if (editingSupplier) {
-            updateSupplier.mutate({ ...data, id: editingSupplier.id, updated_at: new Date().toISOString() });
+            updateSupplier.mutate({ ...data, id: editingSupplier.id, updated_at: getNow().toISOString() });
         } else {
             createSupplier.mutate(data as any);
         }
