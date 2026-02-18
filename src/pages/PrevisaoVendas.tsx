@@ -64,7 +64,8 @@ function ForecastInputTab() {
     const [targetDate, setTargetDate] = useState<Date>(addDays(getNow(), 1));
     const [showDialog, setShowDialog] = useState(false);
     const [showSuggestDialog, setShowSuggestDialog] = useState(false);
-    const [baseDate, setBaseDate] = useState<Date>(subDays(getNow(), 7));
+    const [baseDate, setBaseDate] = useState<Date>(subDays(getNow(), 1));
+    const [periodType, setPeriodType] = useState<'day' | 'week' | 'month' | 'year'>('week');
     const [selectedProductId, setSelectedProductId] = useState('');
     const [quantity, setQuantity] = useState('');
 
@@ -100,9 +101,17 @@ function ForecastInputTab() {
         generateForecast.mutate({
             targetDate: dateStr,
             baseDate: format(baseDate, 'yyyy-MM-dd'),
-            bufferPercent: 10
+            bufferPercent: 10,
+            periodType,
         });
         setShowSuggestDialog(false);
+    };
+
+    const PERIOD_DESCRIPTIONS: Record<string, string> = {
+        day: 'vendas e perdas do dia selecionado',
+        week: 'média diária dos últimos 7 dias até a data selecionada',
+        month: 'média diária dos últimos 30 dias até a data selecionada',
+        year: 'média diária dos últimos 365 dias até a data selecionada',
     };
 
     return (
@@ -250,12 +259,26 @@ function ForecastInputTab() {
                     <DialogHeader>
                         <DialogTitle>Gerar Sugestão Baseada em Histórico</DialogTitle>
                         <DialogDescription>
-                            O sistema analisará as vendas e perdas do dia selecionado e aplicará uma margem de segurança de 10%.
+                            O sistema analisará {PERIOD_DESCRIPTIONS[periodType]} e aplicará uma margem de segurança de 10%.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
                         <div className="space-y-2">
-                            <Label>Usar dados de:</Label>
+                            <Label>Período de análise:</Label>
+                            <Select value={periodType} onValueChange={(v) => setPeriodType(v as any)}>
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="day">Dia</SelectItem>
+                                    <SelectItem value="week">Semana (7 dias)</SelectItem>
+                                    <SelectItem value="month">Mês (30 dias)</SelectItem>
+                                    <SelectItem value="year">Ano (365 dias)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Data de referência:</Label>
                             <Popover>
                                 <PopoverTrigger asChild>
                                     <Button variant="outline" className="w-full justify-start text-left font-normal">
@@ -273,7 +296,10 @@ function ForecastInputTab() {
                                 </PopoverContent>
                             </Popover>
                             <p className="text-xs text-muted-foreground">
-                                Recomendação: Selecione o mesmo dia da semana anterior
+                                {periodType === 'day'
+                                    ? 'As vendas e perdas deste dia serão usadas como base.'
+                                    : `O sistema calculará a média diária do período até esta data.`
+                                }
                             </p>
                         </div>
                     </div>

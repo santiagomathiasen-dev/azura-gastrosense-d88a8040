@@ -117,12 +117,13 @@ export function useSalesForecasts(targetDate?: string) {
     });
 
     const generateForecast = useMutation({
-        mutationFn: async ({ targetDate, baseDate, bufferPercent }: { targetDate: string, baseDate: string, bufferPercent: number }) => {
+        mutationFn: async ({ targetDate, baseDate, bufferPercent, periodType }: { targetDate: string, baseDate: string, bufferPercent: number, periodType?: string }) => {
             // @ts-ignore
             const { error } = await supabase.rpc('generate_sales_forecast', {
                 target_date: targetDate,
                 base_date: baseDate,
-                buffer_percent: bufferPercent
+                buffer_percent: bufferPercent,
+                period_type: periodType || 'day'
             });
             if (error) throw error;
         },
