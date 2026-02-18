@@ -181,69 +181,41 @@ export default function EstoqueProducao() {
       <PageHeader
         title="Estoque de Produção"
         description="Estoque separado para produções"
-        action={{
-          label: 'Solicitar',
-          onClick: () => openRequestDialog(),
-          icon: Send,
-        }}
       />
 
-      {/* Summary Cards - Compact */}
-      <div className="grid grid-cols-3 gap-2 mb-3">
-        <Card className="p-2">
-          <div className="flex items-center gap-2">
-            <Boxes className="h-4 w-4 text-muted-foreground" />
-            <div>
-              <div className="text-lg font-bold">{productionStock.length}</div>
-              <p className="text-xs text-muted-foreground">Em Produção</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-2">
-          <div className="flex items-center gap-2">
-            <ClipboardList className="h-4 w-4 text-muted-foreground" />
-            <div>
-              <div className="text-lg font-bold">{pendingRequests.length}</div>
-              <p className="text-xs text-muted-foreground">Solicitações</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-2">
-          <div className="flex items-center gap-2">
-            <Package className="h-4 w-4 text-muted-foreground" />
-            <div>
-              <div className="text-lg font-bold">{centralItems.length}</div>
-              <p className="text-xs text-muted-foreground">Central</p>
-            </div>
-          </div>
-        </Card>
+      {/* Main Action Buttons - Side by Side */}
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <Button
+          variant="default"
+          className="h-12 text-sm font-semibold rounded-lg"
+          onClick={() => openRequestDialog()}
+        >
+          <Send className="h-5 w-5 mr-2" />
+          Solicitação
+        </Button>
+        <Button
+          variant={voiceControl.isListening ? 'destructive' : 'outline'}
+          className="h-12 text-sm font-semibold rounded-lg"
+          onClick={() => voiceControl.isSupported && voiceControl.toggleListening()}
+          disabled={!voiceControl.isSupported}
+        >
+          {voiceControl.isListening ? (
+            <MicOff className="h-5 w-5 mr-2" />
+          ) : (
+            <Mic className="h-5 w-5 mr-2" />
+          )}
+          Contagem de Estoque
+        </Button>
       </div>
 
-      {/* Voice Control - Prominent */}
-      {voiceControl.isSupported && (
-        <div className="mb-3 flex flex-col items-center gap-2">
-          <Button
-            variant={voiceControl.isListening ? 'destructive' : 'default'}
-            size="lg"
-            className="h-16 w-16 rounded-full shadow-lg"
-            onClick={() => voiceControl.toggleListening()}
-            title={voiceControl.isListening ? 'Parar de ouvir' : 'Contagem por voz'}
-          >
-            {voiceControl.isListening ? (
-              <MicOff className="h-8 w-8" />
-            ) : (
-              <Mic className="h-8 w-8" />
-            )}
-          </Button>
-          {voiceControl.isListening && (
-            <div className="w-full max-w-md p-3 bg-muted rounded-lg text-center">
-              <p className="text-sm text-muted-foreground animate-pulse">
-                🎤 Ouvindo... Diga o nome do ingrediente e a quantidade
-              </p>
-              {voiceControl.transcript && (
-                <p className="text-sm mt-1 font-medium">"{voiceControl.transcript}"</p>
-              )}
-            </div>
+      {/* Voice Control Feedback */}
+      {voiceControl.isListening && (
+        <div className="mb-3 w-full p-3 bg-muted rounded-lg text-center">
+          <p className="text-sm text-muted-foreground animate-pulse">
+            🎤 Ouvindo... Diga o nome do ingrediente e a quantidade
+          </p>
+          {voiceControl.transcript && (
+            <p className="text-sm mt-1 font-medium">"{voiceControl.transcript}"</p>
           )}
         </div>
       )}
