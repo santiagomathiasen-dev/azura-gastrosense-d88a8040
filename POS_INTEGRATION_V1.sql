@@ -3,9 +3,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id),
   description TEXT,
-  key_hash TEXT NOT NULL, -- We'll store a simple hash or the key itself for MVP if requested, but better hash.
-  -- For this MVP/User Request "validation simple", we can just store the key. 
-  -- Ideally we hash it. Let's store "key" for simplicity now as requested "validacao simples".
+  key_hash TEXT NOT NULL, 
   key_value TEXT NOT NULL UNIQUE, 
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -15,11 +13,16 @@ CREATE TABLE IF NOT EXISTS api_keys (
 -- Enable RLS
 ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;
 
--- Policy: Users can see their own keys
+-- Policy: Users can see their own API keys
+-- DROP POLICY IF EXISTS to avoid errors on re-run
+DROP POLICY IF EXISTS "Users can view their own API keys" ON api_keys;
+
 CREATE POLICY "Users can view their own API keys" ON api_keys
   FOR SELECT USING (auth.uid() = user_id);
 
 -- Function to handle POS Sale (Transaction)
+DROP FUNCTION IF EXISTS process_pos_sale(UUID, JSONB);
+
 CREATE OR REPLACE FUNCTION process_pos_sale(
   p_user_id UUID,
   p_sale_payload JSONB
@@ -68,7 +71,6 @@ BEGIN
     LOOP
       
       -- Case 1: Simple Stock Item (Direct Resale or Raw Material)
-      -- NOTE: The logic here assumes `sale_product_components` maps directly to stock usage.
       IF v_component.component_type = 'stock_item' THEN
         v_stock_item_id := v_component.component_id;
         v_deduct_qty := v_component.quantity * v_quantity;
@@ -92,34 +94,17 @@ BEGIN
           v_stock_item_id,
           'exit',
           v_deduct_qty,
-          'manual', -- or 'sale' if enum allows. 'manual' is safe fall back or 'system'
+          'manual', 
           'Venda PDV'
         );
 
       -- Case 2: Finished Production (e.g. A cake slice from a Cake)
       ELSIF v_component.component_type = 'finished_production' THEN
-        -- Deduct from finished_productions_stock
-        -- We need to find the technical_sheet_id from the component
-        -- Logic: component_id relates to ?? Actually sales_product_components 'component_id' 
-        -- usually points to technical_sheet_id if type is 'finished_production'?
-        -- Let's assume component_id IS technical_sheet_id for 'finished_production'.
-        
-        -- We try to deduct from any available batch (FIFO or simple total)
-        -- For MVP, simple total deduction from the aggregated stock or random batch?
-        -- `finished_productions_stock` has `quantity` and `technical_sheet_id`.
-        
-        -- Simple approach: Deduct from the first found batch or just log negative if none.
-        -- Actually `finished_productions_stock` entries are per sheet/praca.
-        -- We'll just decrement the main entry.
         
         UPDATE finished_productions_stock
         SET quantity = quantity - (v_component.quantity * v_quantity)
         WHERE technical_sheet_id = v_component.component_id;
         
-        -- If no row exists, we might need to handle it? 
-        -- If it affects 0 rows, it means we have NO stock record. We should probably insert negative?
-        -- For now, allow simple update.
-
       END IF;
 
     END LOOP;
