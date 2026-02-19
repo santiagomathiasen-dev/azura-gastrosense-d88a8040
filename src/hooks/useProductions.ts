@@ -167,6 +167,30 @@ export function useProductions() {
             notes: `Baixa automática - Produção: ${production.name}`,
           });
 
+          // Deduct from expiry batches (FIFO)
+          const { data: batches } = await supabase
+            .from('item_expiry_dates' as any)
+            .select('*')
+            .eq('stock_item_id', stockItemId)
+            .gt('quantity', 0)
+            .order('expiry_date', { ascending: true });
+
+          if (batches && batches.length > 0) {
+            let remaining = useFromCentral;
+            for (const batch of batches) {
+              if (remaining <= 0) break;
+              const take = Math.min(remaining, Number((batch as any).quantity));
+              const newQty = Number((batch as any).quantity) - take;
+
+              await supabase
+                .from('item_expiry_dates' as any)
+                .update({ quantity: newQty } as any)
+                .eq('id', (batch as any).id);
+
+              remaining -= take;
+            }
+          }
+
           remainingQty -= useFromCentral;
         }
       }

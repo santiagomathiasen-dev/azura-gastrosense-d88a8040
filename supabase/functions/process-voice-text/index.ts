@@ -11,9 +11,9 @@ serve(async (req) => {
   }
 
   try {
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    if (!OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY is not configured");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
+      throw new Error("GEMINI_API_KEY is not configured");
     }
 
     const { text, systemPrompt } = await req.json();
@@ -25,60 +25,73 @@ serve(async (req) => {
       );
     }
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
+    const geminiBody = {
+      contents: [
+        {
+          parts: [
+            { text: `${systemPrompt}\n\nTexto para analisar:\n${text}` },
+          ],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.1,
+        responseMimeType: "application/json",
       },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: text },
-        ],
-        temperature: 0.3,
-      }),
-    });
+    };
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(geminiBody),
+      }
+    );
 
     if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns minutos." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Créditos insuficientes." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
       const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
+      console.error("Gemini error:", response.status, errorText);
+
+      let errorMessage = "Erro ao processar com Gemini";
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMessage = errorJson.error?.message || errorMessage;
+      } catch (e) { }
+
       return new Response(
-        JSON.stringify({ error: "Erro ao processar com IA" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          error: errorMessage,
+          status: response.status,
+          details: errorText
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const aiResponse = await response.json();
-    const assistantMessage = aiResponse.choices?.[0]?.message?.content || "";
+    const assistantMessage = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
 
-    // Extract JSON array from the response
+    // Extract JSON array from the response with cleaning and recovery
     let ingredients: any[] = [];
     try {
-      const jsonMatch = assistantMessage.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        const raw = jsonMatch[0]
-          .replace(/```json/gi, "")
-          .replace(/```/g, "")
-          .trim();
-        ingredients = JSON.parse(raw);
+      let cleanedMessage = assistantMessage.trim();
+      if (cleanedMessage.startsWith("```")) {
+        cleanedMessage = cleanedMessage.replace(/^```[a-z]*\n/i, "").replace(/\n```$/i, "").trim();
       }
+
+      const parsed = JSON.parse(cleanedMessage);
+      ingredients = Array.isArray(parsed) ? parsed : (parsed.ingredients || []);
     } catch (parseError) {
-      console.error("Parse error:", parseError);
-      console.error("Response was:", assistantMessage);
+      console.error("Parse error, trying regex recovery:", parseError);
+      try {
+        const jsonMatch = assistantMessage.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          ingredients = Array.isArray(parsed) ? parsed : (parsed.ingredients || []);
+        }
+      } catch (e) {
+        console.error("Regex recovery failed:", e);
+      }
     }
 
     // Normalize and validate
@@ -101,7 +114,6 @@ serve(async (req) => {
         let unitRaw = String(ing.unit || ing.unidade || "unidade").toLowerCase().trim();
         const categoryRaw = String(ing.category || ing.categoria || "outros").toLowerCase().trim();
 
-        // Normalize 'l' to 'L' for liters
         if (unitRaw === "l") unitRaw = "L";
 
         return {

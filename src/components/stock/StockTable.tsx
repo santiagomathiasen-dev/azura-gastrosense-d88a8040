@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { MoreHorizontal, Pencil, Trash2, ArrowUpDown, Check, X, ArrowRightLeft } from 'lucide-react';
+import { MoreHorizontal, Pencil, Trash2, ArrowUpDown, Check, X, ArrowRightLeft, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -8,6 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Badge } from '@/components/ui/badge';
 import { cn, formatQuantity } from '@/lib/utils';
 import {
   type StockItem,
@@ -39,15 +40,19 @@ interface StockTableProps {
   isVoiceActive?: boolean;
   activeVoiceItemId?: string | null;
   onVoiceToggle?: (itemId: string) => void;
+  onManageBatches?: (item: StockItem) => void;
+  expiryMap?: Record<string, string>;
 }
 
-export function StockTable({ 
-  items, 
-  onMovement, 
-  onEdit, 
+export function StockTable({
+  items,
+  onMovement,
+  onEdit,
   onDelete,
   onCountedQuantityChange,
   onTransfer,
+  onManageBatches,
+  expiryMap = {}
 }: StockTableProps) {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>('');
@@ -138,6 +143,12 @@ export function StockTable({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    {onManageBatches && (
+                      <DropdownMenuItem onClick={() => onManageBatches(item)}>
+                        <Calendar className="h-4 w-4 mr-2" />
+                        Gerenciar Lotes
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem onClick={() => onEdit(item)}>
                       <Pencil className="h-4 w-4 mr-2" />
                       Editar
@@ -156,7 +167,33 @@ export function StockTable({
           >
             {/* Linha 1: Nome e Status */}
             <div className="flex items-center gap-2">
-              <MobileListTitle>{item.name}</MobileListTitle>
+              <MobileListTitle className="flex items-center gap-2">
+                {item.name}
+                {expiryMap[item.id] && (() => {
+                  const expiryDate = new Date(expiryMap[item.id]);
+                  const today = new Date();
+                  const diffTime = expiryDate.getTime() - today.getTime();
+                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                  return (
+                    <div
+                      className={cn(
+                        "flex flex-col items-center justify-center min-w-[34px] h-8 rounded border text-[7px] font-bold leading-none uppercase shrink-0 cursor-pointer hover:bg-muted transition-colors",
+                        diffDays < 0 ? "bg-destructive/10 border-destructive/30 text-destructive" :
+                          diffDays <= 7 ? "bg-orange-100 border-orange-200 text-orange-600" :
+                            "bg-secondary/50 border-muted-foreground/20 text-muted-foreground"
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onManageBatches) onManageBatches(item);
+                      }}
+                    >
+                      <span className="mb-0.5 opacity-70">Val</span>
+                      <span className="text-[9px]">{expiryDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
+                    </div>
+                  );
+                })()}
+              </MobileListTitle>
               <MobileListBadge
                 variant={status === 'green' ? 'success' : status === 'yellow' ? 'warning' : 'destructive'}
               >
@@ -164,9 +201,14 @@ export function StockTable({
               </MobileListBadge>
             </div>
 
-            {/* Linha 2: Categoria, Quantidades - Compact */}
+            {/* Linha 2: Categoria, Fornecedor, Quantidades - Compact */}
             <MobileListDetails className="text-xs gap-1.5 flex-wrap">
               <span className="bg-secondary px-1 py-0.5 rounded text-[10px]">{categoryLabel}</span>
+              {(item as any).supplier?.name && (
+                <span className="text-muted-foreground italic truncate max-w-[100px]">
+                  {(item as any).supplier.name}
+                </span>
+              )}
               <span>Atual: <strong>{formatQuantity(currentQty)}{unitLabel}</strong></span>
               {isEditing ? (
                 <span className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>

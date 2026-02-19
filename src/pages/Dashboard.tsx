@@ -1,8 +1,9 @@
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Calendar, Clock, Bot, XCircle, CheckCircle2, Sparkles, ShoppingCart, TrendingUp, ChefHat, CalendarClock } from 'lucide-react';
+import { AlertTriangle, Calendar, Clock, Bot, XCircle, CheckCircle2, Sparkles, ShoppingCart, TrendingUp, ChefHat, CalendarClock, BarChart3, Package, ClipboardList, ArrowUpRight, Plus } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { useProductions } from '@/hooks/useProductions';
 import { useStockItems } from '@/hooks/useStockItems';
 import { useFinishedProductionsStock } from '@/hooks/useFinishedProductionsStock';
@@ -11,8 +12,9 @@ import { usePendingDeliveries } from '@/hooks/usePendingDeliveries';
 import { usePreparationAlerts } from '@/hooks/usePreparationAlerts';
 import { usePurchaseCalculationByPeriod } from '@/hooks/usePurchaseCalculationByPeriod';
 import { useMemo } from 'react';
-import { getTodayStr } from '@/lib/utils';
+import { getTodayStr, cn } from '@/lib/utils';
 import { useAllExpiryAlerts } from '@/hooks/useExpiryDates';
+import { useStockMovements } from '@/hooks/useStockMovements';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -90,6 +92,36 @@ export default function Dashboard() {
       <PageHeader title="Painel" description="Visão geral da sua gestão gastronômica" />
 
       <div className="space-y-4">
+        {/* Alerta Crítico de Validade */}
+        {totalExpiryAlerts > 0 && (
+          <div
+            className={cn(
+              "p-3 rounded-lg border flex items-center justify-between animate-pulse cursor-pointer",
+              expiredCount > 0
+                ? "bg-destructive/10 border-destructive/30 text-destructive"
+                : "bg-warning/10 border-warning/30 text-warning-foreground"
+            )}
+            onClick={() => navigate('/estoque')}
+          >
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                "p-2 rounded-full",
+                expiredCount > 0 ? "bg-destructive/20" : "bg-warning/20"
+              )}>
+                <CalendarClock className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-bold text-sm">
+                  {expiredCount > 0
+                    ? `${expiredCount} itens VENCIDOS!`
+                    : `${nearExpiryCount} itens vencendo em breve`}
+                </p>
+                <p className="text-xs opacity-90">Verifique o estoque para evitar desperdícios.</p>
+              </div>
+            </div>
+            <Button size="sm" variant="ghost" className="h-8 font-bold">Ver Itens</Button>
+          </div>
+        )}
         {/* Row 1: Assistente - Full Width */}
         <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-secondary/5">
           <CardHeader className="pb-2">

@@ -12,15 +12,6 @@ interface StockInputRequest {
   stockItems: { id: string; name: string; unit: string; category: string }[];
 }
 
-interface StockSuggestion {
-  itemName: string;
-  matchedItemId?: string;
-  quantity: number;
-  unit: string;
-  action: "entry" | "exit" | "adjustment";
-  confidence: number;
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -51,11 +42,9 @@ serve(async (req) => {
       );
     }
 
-    const userId = user.id;
-
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    if (!OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY is not configured");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
+      throw new Error("GEMINI_API_KEY is not configured");
     }
 
     const { type, content, stockItems }: StockInputRequest = await req.json();
@@ -68,130 +57,75 @@ serve(async (req) => {
       );
     }
 
-    if (!["voice", "image"].includes(type)) {
-      return new Response(
-        JSON.stringify({ error: "Tipo deve ser 'voice' ou 'image'" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Verify stockItems belong to the authenticated user
-    if (stockItems && stockItems.length > 0) {
-      const stockItemIds = stockItems.map((item) => item.id);
-      const { data: userItems, error: itemsError } = await supabaseClient
-        .from("stock_items")
-        .select("id")
-        .eq("user_id", userId)
-        .in("id", stockItemIds);
-
-      if (itemsError) {
-        return new Response(
-          JSON.stringify({ error: "Erro ao verificar itens de estoque" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      const validIds = new Set(userItems?.map((item) => item.id) || []);
-      const invalidItems = stockItems.filter((item) => !validIds.has(item.id));
-
-      if (invalidItems.length > 0) {
-        return new Response(
-          JSON.stringify({ error: "Acesso negado a alguns itens de estoque" }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    }
-
     const stockItemsList = (stockItems || [])
-      .map((item) => `- ${item.name} (ID: ${item.id}, unidade: ${item.unit}, categoria: ${item.category})`)
+      .map((item) => `- ${item.name} (ID: ${item.id}, unidade: ${item.unit}, category: ${item.category})`)
       .join("\n");
 
-    let systemPrompt = `Você é um assistente especializado em gestão de estoque para cozinhas profissionais.
-Sua tarefa é interpretar comandos e extrair informações sobre movimentações de estoque.
+    const promptText = `Você é um assistente especializado em gestão de estoque para cozinhas profissionais.
+Tarefa: Interpretar comandos e extrair informações sobre movimentações de estoque.
 
 LISTA DE ITENS NO ESTOQUE:
 ${stockItemsList || "Nenhum item cadastrado"}
 
 REGRAS:
-1. Sempre tente associar o item mencionado a um item existente no estoque
-2. Se não encontrar correspondência exata, sugira o item mais similar
-3. Interprete unidades corretamente (kg, g, L, ml, unidade, caixa, dz)
-4. Determine se é entrada, saída ou ajuste de estoque
-5. Retorne SEMPRE um JSON válido com o formato especificado
-
-FORMATO DE RESPOSTA (JSON):
+1. Associe o item ao estoque (ID correspondente).
+2. Se não encontrar, sugira o item mais similar com matchedItemId: null.
+3. Ações válidas: entry (entrada), exit (saída), adjustment (ajuste).
+4. Retorne um JSON com a estrutura:
 {
   "suggestions": [
     {
-      "itemName": "nome do item mencionado",
-      "matchedItemId": "id do item correspondente ou null",
-      "quantity": 0,
-      "unit": "unidade de medida",
-      "action": "entry|exit|adjustment",
-      "confidence": 0.0
+      "itemName": string,
+      "matchedItemId": string | null,
+      "quantity": number,
+      "unit": string,
+      "action": "entry"|"exit"|"adjustment",
+      "confidence": number
     }
   ],
-  "message": "mensagem explicativa para o usuário"
+  "message": string
 }`;
 
-    let userContent: any;
+    const parts: any[] = [{ text: promptText }];
 
     if (type === "voice") {
-      userContent = `Interprete o seguinte comando de voz e extraia as informações de estoque:
-
-"${content}"
-
-Retorne um JSON com as sugestões de movimentação.`;
+      parts.push({ text: `Comando de voz: "${content}"` });
     } else {
-      userContent = [
-        {
-          type: "text",
-          text: `Analise esta imagem (pode ser foto de estoque, nota fiscal, ou lista de produtos) e extraia as informações de itens e quantidades.
-
-Tente associar cada item identificado com os itens existentes no estoque.
-Retorne um JSON com as sugestões de movimentação.`,
+      parts.push({
+        inlineData: {
+          mimeType: "image/jpeg",
+          data: content.includes(",") ? content.split(",")[1] : content,
         },
-        {
-          type: "image_url",
-          image_url: {
-            url: content.startsWith("data:") ? content : `data:image/jpeg;base64,${content}`,
-          },
-        },
-      ];
+      });
+      parts.push({ text: "Analise esta imagem e extraia as movimentações." });
     }
 
-
-
-    // Use gpt-4o for images (vision), gpt-4o-mini for voice/text (cheaper)
-    const model = type === 'image' ? 'gpt-4o' : 'gpt-4o-mini';
-
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
+    const geminiBody = {
+      contents: [{ parts }],
+      generationConfig: {
+        temperature: 0.1,
+        responseMimeType: "application/json",
       },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userContent },
-        ],
-        temperature: 0.3,
-      }),
-    });
+    };
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(geminiBody),
+      }
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("OpenAI error:", response.status, errorText);
+      console.error("Gemini error:", response.status, errorText);
 
-      let errorMessage = "Erro ao processar com IA";
+      let errorMessage = "Erro ao processar com Gemini";
       try {
         const errorJson = JSON.parse(errorText);
         errorMessage = errorJson.error?.message || errorMessage;
-      } catch (e) {
-        // Not JSON
-      }
+      } catch (e) { }
 
       return new Response(
         JSON.stringify({
@@ -204,28 +138,40 @@ Retorne um JSON com as sugestões de movimentação.`,
     }
 
     const aiResponse = await response.json();
-    const assistantMessage = aiResponse.choices?.[0]?.message?.content || "";
+    const assistantMessage = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
 
-    // Extract JSON from the response
+    // Extract JSON from the response with cleaning and recovery
     let result;
     try {
-      const jsonMatch = assistantMessage.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        result = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error("No JSON found in response");
+      let cleanedMessage = assistantMessage.trim();
+      if (cleanedMessage.startsWith("```")) {
+        cleanedMessage = cleanedMessage.replace(/^```[a-z]*\n/i, "").replace(/\n```$/i, "").trim();
       }
+
+      result = JSON.parse(cleanedMessage);
     } catch (parseError) {
-      result = {
-        suggestions: [],
-        message: "Não foi possível interpretar a entrada. Tente novamente com mais clareza.",
-      };
+      console.error("Parse error, trying regex recovery:", parseError);
+      try {
+        const jsonMatch = assistantMessage.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+        if (jsonMatch) {
+          result = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error("No JSON found");
+        }
+      } catch (e) {
+        console.error("Regex recovery failed:", e);
+        result = {
+          suggestions: [],
+          message: "Não foi possível interpretar a entrada. Tente novamente com mais clareza.",
+        };
+      }
     }
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
+    console.error("process-stock-input error:", error);
     return new Response(
       JSON.stringify({ error: "Erro interno do servidor" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

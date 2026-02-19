@@ -42,6 +42,7 @@ import { Badge } from '@/components/ui/badge';
 import { useStockItems, CATEGORY_LABELS, UNIT_LABELS, type StockItem, type StockCategory, type StockUnit } from '@/hooks/useStockItems';
 import { useStockMovements, type MovementType } from '@/hooks/useStockMovements';
 import { useStockVoiceControl } from '@/hooks/useStockVoiceControl';
+import { useEarliestExpiryMap } from '@/hooks/useExpiryDates';
 import { useProductions } from '@/hooks/useProductions';
 import { usePendingDeliveries } from '@/hooks/usePendingDeliveries';
 import { useProductionStock } from '@/hooks/useProductionStock';
@@ -52,14 +53,17 @@ import { StockItemForm } from '@/components/stock/StockItemForm';
 import { StockMovementDialog } from '@/components/stock/StockMovementDialog';
 import { VoiceImportDialog, type ExtractedItem } from '@/components/VoiceImportDialog';
 import { IngredientFileImportDialog, type ExtractedIngredient } from '@/components/IngredientFileImportDialog';
-import { toast } from 'sonner';
 import { formatQuantity } from '@/lib/utils';
 import { SupplierManagement } from '@/components/suppliers/SupplierManagement';
+import { BatchManagementDialog } from '@/components/stock/BatchManagementDialog';
+import { Calendar } from 'lucide-react';
+import { toast } from 'sonner';
 
 type TransferDestination = 'production' | 'sale';
 
 export default function Estoque() {
-  const { items, isLoading, isOwnerLoading, createItem, updateItem, deleteItem, itemsInAlert } = useStockItems();
+  const { items, isLoading, isOwnerLoading, createItem, batchCreateItems, updateItem, deleteItem, itemsInAlert } = useStockItems();
+  const { expiryMap, isLoading: expiryMapLoading } = useEarliestExpiryMap();
   const { pendingItems, confirmDelivery, cancelOrder } = usePendingDeliveries();
   const { createMovement } = useStockMovements();
   const { getProjectedConsumption, plannedProductions } = useProductions();
@@ -93,15 +97,21 @@ export default function Estoque() {
   // Stock count mode
   const [countingMode, setCountingMode] = useState(false);
 
+  // Batch management state
+  const [batchDialogOpen, setBatchDialogOpen] = useState(false);
+  const [batchItem, setBatchItem] = useState<StockItem | null>(null);
+
   // Voice control for inline quantity updates
   const handleQuantityUpdate = useCallback((itemId: string, quantity: number) => {
     createMovement.mutate(
       {
-        stock_item_id: itemId,
-        type: 'adjustment',
-        quantity: quantity,
-        source: 'audio',
-        notes: 'Contagem por voz',
+        movement: {
+          stock_item_id: itemId,
+          type: 'adjustment',
+          quantity: quantity,
+          source: 'audio',
+          notes: 'Contagem por voz',
+        }
       },
       {
         onSuccess: () => {
@@ -153,53 +163,41 @@ export default function Estoque() {
 
   // Voice import handler
   const handleVoiceImport = async (voiceItems: ExtractedItem[]) => {
-    for (const item of voiceItems) {
-      await new Promise<void>((resolve, reject) => {
-        createItem.mutate(
-          {
-            name: item.name,
-            current_quantity: item.quantity,
-            unit: item.unit as StockUnit,
-            category: item.category as StockCategory,
-            unit_price: item.price || 0,
-            notes: item.supplier ? `Fornecedor: ${item.supplier}` : undefined,
-          },
-          {
-            onSuccess: () => resolve(),
-            onError: (err) => reject(err),
-          }
-        );
-      });
+    try {
+      const itemsToCreate = voiceItems.map(item => ({
+        name: item.name,
+        current_quantity: item.quantity,
+        unit: item.unit as StockUnit,
+        category: item.category as StockCategory,
+        unit_price: item.price || 0,
+        notes: item.supplier ? `Fornecedor: ${item.supplier}` : undefined,
+      }));
+
+      await batchCreateItems.mutateAsync(itemsToCreate);
+    } catch (err) {
+      console.error('Error in handleVoiceImport:', err);
     }
   };
 
   // File import handler
   const handleFileImport = async (ingredientsList: ExtractedIngredient[]) => {
-    let successCount = 0;
-    for (const item of ingredientsList) {
-      try {
-        await new Promise<void>((resolve, reject) => {
-          createItem.mutate(
-            {
-              name: item.name,
-              current_quantity: item.quantity,
-              unit: item.unit as StockUnit,
-              category: item.category as StockCategory,
-              unit_price: item.price || 0,
-              minimum_quantity: item.minimum_quantity || 0,
-              notes: item.supplier ? `Fornecedor: ${item.supplier}` : undefined,
-            },
-            {
-              onSuccess: () => { successCount++; resolve(); },
-              onError: (err) => reject(err),
-            }
-          );
-        });
-      } catch (err) {
-        console.error('Error creating ingredient:', err);
-      }
+    try {
+      const itemsToCreate = ingredientsList.map(item => ({
+        name: item.name,
+        current_quantity: item.quantity,
+        unit: item.unit as StockUnit,
+        category: item.category as StockCategory,
+        unit_price: item.price || 0,
+        minimum_quantity: item.minimum_quantity || 0,
+        notes: item.supplier ? `Fornecedor: ${item.supplier}` : undefined,
+      }));
+
+      await batchCreateItems.mutateAsync(itemsToCreate);
+      setFileImportDialogOpen(false);
+    } catch (err) {
+      console.error('Error in handleFileImport:', err);
+      // Error toast is already handled in batchCreateItems
     }
-    toast.success(`${successCount} ingredientes cadastrados com sucesso!`);
   };
 
   const handleCreateItem = (data: any) => {
@@ -228,15 +226,23 @@ export default function Estoque() {
     });
   };
 
-  const handleMovement = (data: { type: MovementType; quantity: number; notes?: string }) => {
+  const handleMovement = (data: {
+    type: MovementType;
+    quantity: number;
+    notes?: string;
+    deductions?: { id: string; quantity: number }[];
+  }) => {
     if (!selectedItem) return;
     createMovement.mutate(
       {
-        stock_item_id: selectedItem.id,
-        type: data.type,
-        quantity: data.quantity,
-        source: 'manual',
-        notes: data.notes,
+        movement: {
+          stock_item_id: selectedItem.id,
+          type: data.type,
+          quantity: data.quantity,
+          source: 'manual',
+          notes: data.notes,
+        },
+        deductions: data.deductions
       },
       {
         onSuccess: () => {
@@ -250,11 +256,13 @@ export default function Estoque() {
   const handleCountedQuantityChange = (itemId: string, quantity: number) => {
     createMovement.mutate(
       {
-        stock_item_id: itemId,
-        type: 'adjustment',
-        quantity: quantity,
-        source: 'manual',
-        notes: 'Contagem manual',
+        movement: {
+          stock_item_id: itemId,
+          type: 'adjustment',
+          quantity: quantity,
+          source: 'manual',
+          notes: 'Contagem manual',
+        }
       },
       {
         onSuccess: () => {
@@ -286,6 +294,11 @@ export default function Estoque() {
     setTransferDialogOpen(true);
   };
 
+  const openBatchDialog = (item: StockItem) => {
+    setBatchItem(item);
+    setBatchDialogOpen(true);
+  };
+
   const handleTransfer = async () => {
     if (!transferItem) return;
 
@@ -313,11 +326,13 @@ export default function Estoque() {
       } else {
         // Saída do estoque central para produtos de venda
         await createMovement.mutateAsync({
-          stock_item_id: transferItem.id,
-          type: 'exit',
-          quantity: qty,
-          source: 'manual',
-          notes: 'Transferência para Produtos para Venda',
+          movement: {
+            stock_item_id: transferItem.id,
+            type: 'exit',
+            quantity: qty,
+            source: 'manual',
+            notes: 'Transferência para Produtos para Venda',
+          }
         });
 
         toast.success(`${formatQuantity(qty)} ${transferItem.unit} transferido(s) para Produtos para Venda`);
@@ -596,6 +611,8 @@ export default function Estoque() {
               activeVoiceItemId={activeVoiceItemId}
               onVoiceToggle={voiceSupported ? toggleListening : undefined}
               onTransfer={openTransferDialog}
+              onManageBatches={openBatchDialog}
+              expiryMap={expiryMap}
             />
           </div>
         </TabsContent>
@@ -715,6 +732,16 @@ export default function Estoque() {
         onSubmit={handleMovement}
         isLoading={createMovement.isPending}
       />
+
+      {/* Batch Management Dialog */}
+      {batchItem && (
+        <BatchManagementDialog
+          open={batchDialogOpen}
+          onOpenChange={setBatchDialogOpen}
+          stockItemId={batchItem.id}
+          stockItemName={batchItem.name}
+        />
+      )}
 
       {/* Transfer Dialog */}
       <Dialog open={transferDialogOpen} onOpenChange={setTransferDialogOpen}>

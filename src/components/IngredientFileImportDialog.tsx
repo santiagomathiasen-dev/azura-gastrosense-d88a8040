@@ -167,7 +167,7 @@ export function IngredientFileImportDialog({
       if (extractedIngredients.length > 0) {
         toast.success(`Extraídos ${extractedIngredients.length} ingredientes!`);
       } else {
-        toast.info('Nenhum ingrediente encontrado. Verifique o arquivo.');
+        toast.info(data.summary || 'Nenhum ingrediente encontrado. Verifique o arquivo.');
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao processar arquivo';
@@ -184,6 +184,10 @@ export function IngredientFileImportDialog({
         i === index ? { ...ing, selected: !ing.selected } : ing
       )
     );
+  };
+
+  const toggleAll = (selected: boolean) => {
+    setIngredients((prev) => prev.map((ing) => ({ ...ing, selected })));
   };
 
   const updateIngredient = (index: number, updates: Partial<ExtractedIngredient>) => {
@@ -302,8 +306,17 @@ export function IngredientFileImportDialog({
               {/* Ingredients */}
               {ingredients.length > 0 && (
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Ingredientes Extraídos</Label>
+                  <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="select-all-ingredients"
+                        checked={ingredients.length > 0 && ingredients.every(i => i.selected)}
+                        onCheckedChange={(checked) => toggleAll(!!checked)}
+                      />
+                      <Label htmlFor="select-all-ingredients" className="cursor-pointer">
+                        Ingredientes Extraídos
+                      </Label>
+                    </div>
                     <Badge variant="secondary">{selectedCount} selecionados</Badge>
                   </div>
                   <div className="border rounded-lg divide-y">

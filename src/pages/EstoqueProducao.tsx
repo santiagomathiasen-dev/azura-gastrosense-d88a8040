@@ -24,6 +24,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useStockItems, CATEGORY_LABELS, UNIT_LABELS } from '@/hooks/useStockItems';
+import { useEarliestExpiryMap } from '@/hooks/useExpiryDates';
 import { useProductionStock } from '@/hooks/useProductionStock';
 import { useStockRequests } from '@/hooks/useStockRequests';
 import { useStockVoiceControl } from '@/hooks/useStockVoiceControl';
@@ -31,6 +32,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { EmptyState } from '@/components/EmptyState';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 export default function EstoqueProducao() {
   const { items: centralItems, isLoading: centralLoading } = useStockItems();
@@ -40,6 +42,7 @@ export default function EstoqueProducao() {
     transferToCentral,
     updateQuantity,
   } = useProductionStock();
+  const { expiryMap } = useEarliestExpiryMap();
   const {
     requests,
     pendingRequests,
@@ -275,6 +278,24 @@ export default function EstoqueProducao() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-xs truncate">{ps.stock_item?.name || 'Item não encontrado'}</span>
+                        {expiryMap[ps.stock_item_id] && (() => {
+                          const expiryDate = new Date(expiryMap[ps.stock_item_id]);
+                          const today = new Date();
+                          const diffTime = expiryDate.getTime() - today.getTime();
+                          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                          return (
+                            <div className={cn(
+                              "flex flex-col items-center justify-center min-w-[30px] h-7 rounded border text-[6px] font-bold leading-none uppercase shrink-0",
+                              diffDays < 0 ? "bg-destructive/10 border-destructive/30 text-destructive" :
+                                diffDays <= 7 ? "bg-orange-100 border-orange-200 text-orange-600" :
+                                  "bg-secondary/50 border-muted-foreground/20 text-muted-foreground"
+                            )}>
+                              <span className="mb-0.5 opacity-70">Val</span>
+                              <span className="text-[8px]">{expiryDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
+                            </div>
+                          );
+                        })()}
                         <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">
                           {Number(ps.quantity).toFixed(1)} {ps.stock_item?.unit ? UNIT_LABELS[ps.stock_item.unit as keyof typeof UNIT_LABELS] : ''}
                         </Badge>

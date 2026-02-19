@@ -87,6 +87,30 @@ export function useProductionStock() {
         });
       if (movementError) throw movementError;
 
+      // 1b. Deduct from expiry batches (FIFO)
+      const { data: batches } = await supabase
+        .from('item_expiry_dates' as any)
+        .select('*')
+        .eq('stock_item_id', stockItemId)
+        .gt('quantity', 0)
+        .order('expiry_date', { ascending: true });
+
+      if (batches && batches.length > 0) {
+        let remaining = quantity;
+        for (const batch of batches) {
+          if (remaining <= 0) break;
+          const take = Math.min(remaining, Number((batch as any).quantity));
+          const newQty = Number((batch as any).quantity) - take;
+
+          await supabase
+            .from('item_expiry_dates' as any)
+            .update({ quantity: newQty } as any)
+            .eq('id', (batch as any).id);
+
+          remaining -= take;
+        }
+      }
+
       // 2. Add to production stock (upsert)
       const { data: existing } = await supabase
         .from('production_stock')

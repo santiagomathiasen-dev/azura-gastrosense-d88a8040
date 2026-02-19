@@ -52,7 +52,10 @@ export function useStockItems() {
       if (!user?.id && !ownerId) return [];
       const { data, error } = await supabase
         .from('stock_items')
-        .select('*')
+        .select(`
+          *,
+          supplier:suppliers(name)
+        `)
         .order('name');
       if (error) throw error;
       return data as StockItem[];
@@ -119,12 +122,36 @@ export function useStockItems() {
     (item) => getStockStatus(Number(item.current_quantity), Number(item.minimum_quantity)) !== 'green'
   );
 
+  const batchCreateItems = useMutation({
+    mutationFn: async (items: Omit<StockItemInsert, 'user_id'>[]) => {
+      if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
+      if (!ownerId) throw new Error('Usuário não autenticado');
+
+      const itemsWithUser = items.map(item => ({ ...item, user_id: ownerId }));
+
+      const { error } = await supabase
+        .from('stock_items')
+        .insert(itemsWithUser);
+
+      if (error) throw error;
+      return null;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['stock_items'] });
+      toast.success(`${variables.length} itens criados com sucesso!`);
+    },
+    onError: (err: Error) => {
+      toast.error(`Erro ao criar itens: ${err.message}`);
+    },
+  });
+
   return {
     items,
     isLoading,
     isOwnerLoading,
     error,
     createItem,
+    batchCreateItems,
     updateItem,
     deleteItem,
     itemsInAlert,

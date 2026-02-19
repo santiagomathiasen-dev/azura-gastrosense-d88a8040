@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -74,6 +75,26 @@ export function useExpiryDates(stockItemId?: string) {
         },
     });
 
+    const updateExpiryQuantity = useMutation({
+        mutationFn: async ({ id, quantity }: { id: string, quantity: number }) => {
+            const { error } = await supabase
+                .from('item_expiry_dates' as any)
+                .update({ quantity } as any)
+                .eq('id', id);
+
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['expiry-dates'] });
+            queryClient.invalidateQueries({ queryKey: ['expiry-dates-all'] });
+            queryClient.invalidateQueries({ queryKey: ['expiry-dates-all-map'] });
+        },
+        onError: (error) => {
+            console.error('Error updating expiry quantity:', error);
+            toast.error('Erro ao atualizar quantidade de validade');
+        },
+    });
+
     const removeExpiryDate = useMutation({
         mutationFn: async (id: string) => {
             const { error } = await supabase
@@ -114,11 +135,41 @@ export function useExpiryDates(stockItemId?: string) {
         }).sort((a, b) => a.daysUntil - b.daysUntil);
     };
 
+    // Helper to auto-deduct quantity using FIFO
+    const autoDeductFIFO = async (stockItemId: string, quantityToDeduct: number) => {
+        // Fetch batches for this item ordered by date ASC
+        const { data: batches, error } = await supabase
+            .from('item_expiry_dates' as any)
+            .select('*')
+            .eq('stock_item_id', stockItemId)
+            .gt('quantity', 0)
+            .order('expiry_date', { ascending: true });
+
+        if (error || !batches) return;
+
+        let remaining = quantityToDeduct;
+        for (const batch of batches) {
+            if (remaining <= 0) break;
+            const take = Math.min(remaining, Number((batch as any).quantity));
+            const newQty = Number((batch as any).quantity) - take;
+
+            const { error: updateError } = await supabase
+                .from('item_expiry_dates' as any)
+                .update({ quantity: newQty } as any)
+                .eq('id', (batch as any).id);
+
+            if (updateError) console.error('Error auto-deducting batch:', updateError);
+            remaining -= take;
+        }
+    };
+
     return {
         expiryDates,
         isLoading,
         addExpiryDate,
+        updateExpiryQuantity,
         removeExpiryDate,
+        autoDeductFIFO,
         getExpiryAlerts,
     };
 }
@@ -168,5 +219,37 @@ export function useAllExpiryAlerts(daysThreshold = 7) {
         totalAlerts: alerts.length,
         expiredCount: alerts.filter(a => a.isExpired).length,
         nearExpiryCount: alerts.filter(a => a.isNearExpiry).length,
+    };
+}
+
+export function useEarliestExpiryMap() {
+    const { data: allExpiryDates = [], isLoading } = useQuery({
+        queryKey: ['expiry-dates-all-map'],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from('item_expiry_dates' as any)
+                .select('stock_item_id, expiry_date')
+                .gt('quantity', 0)
+                .order('expiry_date', { ascending: true });
+
+            if (error) throw error;
+            return (data || []) as unknown as { stock_item_id: string; expiry_date: string }[];
+        },
+    });
+
+    const expiryMap = useMemo(() => {
+        const map: Record<string, string> = {};
+        allExpiryDates.forEach(d => {
+            // Since it's ordered by date, the first one encountered for each ID is the earliest
+            if (!map[d.stock_item_id]) {
+                map[d.stock_item_id] = d.expiry_date;
+            }
+        });
+        return map;
+    }, [allExpiryDates]);
+
+    return {
+        expiryMap,
+        isLoading,
     };
 }
