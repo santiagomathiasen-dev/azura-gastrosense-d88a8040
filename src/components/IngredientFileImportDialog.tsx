@@ -147,7 +147,7 @@ export function IngredientFileImportDialog({
         throw new Error(error.message);
       }
 
-      if (data.error) {
+      if (data?.error) {
         toast.error(data.error);
         setStep('upload');
         return;
