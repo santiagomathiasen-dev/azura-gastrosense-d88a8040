@@ -87,7 +87,8 @@ export default function Dashboard() {
     }
     if (urgentCount > 0) list.push({ icon: ShoppingCart, text: `${urgentCount} insumos em estado crítico. Garanta a compra urgente.`, type: 'warning' });
     if (totalEstimatedCost > 1000) list.push({ icon: TrendingUp, text: `Investimento estimado: R$ ${totalEstimatedCost.toFixed(2)}. Atenção ao fluxo de caixa.`, type: 'info' });
-    const todayProductions = productions.filter(p => p.scheduled_date.startsWith(getTodayStr()) && p.status === 'planned');
+    const todayStr = getTodayStr();
+    const todayProductions = productions.filter(p => p.scheduled_date?.startsWith(todayStr) && p.status === 'planned');
     if (todayProductions.length > 0) list.push({ icon: Sparkles, text: `${todayProductions.length} produções planejadas para hoje. Comece pelas mais complexas!`, type: 'success' });
     if (list.length === 0) list.push({ icon: Bot, text: "Tudo sob controle! Estoque e produções dentro dos parâmetros.", type: 'success' });
     return list.slice(0, 4);
@@ -136,7 +137,7 @@ export default function Dashboard() {
         {/* Row 1: Assistente - Full Width */}
         {expiryError && (
           <div className="p-4 bg-destructive/10 border border-destructive text-destructive rounded-lg mb-4 text-xs font-mono">
-            Error loading expiry: {(expiryError as any).message || JSON.stringify(expiryError)}
+            Error loading data. Please check connection.
           </div>
         )}
         <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-secondary/5">
