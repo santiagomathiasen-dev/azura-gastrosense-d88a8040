@@ -12,7 +12,11 @@
             "@/*": [
                 "./src/*"
             ]
-        }
+        },
+        "types": [
+            "node",
+            "@vercel/node"
+        ]
     },
     "include": [
         "."
