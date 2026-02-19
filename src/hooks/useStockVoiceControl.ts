@@ -46,7 +46,7 @@ interface UseStockVoiceControlProps {
   onExpiryUpdate?: (itemId: string, expirationDate: string) => void;
 }
 
-const VOICE_TIMEOUT_MS = 30000; // 30 seconds before auto-stop
+const VOICE_TIMEOUT_MS = 6000; // 6 seconds before auto-stop
 
 export function useStockVoiceControl({ stockItems, onQuantityUpdate, onExpiryUpdate }: UseStockVoiceControlProps) {
   const [isListening, setIsListening] = useState(false);

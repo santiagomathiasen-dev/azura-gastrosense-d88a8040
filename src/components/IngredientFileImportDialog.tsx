@@ -26,6 +26,7 @@ export interface ExtractedIngredient {
   category: StockCategory;
   price?: number | null;
   supplier?: string | null;
+  minimum_quantity?: number | null;
   selected?: boolean;
 }
 
@@ -67,7 +68,7 @@ export function IngredientFileImportDialog({
   const [fileName, setFileName] = useState<string>('');
   const [ingredients, setIngredients] = useState<ExtractedIngredient[]>([]);
   const [summary, setSummary] = useState('');
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -100,7 +101,7 @@ export function IngredientFileImportDialog({
       'application/pdf',
       'text/plain',
     ];
-    
+
     if (!validTypes.includes(file.type)) {
       toast.error('Tipo de arquivo não suportado. Use imagem, PDF ou texto.');
       return;
@@ -134,9 +135,9 @@ export function IngredientFileImportDialog({
       console.log(`Processing ${fileType} file for ingredient extraction`);
 
       const { data, error } = await supabase.functions.invoke('extract-ingredients', {
-        body: { 
-          fileType, 
-          content, 
+        body: {
+          fileType,
+          content,
           extractRecipe: false
         },
       });
@@ -157,12 +158,12 @@ export function IngredientFileImportDialog({
         ...ing,
         selected: true,
       }));
-      
+
       setIngredients(extractedIngredients);
       setSummary(data.summary || '');
 
       setStep('review');
-      
+
       if (extractedIngredients.length > 0) {
         toast.success(`Extraídos ${extractedIngredients.length} ingredientes!`);
       } else {
@@ -195,7 +196,7 @@ export function IngredientFileImportDialog({
 
   const handleConfirmImport = async () => {
     const selectedIngredients = ingredients.filter((ing) => ing.selected);
-    
+
     if (selectedIngredients.length === 0) {
       toast.error('Selecione pelo menos um ingrediente');
       return;
@@ -324,7 +325,7 @@ export function IngredientFileImportDialog({
                             />
                           </div>
                         </div>
-                        
+
                         <div className="grid grid-cols-3 gap-2 pl-7">
                           <div>
                             <Label className="text-xs text-muted-foreground">Quantidade</Label>

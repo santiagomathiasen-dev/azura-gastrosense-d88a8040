@@ -58,8 +58,9 @@ Cada ingrediente no array "ingredients" deve ter:
 - quantity (number): quantidade
 - unit (string): unidade (kg, g, l, ml, unidade, caixa, dz)
 - category (string): categoria (laticinios, secos_e_graos, hortifruti, carnes_e_peixes, embalagens, limpeza, outros)
-- preco (number ou null): preço unitário se disponível
-- fornecedor (string ou null): nome do fornecedor se disponível
+- price (number ou null): preço unitário se disponível
+- supplier (string ou null): nome do fornecedor se disponível
+- minimum_quantity (number ou null): estoque mínimo sugerido ou encontrado
 
 Exemplo de resposta:
 {"recipeName": "Bolo de Chocolate", "preparationMethod": "Misture os ingredientes...", "preparationTime": 60, "yieldQuantity": 12, "ingredients": [{"name": "Farinha de trigo", "quantity": 0.5, "unit": "kg", "category": "secos_e_graos", "preco": 4.50, "fornecedor": null}], "summary": "Receita de bolo com 5 ingredientes"}`;
@@ -93,6 +94,9 @@ Exemplo de resposta:
       });
     }
 
+    // Use gpt-4o for images/PDFs (vision), gpt-4o-mini for text (cheaper)
+    const model = (fileType === 'image' || fileType === 'pdf') ? 'gpt-4o' : 'gpt-4o-mini';
+
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -100,7 +104,7 @@ Exemplo de resposta:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model,
         messages,
         temperature: 0.3,
       }),
@@ -223,8 +227,9 @@ Exemplo de resposta:
           quantity: toNumber(ing.quantidade ?? ing.quantity),
           unit: validUnits.includes(unitRaw) ? unitRaw : "unidade",
           category: validCategories.includes(categoryRaw) ? categoryRaw : "outros",
-          price: ing.preco !== null && ing.preco !== undefined ? toNumber(ing.preco) : null,
-          supplier: ing.fornecedor ?? null,
+          price: ing.price !== null && ing.price !== undefined ? toNumber(ing.price ?? ing.preco) : null,
+          supplier: ing.supplier ?? ing.fornecedor ?? null,
+          minimum_quantity: ing.minimum_quantity !== null && ing.minimum_quantity !== undefined ? toNumber(ing.minimum_quantity) : null,
         };
       })
       .filter(Boolean);

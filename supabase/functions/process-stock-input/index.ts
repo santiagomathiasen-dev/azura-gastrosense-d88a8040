@@ -162,6 +162,9 @@ Retorne um JSON com as sugestões de movimentação.`,
 
 
 
+    // Use gpt-4o for images (vision), gpt-4o-mini for voice/text (cheaper)
+    const model = type === 'image' ? 'gpt-4o' : 'gpt-4o-mini';
+
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -169,7 +172,7 @@ Retorne um JSON com as sugestões de movimentação.`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userContent },

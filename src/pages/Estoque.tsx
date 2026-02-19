@@ -186,6 +186,7 @@ export default function Estoque() {
               unit: item.unit as StockUnit,
               category: item.category as StockCategory,
               unit_price: item.price || 0,
+              minimum_quantity: item.minimum_quantity || 0,
               notes: item.supplier ? `Fornecedor: ${item.supplier}` : undefined,
             },
             {
