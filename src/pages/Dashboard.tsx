@@ -25,7 +25,18 @@ export default function Dashboard() {
   const { alerts: preparationAlerts, isLoading: alertsLoading, resolveAlert } = usePreparationAlerts();
   const { pendingItems } = usePendingDeliveries();
   const { totalEstimatedCost, urgentCount } = usePurchaseCalculationByPeriod({ productions });
-  const { alerts: expiryAlerts, totalAlerts: totalExpiryAlerts, expiredCount, nearExpiryCount, isLoading: expiryLoading } = useAllExpiryAlerts(7);
+  const { alerts: expiryAlerts, totalAlerts: totalExpiryAlerts, expiredCount, nearExpiryCount, isLoading: expiryLoading, error: expiryError } = useAllExpiryAlerts(7);
+
+  console.log('Dashboard Debug:', {
+    productions: productions.length,
+    stockItems: stockItems.length,
+    preparationAlerts: preparationAlerts.length,
+    expiryAlerts: totalExpiryAlerts,
+    productionsLoading,
+    stockLoading,
+    expiryLoading,
+    expiryError
+  });
 
   const plannedProductions = productions.filter((p) => p.status === 'planned');
   const inProgressProductions = productions.filter((p) => p.status === 'in_progress');
@@ -83,7 +94,7 @@ export default function Dashboard() {
   }, [productions, saleProducts, urgentCount, totalEstimatedCost]);
 
   const totalAlerts = combinedAlerts.length;
-  const isLoadingAlerts = stockLoading || finishedLoading || saleProductsLoading;
+  const isLoadingAlerts = stockLoading || finishedLoading || saleProductsLoading || expiryLoading;
   const cardClass = "flex flex-col min-h-[200px]";
   const cardContentClass = "flex-1 overflow-auto space-y-2";
 
@@ -123,6 +134,11 @@ export default function Dashboard() {
           </div>
         )}
         {/* Row 1: Assistente - Full Width */}
+        {expiryError && (
+          <div className="p-4 bg-destructive/10 border border-destructive text-destructive rounded-lg mb-4 text-xs font-mono">
+            Error loading expiry: {(expiryError as any).message || JSON.stringify(expiryError)}
+          </div>
+        )}
         <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-secondary/5">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2 text-primary">

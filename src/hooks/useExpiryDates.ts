@@ -176,7 +176,7 @@ export function useExpiryDates(stockItemId?: string) {
 
 // Hook to get ALL expiry dates for dashboard alerts
 export function useAllExpiryAlerts(daysThreshold = 7) {
-    const { data: allExpiryDates = [], isLoading } = useQuery({
+    const { data: allExpiryDates = [], isLoading, error } = useQuery({
         queryKey: ['expiry-dates-all'],
         queryFn: async () => {
             const { data, error } = await supabase
@@ -216,6 +216,7 @@ export function useAllExpiryAlerts(daysThreshold = 7) {
     return {
         alerts,
         isLoading,
+        error,
         totalAlerts: alerts.length,
         expiredCount: alerts.filter(a => a.isExpired).length,
         nearExpiryCount: alerts.filter(a => a.isNearExpiry).length,
