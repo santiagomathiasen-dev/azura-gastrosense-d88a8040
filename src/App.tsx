@@ -21,6 +21,7 @@ import ProdutosVenda from "@/pages/ProdutosVenda";
 import Colaboradores from "@/pages/Colaboradores";
 import Gestores from "@/pages/Gestores";
 import Relatorios from "@/pages/Relatorios";
+import Financeiro from "@/pages/Financeiro";
 import Perdas from "@/pages/Perdas";
 import PrevisaoVendas from "@/pages/PrevisaoVendas";
 import PaymentRequired from "@/pages/PaymentRequired";
@@ -64,6 +65,7 @@ const App = () => (
                 <Route path="/perdas" element={<Perdas />} />
                 <Route path="/previsao-vendas" element={<PrevisaoVendas />} />
                 <Route path="/relatorios" element={<Relatorios />} />
+                <Route path="/financeiro" element={<Financeiro />} />
                 <Route path="/payment-required" element={<PaymentRequired />} />
               </Route>
 

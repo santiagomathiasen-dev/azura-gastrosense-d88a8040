@@ -20,12 +20,12 @@ BEGIN
     v_user_id,
     sale_product_id,
     generate_sales_forecast.target_date,
-    CEIL((SUM(total_quantity)::DECIMAL / v_num_days) * (1 + (buffer_percent / 100.0))),
+    CEIL(SUM(total_quantity)::DECIMAL * (1 + (buffer_percent / 100.0))),
     CASE period_type
-      WHEN 'day' THEN 'Baseado em ' || to_char(base_date, 'DD/MM/YYYY')
-      WHEN 'week' THEN 'Media semanal (' || to_char(v_start_date, 'DD/MM') || ' a ' || to_char(base_date, 'DD/MM/YYYY') || ')'
-      WHEN 'month' THEN 'Media mensal (' || to_char(v_start_date, 'DD/MM') || ' a ' || to_char(base_date, 'DD/MM/YYYY') || ')'
-      WHEN 'year' THEN 'Media anual (' || to_char(v_start_date, 'DD/MM/YYYY') || ' a ' || to_char(base_date, 'DD/MM/YYYY') || ')'
+      WHEN 'day' THEN 'Vendas e perdas do dia ' || to_char(base_date, 'DD/MM/YYYY')
+      WHEN 'week' THEN 'Consumo total - Últimos 7 dias (' || to_char(v_start_date, 'DD/MM') || ' a ' || to_char(base_date, 'DD/MM/YYYY') || ')'
+      WHEN 'month' THEN 'Consumo total - Últimos 30 dias (' || to_char(v_start_date, 'DD/MM') || ' a ' || to_char(base_date, 'DD/MM/YYYY') || ')'
+      WHEN 'year' THEN 'Consumo total - Último ano (' || to_char(v_start_date, 'DD/MM/YYYY') || ' a ' || to_char(base_date, 'DD/MM/YYYY') || ')'
       ELSE 'Gerado automaticamente'
     END
   FROM (

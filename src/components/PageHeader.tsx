@@ -9,11 +9,12 @@ interface PageHeaderProps {
     onClick: () => void;
     icon?: LucideIcon;
   };
+  children?: React.ReactNode;
 }
 
-export function PageHeader({ title, description, action }: PageHeaderProps) {
+export function PageHeader({ title, description, action, children }: PageHeaderProps) {
   const ActionIcon = action?.icon || Plus;
-  
+
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
       <div>
@@ -22,12 +23,15 @@ export function PageHeader({ title, description, action }: PageHeaderProps) {
           <p className="text-muted-foreground mt-1">{description}</p>
         )}
       </div>
-      {action && (
-        <Button onClick={action.onClick} className="w-full sm:w-auto">
-          <ActionIcon className="h-4 w-4 mr-2" />
-          {action.label}
-        </Button>
-      )}
+      <div className="flex flex-wrap items-center gap-2">
+        {children}
+        {action && (
+          <Button onClick={action.onClick} className="w-full sm:w-auto shadow-sm">
+            <ActionIcon className="h-4 w-4 mr-2" />
+            {action.label}
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

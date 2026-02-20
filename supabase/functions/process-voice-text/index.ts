@@ -43,7 +43,7 @@ serve(async (req) => {
     };
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -148,7 +148,10 @@ serve(async (req) => {
   } catch (error) {
     console.error("process-voice-text error:", error);
     return new Response(
-      JSON.stringify({ error: "Erro interno do servidor" }),
+      JSON.stringify({
+        error: "Erro no processamento de voz. Verifique se a chave da API (GEMINI_API_KEY) está configurada corretamente.",
+        details: error instanceof Error ? error.message : String(error)
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

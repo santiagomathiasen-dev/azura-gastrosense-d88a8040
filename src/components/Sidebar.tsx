@@ -15,7 +15,8 @@ import {
   Users,
   BarChart3,
   TrendingDown,
-  CalendarClock
+  CalendarClock,
+  Calculator
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useCollaboratorContext } from '@/contexts/CollaboratorContext';
@@ -41,6 +42,7 @@ const navItems = [
   { to: '/produtos-venda', icon: ShoppingBag, label: 'Produtos p/ Venda', permission: 'can_access_produtos_venda' },
   { to: '/perdas', icon: TrendingDown, label: 'Perdas', permission: 'can_access_estoque' },
   { to: '/relatorios', icon: BarChart3, label: 'Relatórios', permission: 'can_access_dashboard' },
+  { to: '/financeiro', icon: Calculator, label: 'Financeiro', permission: 'can_access_dashboard' },
 ];
 
 export function Sidebar() {

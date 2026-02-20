@@ -432,7 +432,21 @@ export default function Estoque() {
       <PageHeader
         title="Estoque Central"
         description="Ingredientes, entradas e saídas"
-      />
+        action={{
+          label: "Novo Insumo",
+          onClick: () => { setSelectedItem(null); setFormOpen(true); },
+          icon: Plus
+        }}
+      >
+        <Button
+          variant="outline"
+          onClick={() => setImportDialogOpen(true)}
+          className="h-9 gap-2 shadow-sm border-emerald-200 hover:bg-emerald-50 text-emerald-700"
+        >
+          <FileText className="h-4 w-4" />
+          Importar PDF/Foto
+        </Button>
+      </PageHeader>
 
       <Tabs defaultValue="stock" className="flex-1 flex flex-col overflow-hidden">
         <TabsList className="grid w-full grid-cols-3 mb-3">
@@ -689,8 +703,8 @@ export default function Estoque() {
 
           {/* Registered Items List */}
           <div className="space-y-2">
-            <h3 className="font-semibold text-lg">Insumos Cadastrados ({items.length})</h3>
-            {items.map((item) => (
+            <h3 className="font-semibold text-lg">Insumos Cadastrados ({(items || []).length})</h3>
+            {(items || []).map((item) => (
               <Card key={item.id} className="p-3">
                 <div className="flex items-center justify-between">
                   <div>

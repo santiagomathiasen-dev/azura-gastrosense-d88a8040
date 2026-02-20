@@ -1,9 +1,9 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Package, 
-  FileText, 
-  Factory, 
+import {
+  LayoutDashboard,
+  Package,
+  FileText,
+  Factory,
   ShoppingCart,
   LogOut,
   Boxes,
@@ -11,7 +11,8 @@ import {
   ShoppingBag,
   Users,
   BarChart3,
-  TrendingDown
+  TrendingDown,
+  Calculator
 } from 'lucide-react';
 import { Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -32,6 +33,7 @@ const navItems = [
   { to: '/produtos-venda', icon: ShoppingBag, label: 'Venda', permission: 'can_access_produtos_venda' },
   { to: '/perdas', icon: TrendingDown, label: 'Perdas', permission: 'can_access_estoque' },
   { to: '/relatorios', icon: BarChart3, label: 'Relatórios', permission: 'can_access_dashboard' },
+  { to: '/financeiro', icon: Calculator, label: 'Financeiro', permission: 'can_access_dashboard' },
 ];
 
 export function MobileNav() {
@@ -81,7 +83,7 @@ export function MobileNav() {
           ))}
         </div>
       </ScrollArea>
-      
+
       <div className="border-t border-border p-2">
         <button
           onClick={handleLogout}

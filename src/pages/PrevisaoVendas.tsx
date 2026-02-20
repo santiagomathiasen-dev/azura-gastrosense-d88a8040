@@ -115,9 +115,9 @@ function ForecastInputTab() {
 
     const PERIOD_DESCRIPTIONS: Record<string, string> = {
         day: 'vendas e perdas do dia selecionado',
-        week: 'média diária dos últimos 7 dias até a data selecionada',
-        month: 'média diária dos últimos 30 dias até a data selecionada',
-        year: 'média diária dos últimos 365 dias até a data selecionada',
+        week: 'consumo total dos últimos 7 dias até a data selecionada',
+        month: 'consumo total dos últimos 30 dias até a data selecionada',
+        year: 'consumo total do último ano até a data selecionada',
     };
 
     return (
@@ -265,7 +265,7 @@ function ForecastInputTab() {
                     <DialogHeader>
                         <DialogTitle>Gerar Sugestão Baseada em Histórico</DialogTitle>
                         <DialogDescription>
-                            O sistema analisará {PERIOD_DESCRIPTIONS[periodType]} e aplicará uma margem de segurança de 10%.
+                            O sistema analisará o {PERIOD_DESCRIPTIONS[periodType]} e sugerirá a quantidade total necessária para cobrir o mesmo período, com margem de 10%.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
@@ -304,7 +304,7 @@ function ForecastInputTab() {
                             <p className="text-xs text-muted-foreground">
                                 {periodType === 'day'
                                     ? 'As vendas e perdas deste dia serão usadas como base.'
-                                    : `O sistema calculará a média diária do período até esta data.`
+                                    : `O sistema calculará o consumo total do período até esta data.`
                                 }
                             </p>
                         </div>

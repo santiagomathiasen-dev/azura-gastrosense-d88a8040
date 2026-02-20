@@ -64,6 +64,7 @@ interface PurchaseListItem {
   isPurchased: boolean;
   orderedQuantity: number;
   pendingDeliveryId?: string;
+  isManual?: boolean;
 }
 
 export default function Compras() {
@@ -310,9 +311,20 @@ export default function Compras() {
     }
   };
 
+  const handleOpenWhatsAppGrouped = () => {
+    if (selectedItems.size === 0) return;
+
+    // Open supplier picker for the WHOLE selection
+    setSupplierPickerData({
+      open: true,
+      item: null // special case: item is null means we are sending the whole selected set
+    });
+    setPickedSupplierId('');
+  };
+
   const handleConfirmSupplierPick = () => {
     const supplier = allSuppliers.find((s: any) => s.id === pickedSupplierId) as any;
-    if (!supplier || !supplierPickerData.item) return;
+    if (!supplier) return;
 
     const phone = supplier.whatsapp_number || supplier.whatsapp || supplier.phone;
     if (!phone) {
@@ -320,9 +332,20 @@ export default function Compras() {
       return;
     }
 
-    const item = supplierPickerData.item;
-    let message = `Olá ${supplier.name}, gostaria de solicitar:\n`;
-    message += `- ${item.suggestedQuantity} ${item.unit} de ${item.name}\n`;
+    // Build the message based on WHAT prompted the picker
+    let message = `Olá *${supplier.name}*, gostaria de fazer um pedido:\n\n`;
+
+    if (supplierPickerData.item) {
+      // Single item case (legacy/individual)
+      const item = supplierPickerData.item;
+      message += `• *${item.suggestedQuantity} ${item.unit}* de ${item.name}\n`;
+    } else {
+      // Grouped selection case
+      const selectedDetails = mergedPurchaseList.filter(item => selectedItems.has(item.stockItemId));
+      selectedDetails.forEach(i => {
+        message += `• *${i.suggestedQuantity} ${i.unit}* de ${i.name}\n`;
+      });
+    }
 
     setWhatsAppDialogData({
       open: true,
@@ -332,72 +355,6 @@ export default function Compras() {
       initialMessage: message
     });
     setSupplierPickerData({ open: false, item: null });
-  };
-
-  const handleSendGroupedWhatsApp = () => {
-    if (selectedItems.size === 0) return;
-
-    // Get selected items with details
-    const selectedDetails = mergedPurchaseList.filter(item => selectedItems.has(item.stockItemId));
-
-    // Identify suppliers
-    const suppliers = new Set(selectedDetails.map(item => item.supplierId).filter(Boolean));
-
-    if (suppliers.size === 0) {
-      toast.error('Nenhum dos itens selecionados possui fornecedor vinculado.');
-      return;
-    }
-
-    if (suppliers.size > 1) {
-      toast.error('Selecione itens de apenas um fornecedor por vez para enviar via WhatsApp.');
-      return;
-    }
-
-    const supplierId = Array.from(suppliers)[0] as string;
-    const supplierItem = selectedDetails.find(item => item.supplierId === supplierId);
-
-    if (!supplierItem || !supplierItem.supplierName || !supplierItem.supplierPhone) {
-      // Find supplier in allSuppliers to be sure
-      const supplier = allSuppliers.find((s: any) => s.id === supplierId);
-      if (!supplier) {
-        toast.error('Fornecedor não encontrado.');
-        return;
-      }
-      const phone = supplier.whatsapp_number || supplier.whatsapp || supplier.phone;
-      if (!phone) {
-        toast.error('Este fornecedor não possui WhatsApp cadastrado.');
-        return;
-      }
-
-      // Use details from allSuppliers
-      let message = `Olá ${supplier.name}, gostaria de fazer um pedido:\n`;
-      selectedDetails.filter(i => i.supplierId === supplierId).forEach(i => {
-        message += `• ${i.suggestedQuantity} ${i.unit} de ${i.name}\n`;
-      });
-
-      setWhatsAppDialogData({
-        open: true,
-        supplierName: supplier.name,
-        phoneNumber: phone,
-        supplierId: supplier.id,
-        initialMessage: message
-      });
-      return;
-    }
-
-    // All good, generate message
-    let message = `Olá ${supplierItem.supplierName}, gostaria de fazer um pedido:\n`;
-    selectedDetails.forEach(i => {
-      message += `• ${i.suggestedQuantity} ${i.unit} de ${i.name}\n`;
-    });
-
-    setWhatsAppDialogData({
-      open: true,
-      supplierName: supplierItem.supplierName,
-      phoneNumber: supplierItem.supplierPhone,
-      supplierId: supplierId,
-      initialMessage: message
-    });
   };
 
   const gerarListaCompras = () => {
@@ -605,33 +562,38 @@ export default function Compras() {
 
 
 
-      {/* Selection Actions */}
+      {/* Selection Actions (Sticky Bar) */}
       {selectedItems.size > 0 && (
-        <div className="flex items-center gap-2 mb-4 p-2 bg-primary/10 rounded-lg">
-          <Checkbox
-            checked={selectedItems.size === filteredItems.length}
-            onCheckedChange={toggleSelectAll}
-          />
-          <span className="text-sm font-medium flex-1">
+        <div className="flex items-center gap-2 mb-4 p-2 bg-primary/10 rounded-lg border border-primary/20 sticky top-2 z-10 shadow-md backdrop-blur-sm animate-in slide-in-from-top-4 duration-300">
+          <span className="text-sm font-bold flex-1 ml-2 text-primary">
             {selectedItems.size} selecionado(s)
           </span>
           <div className="flex gap-2">
             <Button
               size="sm"
               variant="secondary"
-              onClick={handleSendGroupedWhatsApp}
-              className="h-8 gap-1 bg-green-600 hover:bg-green-700 text-white border-0"
+              onClick={handleOpenWhatsAppGrouped}
+              className="h-9 gap-2 bg-green-600 hover:bg-green-700 text-white border-0 shadow-sm"
             >
-              <MessageCircle className="h-4 w-4" />
-              Enviar WhatsApp
+              <MessageCircle className="h-4 w-4 text-white" />
+              Pedido WhatsApp
             </Button>
             <Button
               size="sm"
               onClick={openOrderDialog}
-              className="h-8 gap-1"
+              className="h-9 gap-2 shadow-sm"
             >
               <ShoppingCart className="h-4 w-4" />
-              Marcar Comprado
+              Confirmar Compra
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => setSelectedItems(new Set())}
+              className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              title="Limpar seleção"
+            >
+              <Clock className="h-4 w-4 rotate-45" />
             </Button>
           </div>
         </div>
@@ -671,113 +633,136 @@ export default function Compras() {
           </CardContent>
         </Card>
       ) : (
-        <MobileList>
-          {/* Select All Header - only for unpurchased items */}
-          {unpurchasedItems.length > 0 && (
-            <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/30">
-              <Checkbox
-                checked={selectedItems.size === unpurchasedItems.length && unpurchasedItems.length > 0}
-                onCheckedChange={toggleSelectAll}
-              />
-              <span className="text-xs text-muted-foreground">Selecionar todos pendentes</span>
-            </div>
-          )}
+        <div className="space-y-6">
+          {(() => {
+            // Group items by supplier
+            const groups: Record<string, { name: string; items: PurchaseListItem[] }> = {};
 
-          {filteredItems.map((item) => (
-            <MobileListItem
-              key={item.stockItemId}
-              className={cn(
-                item.isUrgent && !item.isPurchased && "border-warning/50 bg-warning/5",
-                selectedItems.has(item.stockItemId) && "bg-primary/5 border-primary/30",
-                item.isPurchased && "bg-muted/50 border-muted"
-              )}
-            >
-              {/* Linha 1: Checkbox, Nome, Status e Preço */}
-              <div className="flex items-center gap-2">
-                {!item.isPurchased ? (
-                  <Checkbox
-                    checked={selectedItems.has(item.stockItemId)}
-                    onCheckedChange={() => toggleSelectItem(item.stockItemId)}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                ) : (
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600 flex-shrink-0" />
-                )}
-                <MobileListTitle
-                  className={cn(
-                    "flex-1",
-                    item.isPurchased && "line-through text-muted-foreground"
-                  )}
-                >
-                  {item.name}
-                </MobileListTitle>
+            filteredItems.forEach(item => {
+              const key = item.supplierId || 'none';
+              if (!groups[key]) {
+                groups[key] = {
+                  name: item.supplierName || 'Sem Fornecedor',
+                  items: []
+                };
+              }
+              groups[key].items.push(item);
+            });
 
-                {/* WhatsApp Button next to name - shown for ALL unpurchased items */}
-                {!item.isPurchased && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={cn(
-                      "h-6 w-6 mr-1",
-                      item.supplierPhone
-                        ? "text-green-600 hover:text-green-700 hover:bg-green-50"
-                        : "text-muted-foreground hover:text-green-600 hover:bg-green-50"
+            // Sort groups: suppliers first, then 'none'
+            const sortedKeys = Object.keys(groups).sort((a, b) => {
+              if (a === 'none') return 1;
+              if (b === 'none') return -1;
+              return groups[a].name.localeCompare(groups[b].name);
+            });
+
+            return sortedKeys.map(key => {
+              const group = groups[key];
+              const groupItems = group.items;
+              const unpurchasedGroupItems = groupItems.filter(i => !i.isPurchased);
+              const allSelected = unpurchasedGroupItems.length > 0 &&
+                unpurchasedGroupItems.every(i => selectedItems.has(i.stockItemId));
+
+              return (
+                <div key={key} className="space-y-1">
+                  {/* Group Header */}
+                  <div className="flex items-center gap-3 px-3 py-2 bg-muted/30 rounded-t-lg border-x border-t">
+                    {unpurchasedGroupItems.length > 0 && (
+                      <Checkbox
+                        checked={allSelected}
+                        onCheckedChange={(checked) => {
+                          setSelectedItems(prev => {
+                            const newSet = new Set(prev);
+                            unpurchasedGroupItems.forEach(i => {
+                              if (checked) newSet.add(i.stockItemId);
+                              else newSet.delete(i.stockItemId);
+                            });
+                            return newSet;
+                          });
+                        }}
+                      />
                     )}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleOpenWhatsApp(item);
-                    }}
-                    title={item.supplierName ? `Enviar pedido para ${item.supplierName}` : 'Selecionar fornecedor e enviar pedido'}
-                  >
-                    <MessageCircle className="h-4 w-4" />
-                  </Button>
-                )}
-
-                {item.isPurchased ? (
-                  <MobileListBadge variant="default" className="bg-emerald-100 text-emerald-700 border-emerald-200">
-                    Comprado
-                  </MobileListBadge>
-                ) : item.isUrgent ? (
-                  <MobileListBadge variant="warning">Urgente</MobileListBadge>
-                ) : item.isManual ? (
-                  <MobileListBadge variant="default" className="bg-blue-100 text-blue-700 border-blue-200">
-                    Na Lista
-                  </MobileListBadge>
-                ) : null}
-                {item.estimatedCost > 0 && !item.isPurchased && (
-                  <span className="text-sm font-medium text-primary">
-                    R$ {item.estimatedCost.toFixed(0)}
-                  </span>
-                )}
-              </div>
-
-              {/* Linha 2: Detalhes */}
-              <MobileListDetails className={cn("ml-6", item.isPurchased && "text-muted-foreground")}>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  {item.supplierName && (
-                    <div className="flex items-center gap-1">
-                      <span>{item.supplierName}</span>
-                    </div>
-                  )}
-
-                  {item.isPurchased ? (
-                    <span className="text-emerald-600">
-                      Comprado: {formatQuantity(Number(item.ordered_quantity))} {item.stock_item?.unit}
-                      {item.order_date && ` em ${parseSafeDate(item.order_date).toLocaleDateString('pt-BR')}`}
+                    <span className="text-sm font-bold flex items-center gap-2">
+                      {key === 'none' ? <Package className="h-4 w-4 text-muted-foreground" /> : <Factory className="h-4 w-4 text-primary" />}
+                      {group.name}
+                      <Badge variant="secondary" className="text-[10px] h-4 ml-1 px-1.5 font-medium">
+                        {groupItems.length}
+                      </Badge>
                     </span>
-                  ) : (
-                    <span>Comprar: <strong>{item.suggestedQuantity} {item.unit}</strong></span>
-                  )}
-                  <span>Atual: {item.currentQuantity}</span>
-                  <span>Mín: {item.minimumQuantity}</span>
-                  {item.productionNeed > 0 && !item.isPurchased && (
-                    <span className="text-primary">Prod: {item.productionNeed.toFixed(1)}</span>
-                  )}
+                  </div>
+
+                  <MobileList className="border-t-0 shadow-none">
+                    {groupItems.map((item) => (
+                      <MobileListItem
+                        key={item.stockItemId}
+                        className={cn(
+                          item.isUrgent && !item.isPurchased && "border-warning/50 bg-warning/5",
+                          selectedItems.has(item.stockItemId) && "bg-primary/5 border-primary/30",
+                          item.isPurchased && "bg-muted/50 border-muted opacity-60"
+                        )}
+                        onClick={() => !item.isPurchased && toggleSelectItem(item.stockItemId)}
+                      >
+                        <div className="flex items-center gap-2">
+                          {!item.isPurchased ? (
+                            <Checkbox
+                              checked={selectedItems.has(item.stockItemId)}
+                              onCheckedChange={() => toggleSelectItem(item.stockItemId)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          ) : (
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+                          )}
+                          <MobileListTitle
+                            className={cn(
+                              "flex-1",
+                              item.isPurchased && "line-through text-muted-foreground"
+                            )}
+                          >
+                            {item.name}
+                          </MobileListTitle>
+
+                          {item.isPurchased ? (
+                            <MobileListBadge variant="default" className="bg-emerald-100 text-emerald-700 border-emerald-200">
+                              Comprado
+                            </MobileListBadge>
+                          ) : item.isUrgent ? (
+                            <MobileListBadge variant="warning">Urgente</MobileListBadge>
+                          ) : item.isManual ? (
+                            <MobileListBadge variant="default" className="bg-blue-100 text-blue-700 border-blue-200">
+                              Na Lista
+                            </MobileListBadge>
+                          ) : null}
+
+                          {item.estimatedCost > 0 && !item.isPurchased && (
+                            <span className="text-sm font-semibold text-emerald-600">
+                              R$ {item.estimatedCost.toFixed(0)}
+                            </span>
+                          )}
+                        </div>
+
+                        <MobileListDetails className={cn("ml-6", item.isPurchased && "text-muted-foreground")}>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+                            {item.isPurchased ? (
+                              <span className="text-emerald-600 text-[11px]">
+                                Comprado: {item.orderedQuantity} {item.unit}
+                              </span>
+                            ) : (
+                              <span className="text-[11px]">Pedir: <strong className="text-primary">{item.suggestedQuantity} {item.unit}</strong></span>
+                            )}
+                            <span className="text-[11px]">Stock: {item.currentQuantity}</span>
+                            {item.productionNeed > 0 && !item.isPurchased && (
+                              <span className="text-primary text-[11px]">Produção: {item.productionNeed.toFixed(1)}</span>
+                            )}
+                          </div>
+                        </MobileListDetails>
+                      </MobileListItem>
+                    ))}
+                  </MobileList>
                 </div>
-              </MobileListDetails>
-            </MobileListItem>
-          ))}
-        </MobileList>
+              );
+            });
+          })()}
+        </div>
       )}
 
       {/* Order Confirmation Dialog */}
