@@ -272,6 +272,51 @@ export type Database = {
           },
         ]
       }
+      production_stage_executions: {
+        Row: {
+          created_at: string
+          finished_at: string | null
+          id: string
+          production_id: string
+          stage_id: string
+          started_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          production_id: string
+          stage_id: string
+          started_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          production_id?: string
+          stage_id?: string
+          started_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_stage_executions_production_id_fkey"
+            columns: ["production_id"]
+            isOneToOne: false
+            referencedRelation: "productions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_stage_executions_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "technical_sheet_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       production_step_executions: {
         Row: {
           completed: boolean
@@ -1362,7 +1407,13 @@ export type Database = {
       | "praca_quente"
       | "bar"
       forecast_order_status: "pending" | "in_progress" | "completed" | "cancelled"
-      production_status: "planned" | "in_progress" | "completed" | "cancelled" | "paused"
+      production_status:
+        | "requested"
+        | "planned"
+        | "in_progress"
+        | "completed"
+        | "cancelled"
+        | "paused"
       production_type: "insumo" | "final"
       purchase_status: "pending" | "ordered" | "delivered" | "cancelled"
       sale_component_type: "finished_production" | "stock_item" | "sale_product"
@@ -1515,7 +1566,14 @@ export const Constants = {
         "bar",
       ],
       forecast_order_status: ["pending", "in_progress", "completed", "cancelled"],
-      production_status: ["planned", "in_progress", "completed", "cancelled", "paused"],
+      production_status: [
+        "requested",
+        "planned",
+        "in_progress",
+        "completed",
+        "cancelled",
+        "paused",
+      ],
       production_type: ["insumo", "final"],
       purchase_status: ["pending", "ordered", "delivered", "cancelled"],
       sale_component_type: [

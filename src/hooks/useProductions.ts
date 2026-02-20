@@ -302,9 +302,9 @@ export function useProductions() {
         .single();
       if (error) throw error;
 
-      // If changing from 'planned' to 'in_progress', subtract stock
+      // If changing from 'planned' or 'requested' to 'in_progress', subtract stock
       if (
-        currentProduction?.status === 'planned' &&
+        (currentProduction?.status === 'planned' || currentProduction?.status === 'requested') &&
         updates.status === 'in_progress' &&
         currentProduction.technical_sheet
       ) {

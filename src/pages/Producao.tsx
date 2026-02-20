@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Factory, Search, Calendar as CalendarIcon, Play, CheckCircle2, Clock, Eye, ChevronLeft, ChevronRight, XCircle, ListChecks, Check, ChevronDown, Loader2, PauseCircle } from 'lucide-react';
+import { Factory, Search, Calendar as CalendarIcon, Play, CheckCircle2, Clock, Eye, ChevronLeft, ChevronRight, XCircle, ListChecks, Check, ChevronDown, Loader2, PauseCircle, TrendingUp } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { Input } from '@/components/ui/input';
@@ -40,7 +40,9 @@ import { useProductions, ProductionWithSheet, STATUS_LABELS, ProductionStatus } 
 import { useTechnicalSheets } from '@/hooks/useTechnicalSheets';
 import { useTechnicalSheetStages, StageWithSteps } from '@/hooks/useTechnicalSheetStages';
 import { useProductionStepExecution } from '@/hooks/useProductionStepExecution';
+import { useProductionStageExecution } from '@/hooks/useProductionStageExecution';
 import { ProductionExecutionDialog } from '@/components/production/ProductionExecutionDialog';
+import { ProductionReportDialog } from '@/components/production/ProductionReportDialog';
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, addDays, addWeeks, addMonths, addYears, subDays, subWeeks, subMonths, subYears, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -64,6 +66,7 @@ const PRACAS: { value: string; label: string }[] = [
 ];
 
 const statusConfig: Record<ProductionStatus, { label: string; icon: typeof CalendarIcon; variant: 'default' | 'warning' | 'success' | 'destructive' }> = {
+  requested: { label: 'Solicitada', icon: Clock, variant: 'warning' },
   planned: { label: 'Planejada', icon: CalendarIcon, variant: 'default' },
   in_progress: { label: 'Em andamento', icon: Play, variant: 'warning' },
   completed: { label: 'Concluída', icon: CheckCircle2, variant: 'success' },
@@ -84,6 +87,7 @@ export default function Producao() {
   const [actualQuantity, setActualQuantity] = useState('');
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [pracaFilter, setPracaFilter] = useState<PracaType>('all');
+  const [reportOpen, setReportOpen] = useState(false);
 
   // Period filter state
   const [periodType, setPeriodType] = useState<PeriodType>('week');
@@ -166,6 +170,7 @@ export default function Producao() {
   }, [productions, periodBoundaries, search, pracaFilter]);
 
   const producoesPorStatus = {
+    requested: filteredProducoes.filter(p => p.status === 'requested'),
     planned: filteredProducoes.filter(p => p.status === 'planned'),
     in_progress: filteredProducoes.filter(p => p.status === 'in_progress' || p.status === 'paused'),
     completed: filteredProducoes.filter(p => p.status === 'completed'),
@@ -469,6 +474,19 @@ export default function Producao() {
           />
         ) : (
           <div className="space-y-3">
+            {/* Solicitações */}
+            {producoesPorStatus.requested.length > 0 && (
+              <div>
+                <h3 className="font-medium mb-2 text-xs flex items-center gap-1">
+                  <Clock className="h-3 w-3 text-warning" />
+                  Solicitações ({producoesPorStatus.requested.length})
+                </h3>
+                <MobileList>
+                  {producoesPorStatus.requested.map(renderProducaoItem)}
+                </MobileList>
+              </div>
+            )}
+
             {/* Planejadas */}
             {producoesPorStatus.planned.length > 0 && (
               <div>
@@ -633,6 +651,7 @@ export default function Producao() {
           }
         }}
         isUpdating={updateProduction.isPending}
+        onOpenReport={() => setReportOpen(true)}
       />
 
       {/* Complete Production Dialog */}
@@ -704,6 +723,13 @@ export default function Producao() {
           }
         }}
       />
+
+      {/* Production Report Dialog */}
+      <ProductionReportDialog
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+        production={selectedProducao}
+      />
     </div>
   );
 }
@@ -717,6 +743,7 @@ function ProductionPreviewSheet({
   onComplete,
   onUpdateDate,
   isUpdating,
+  onOpenReport,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -725,6 +752,7 @@ function ProductionPreviewSheet({
   onComplete: () => void;
   onUpdateDate: (newDate: string) => Promise<void>;
   isUpdating: boolean;
+  onOpenReport: () => void;
 }) {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
@@ -741,6 +769,13 @@ function ProductionPreviewSheet({
     isStepCompleted,
     getCompletionPercentage,
   } = useProductionStepExecution(producao?.id);
+
+  const {
+    stageExecutions,
+    startStage,
+    finishStage,
+    getStageExecution,
+  } = useProductionStageExecution(producao?.id);
 
   const { updateProduction } = useProductions();
 
@@ -958,6 +993,35 @@ function ProductionPreviewSheet({
                             <Clock className="h-3 w-3" />{stage.duration_minutes}min
                           </span>
                         )}
+                        {producao.status === 'in_progress' && (
+                          <div className="flex gap-1 ml-2" onClick={(e) => e.stopPropagation()}>
+                            {!getStageExecution(stage.id)?.started_at ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-[10px] px-2 gap-1 border-primary/30 hover:bg-primary/5"
+                                onClick={() => startStage.mutate(stage.id)}
+                                disabled={startStage.isPending}
+                              >
+                                <Play className="h-3 w-3" /> Iniciar etapa
+                              </Button>
+                            ) : !getStageExecution(stage.id)?.finished_at ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-[10px] px-2 gap-1 border-success/30 hover:bg-success/5 text-success"
+                                onClick={() => finishStage.mutate(stage.id)}
+                                disabled={finishStage.isPending}
+                              >
+                                <Check className="h-3 w-3" /> Concluir etapa
+                              </Button>
+                            ) : (
+                              <Badge variant="outline" className="h-7 text-[10px] text-success border-success/30 bg-success/5">
+                                <Check className="h-3 w-3 mr-1" /> Etapa finalizada
+                              </Badge>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
@@ -1036,6 +1100,17 @@ function ProductionPreviewSheet({
 
         <DialogFooter className="gap-2">
           <div className="flex-1 flex gap-2">
+            {producao.status === 'completed' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onOpenReport}
+                className="gap-2"
+              >
+                <TrendingUp className="h-4 w-4" />
+                Relatório
+              </Button>
+            )}
             {producao.status === 'in_progress' && (
               <>
                 <Button
@@ -1077,6 +1152,15 @@ function ProductionPreviewSheet({
           </div>
 
           <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
+          {producao.status === 'requested' && (
+            <Button
+              onClick={() => updateProduction.mutate({ id: producao.id, status: 'planned' })}
+              className="gap-2"
+              disabled={updateProduction.isPending}
+            >
+              <Check className="h-4 w-4" />Confirmar Solicitação
+            </Button>
+          )}
           {producao.status === 'planned' && (
             <Button onClick={onStartProduction} className="gap-2">
               <Play className="h-4 w-4" />Iniciar
