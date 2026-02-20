@@ -109,6 +109,25 @@ export function useProductionStock() {
 
           remaining -= take;
         }
+
+        // IMPORTANT: If stock reaches 0 (or was already 0), ensure both batch and legacy fields are cleared
+        const { data: currentItem } = await supabase
+          .from('stock_items')
+          .select('current_quantity')
+          .eq('id', stockItemId)
+          .single();
+
+        if (currentItem && Number(currentItem.current_quantity) <= 0) {
+          await supabase
+            .from('item_expiry_dates' as any)
+            .update({ quantity: 0 } as any)
+            .eq('stock_item_id', stockItemId);
+
+          await supabase
+            .from('stock_items')
+            .update({ expiration_date: null })
+            .eq('id', stockItemId);
+        }
       }
 
       // 2. Add to production stock (upsert)

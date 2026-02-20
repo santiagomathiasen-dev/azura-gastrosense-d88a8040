@@ -34,6 +34,7 @@ import { StageDisplay } from '@/components/fichas/StageDisplay';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import type { ExtractedIngredient, RecipeData } from '@/hooks/useIngredientImport';
+import { supabase } from '@/integrations/supabase/client';
 
 const calcularCustoTotal = (sheet: TechnicalSheetWithIngredients) => {
   if (sheet.total_cost) return sheet.total_cost;
@@ -73,6 +74,7 @@ export default function Fichas() {
     minimumStock: '0',
     shelfLife: '',
     leadTime: '',
+    video_url: '',
   });
 
   // Stages for form
@@ -95,13 +97,14 @@ export default function Fichas() {
       minimumStock: '0',
       shelfLife: '',
       leadTime: '',
+      video_url: '',
     });
     setStages([]);
     setEditingSheet(null);
   };
 
   // Voice Import
-  const handleVoiceImport = async (items: ExtractedItem[]) => {
+  const handleVoiceImport = async (items: ExtractedItem[], recipeName?: string, preparationMethod?: string) => {
     if (isOwnerLoading || stockOwnerLoading) {
       toast.error('Aguarde o carregamento dos dados do usuário...');
       return;
@@ -110,8 +113,15 @@ export default function Fichas() {
 
     try {
       const ingredientStockIds: Map<string, string> = new Map();
+      const newlyCreatedStockItems: Map<string, string> = new Map();
 
       for (const ing of items) {
+        // Check newly created items first to avoid duplicate creation in this loop
+        if (newlyCreatedStockItems.has(ing.name.toLowerCase())) {
+          ingredientStockIds.set(ing.name, newlyCreatedStockItems.get(ing.name.toLowerCase())!);
+          continue;
+        }
+
         const existing = stockItems.find(
           item => item.name.toLowerCase() === ing.name.toLowerCase()
         );
@@ -119,45 +129,39 @@ export default function Fichas() {
         if (existing) {
           ingredientStockIds.set(ing.name, existing.id);
         } else {
-          const newItem = await new Promise<any>((resolve, reject) => {
-            createStockItem.mutate(
-              {
-                name: ing.name,
-                current_quantity: 0,
-                unit: ing.unit as StockUnit,
-                category: ing.category as StockCategory,
-                minimum_quantity: 0,
-              },
-              {
-                onSuccess: (data) => resolve(data),
-                onError: (err) => reject(err),
-              }
-            );
-          });
-          ingredientStockIds.set(ing.name, newItem.id);
+          try {
+            const newItem = await createStockItem.mutateAsync({
+              name: ing.name,
+              current_quantity: 0,
+              unit: ing.unit as StockUnit,
+              category: ing.category as StockCategory,
+              minimum_quantity: 0,
+            });
+
+            if (newItem?.id) {
+              ingredientStockIds.set(ing.name, newItem.id);
+              newlyCreatedStockItems.set(ing.name.toLowerCase(), newItem.id);
+            }
+          } catch (err) {
+            console.error(`Error creating stock item ${ing.name}:`, err);
+            // Continue with other items even if one fails
+          }
         }
       }
 
-      const newSheet = await new Promise<any>((resolve, reject) => {
-        createSheet.mutate(
-          {
-            name: 'Receita por Voz',
-            description: '',
-            yield_quantity: 1,
-            yield_unit: 'un',
-          },
-          {
-            onSuccess: (data) => resolve(data),
-            onError: (err) => reject(err),
-          }
-        );
+      const newSheet = await createSheet.mutateAsync({
+        name: recipeName || 'Receita por Voz',
+        description: '',
+        preparation_method: preparationMethod || null,
+        yield_quantity: 1,
+        yield_unit: 'un',
       });
 
       for (const ing of items) {
         const stockItemId = ingredientStockIds.get(ing.name);
         if (stockItemId) {
           await addIngredient.mutateAsync({
-            technical_sheet_id: newSheet.id,
+            technical_sheet_id: (newSheet as any).id,
             stock_item_id: stockItemId,
             quantity: ing.quantity,
             unit: ing.unit,
@@ -184,8 +188,14 @@ export default function Fichas() {
 
     try {
       const ingredientStockIds: Map<string, string> = new Map();
+      const newlyCreatedStockItems: Map<string, string> = new Map();
 
       for (const ing of items) {
+        if (newlyCreatedStockItems.has(ing.name.toLowerCase())) {
+          ingredientStockIds.set(ing.name, newlyCreatedStockItems.get(ing.name.toLowerCase())!);
+          continue;
+        }
+
         const existing = stockItems.find(
           item => item.name.toLowerCase() === ing.name.toLowerCase()
         );
@@ -193,47 +203,39 @@ export default function Fichas() {
         if (existing) {
           ingredientStockIds.set(ing.name, existing.id);
         } else {
-          const newItem = await new Promise<any>((resolve, reject) => {
-            createStockItem.mutate(
-              {
-                name: ing.name,
-                current_quantity: 0,
-                unit: ing.unit as StockUnit,
-                category: ing.category as StockCategory,
-                minimum_quantity: 0,
-              },
-              {
-                onSuccess: (data) => resolve(data),
-                onError: (err) => reject(err),
-              }
-            );
-          });
-          ingredientStockIds.set(ing.name, newItem.id);
+          try {
+            const newItem = await createStockItem.mutateAsync({
+              name: ing.name,
+              current_quantity: 0,
+              unit: ing.unit as StockUnit,
+              category: ing.category as StockCategory,
+              minimum_quantity: 0,
+            });
+
+            if (newItem?.id) {
+              ingredientStockIds.set(ing.name, newItem.id);
+              newlyCreatedStockItems.set(ing.name.toLowerCase(), newItem.id);
+            }
+          } catch (err) {
+            console.error(`Error creating stock item ${ing.name}:`, err);
+          }
         }
       }
 
-      const newSheet = await new Promise<any>((resolve, reject) => {
-        createSheet.mutate(
-          {
-            name: recipeInfo.recipeName || 'Receita Importada',
-            description: '',
-            preparation_method: recipeInfo.preparationMethod || null,
-            preparation_time: recipeInfo.preparationTime || null,
-            yield_quantity: recipeInfo.yieldQuantity || 1,
-            yield_unit: 'un',
-          },
-          {
-            onSuccess: (data) => resolve(data),
-            onError: (err) => reject(err),
-          }
-        );
+      const newSheet = await createSheet.mutateAsync({
+        name: recipeInfo.recipeName || 'Receita Importada',
+        description: '',
+        preparation_method: recipeInfo.preparationMethod || null,
+        preparation_time: recipeInfo.preparationTime || null,
+        yield_quantity: recipeInfo.yieldQuantity || 1,
+        yield_unit: 'un',
       });
 
       for (const ing of items) {
         const stockItemId = ingredientStockIds.get(ing.name);
         if (stockItemId) {
           await addIngredient.mutateAsync({
-            technical_sheet_id: newSheet.id,
+            technical_sheet_id: (newSheet as any).id,
             stock_item_id: stockItemId,
             quantity: ing.quantity,
             unit: ing.unit,
@@ -245,7 +247,53 @@ export default function Fichas() {
     } catch (error) {
       console.error('Error creating recipe from file:', error);
       toast.error('Erro ao criar receita');
-      throw error;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleExtractFromVideo = async () => {
+    if (!formData.video_url) {
+      toast.error('Insira a URL do vídeo primeiro');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('process-recipe-video', {
+        body: { videoUrl: formData.video_url },
+      });
+
+      if (error) throw error;
+
+      if (data.preparation_method) {
+        if (stages.length === 0) {
+          setStages([{
+            id: crypto.randomUUID(),
+            name: 'Preparo (IA)',
+            preparationMethod: data.preparation_method,
+            ingredients: [],
+            order_index: 0,
+          }]);
+        } else {
+          const newStages = [...stages];
+          newStages[0] = { ...newStages[0], preparationMethod: data.preparation_method };
+          setStages(newStages);
+        }
+
+        if (data.name && !formData.nome) {
+          setFormData(prev => ({ ...prev, nome: data.name }));
+        }
+
+        if (data.estimated_time && !formData.tempoPreparo) {
+          setFormData(prev => ({ ...prev, tempoPreparo: data.estimated_time.toString() }));
+        }
+
+        toast.success('Técnicas extraídas com sucesso!');
+      }
+    } catch (err) {
+      console.error('Error extracting from video:', err);
+      toast.error('Erro ao extrair técnicas do vídeo');
     } finally {
       setIsSaving(false);
     }
@@ -282,6 +330,7 @@ export default function Fichas() {
       minimumStock: (sheet.minimum_stock || 0).toString(),
       shelfLife: sheet.shelf_life_hours?.toString() || '',
       leadTime: sheet.lead_time_hours?.toString() || '',
+      video_url: sheet.video_url || '',
     });
 
     // Convert existing stages and ingredients to form format
@@ -377,6 +426,7 @@ export default function Fichas() {
           yield_quantity: formData.rendimento ? parseFloat(formData.rendimento) : 1,
           yield_unit: formData.unidadeRendimento,
           image_url: formData.image_url || null,
+          video_url: formData.video_url || null,
           minimum_stock: formData.minimumStock ? parseFloat(formData.minimumStock) : 0,
           production_type: formData.productionType,
           shelf_life_hours: formData.shelfLife ? parseInt(formData.shelfLife) : null,
@@ -403,6 +453,7 @@ export default function Fichas() {
           yield_quantity: formData.rendimento ? parseFloat(formData.rendimento) : 1,
           yield_unit: formData.unidadeRendimento,
           image_url: formData.image_url || null,
+          video_url: formData.video_url || null,
           minimum_stock: formData.minimumStock ? parseFloat(formData.minimumStock) : 0,
           production_type: formData.productionType,
           shelf_life_hours: formData.shelfLife ? parseInt(formData.shelfLife) : null,
@@ -679,6 +730,37 @@ export default function Fichas() {
                   </Card>
                 </div>
 
+                {selectedSheet.video_url && (
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Vídeo da Técnica</h4>
+                    <div className="aspect-video rounded-lg overflow-hidden border">
+                      {selectedSheet.video_url.includes('youtube.com') || selectedSheet.video_url.includes('youtu.be') ? (
+                        <iframe
+                          width="100%"
+                          height="100%"
+                          src={`https://www.youtube.com/embed/${selectedSheet.video_url.split('v=')[1] || selectedSheet.video_url.split('/').pop()}`}
+                          title="YouTube video player"
+                          frameBorder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        ></iframe>
+                      ) : (
+                        <div className="flex items-center justify-center h-full bg-muted">
+                          <a
+                            href={selectedSheet.video_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:underline flex items-center gap-2"
+                          >
+                            <FileText className="h-5 w-5" />
+                            Ver Vídeo (Instagram/Outros)
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Stage Display with ingredients organized by stage */}
                 <StageDisplay
                   stages={sheetStages}
@@ -723,14 +805,38 @@ export default function Fichas() {
                   bucket="technical-sheet-images"
                   size="lg"
                 />
-                <div className="flex-1 space-y-2">
-                  <Label htmlFor="nome">Nome da Receita *</Label>
-                  <Input
-                    id="nome"
-                    value={formData.nome}
-                    onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                    placeholder="Ex: Bolo de Chocolate"
-                  />
+                <div className="flex-1 space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="nome">Nome da Receita *</Label>
+                    <Input
+                      id="nome"
+                      value={formData.nome}
+                      onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                      placeholder="Ex: Bolo de Chocolate"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="video_url">URL do Vídeo (YouTube/Instagram)</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="video_url"
+                        value={formData.video_url}
+                        onChange={(e) => setFormData({ ...formData, video_url: e.target.value })}
+                        placeholder="https://..."
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={handleExtractFromVideo}
+                        disabled={isSaving || !formData.video_url}
+                      >
+                        {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Extrair do Vídeo'}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
 

@@ -70,20 +70,30 @@ serve(async (req) => {
 
     // LIST gestors
     if (req.method === "GET" || action === "list") {
-      const { data: gestors, error } = await admin
+      const { data: profiles, error: profileError } = await admin
         .from("profiles")
         .select("id, email, full_name, role, status_pagamento, created_at")
         .eq("role", "gestor")
         .is("gestor_id", null)
         .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("Error listing gestors:", error);
+      if (profileError) {
+        console.error("Error listing profiles:", profileError);
         return new Response(JSON.stringify({ error: "Erro ao listar gestores" }), {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      // Fetch last_sign_in_at for these users from auth.users
+      // Since we are using service role, we can do this
+      const gestors = await Promise.all((profiles || []).map(async (profile) => {
+        const { data: userData, error: userError } = await admin.auth.admin.getUserById(profile.id);
+        return {
+          ...profile,
+          last_sign_in_at: userData?.user?.last_sign_in_at || null,
+        };
+      }));
 
       return new Response(JSON.stringify({ gestors }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -140,7 +150,7 @@ serve(async (req) => {
         // Update profile to gestor role with status_pagamento = true
         const { error: profileError } = await admin
           .from("profiles")
-          .update({ 
+          .update({
             role: "gestor",
             status_pagamento: true,
             full_name: name.trim(),
@@ -163,9 +173,9 @@ serve(async (req) => {
           console.error("Invite link error (non-critical):", inviteError);
         }
 
-        return new Response(JSON.stringify({ 
-          success: true, 
-          message: "Gestor criado. Email de confirmação enviado." 
+        return new Response(JSON.stringify({
+          success: true,
+          message: "Gestor criado. Email de confirmação enviado."
         }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });

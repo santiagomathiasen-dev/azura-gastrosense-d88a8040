@@ -14,6 +14,7 @@ type ProductionPeriod = Database['public']['Enums']['production_period'];
 export type { Production, ProductionInsert, ProductionUpdate, ProductionStatus, ProductionPeriod };
 
 export const STATUS_LABELS: Record<ProductionStatus, string> = {
+  requested: 'Solicitada',
   planned: 'Planejada',
   in_progress: 'Em Andamento',
   completed: 'Concluída',

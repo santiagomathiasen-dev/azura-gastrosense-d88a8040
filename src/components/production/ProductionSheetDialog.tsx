@@ -14,6 +14,7 @@ import { useTechnicalSheetStages } from '@/hooks/useTechnicalSheetStages';
 import { StageDisplay } from '@/components/fichas/StageDisplay';
 import { ForecastProductionOrder } from '@/hooks/useForecastProductionOrders';
 import { Skeleton } from '@/components/ui/skeleton';
+import { parseSafeDate } from '@/hooks/useExpiryDates';
 import { Calculator, Clock, Users, AlertTriangle } from 'lucide-react';
 
 interface ProductionSheetDialogProps {
@@ -59,7 +60,7 @@ export function ProductionSheetDialog({ order, open, onOpenChange }: ProductionS
                                 {sheet?.name || 'Carregando...'}
                             </DialogTitle>
                             <DialogDescription>
-                                Ordem de Produção: {new Date(order.production_date).toLocaleDateString()}
+                                Ordem de Produção: {parseSafeDate(order.production_date).toLocaleDateString()}
                             </DialogDescription>
                         </div>
                         <Badge variant={

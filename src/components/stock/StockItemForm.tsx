@@ -24,7 +24,7 @@ import { CATEGORY_LABELS, UNIT_LABELS, type StockItem, type StockCategory, type 
 import { useSuppliers } from '@/hooks/useSuppliers';
 import { AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import { getNow } from '@/lib/utils';
-import { useExpiryDates } from '@/hooks/useExpiryDates';
+import { useExpiryDates, parseSafeDate } from '@/hooks/useExpiryDates';
 import { Badge } from '@/components/ui/badge';
 
 const formSchema = z.object({
@@ -122,8 +122,8 @@ export function StockItemForm({
   };
 
   const expirationDate = watch('expiration_date');
-  const isExpiringSoon = expirationDate && new Date(expirationDate) <= new Date(getNow().getTime() + 7 * 24 * 60 * 60 * 1000);
-  const isExpired = expirationDate && new Date(expirationDate) < getNow();
+  const isExpiringSoon = expirationDate && parseSafeDate(expirationDate) <= new Date(getNow().getTime() + 7 * 24 * 60 * 60 * 1000);
+  const isExpired = expirationDate && parseSafeDate(expirationDate) < getNow();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -280,10 +280,10 @@ export function StockItemForm({
               </Label>
 
               {/* Existing expiry dates */}
-              {expiryDates.length > 0 && (
+              {expiryDates.filter(ed => Number(ed.quantity) > 0).length > 0 && (
                 <div className="space-y-1 max-h-32 overflow-auto">
-                  {expiryDates.map((ed) => {
-                    const expDate = new Date(ed.expiry_date);
+                  {expiryDates.filter(ed => Number(ed.quantity) > 0).map((ed) => {
+                    const expDate = parseSafeDate(ed.expiry_date);
                     const now = getNow();
                     const daysUntil = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
                     const expired = daysUntil < 0;
@@ -292,7 +292,7 @@ export function StockItemForm({
                       <div
                         key={ed.id}
                         className={`flex items-center gap-2 p-2 rounded-lg text-xs border ${expired ? 'border-destructive/30 bg-destructive/5' :
-                            nearExpiry ? 'border-yellow-500/30 bg-yellow-500/5' : 'bg-muted/50'
+                          nearExpiry ? 'border-yellow-500/30 bg-yellow-500/5' : 'bg-muted/50'
                           }`}
                       >
                         <div className="flex-1 min-w-0">

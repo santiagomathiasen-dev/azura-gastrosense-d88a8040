@@ -23,6 +23,7 @@ import Gestores from "@/pages/Gestores";
 import Relatorios from "@/pages/Relatorios";
 import Perdas from "@/pages/Perdas";
 import PrevisaoVendas from "@/pages/PrevisaoVendas";
+import PaymentRequired from "@/pages/PaymentRequired";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -63,6 +64,7 @@ const App = () => (
                 <Route path="/perdas" element={<Perdas />} />
                 <Route path="/previsao-vendas" element={<PrevisaoVendas />} />
                 <Route path="/relatorios" element={<Relatorios />} />
+                <Route path="/payment-required" element={<PaymentRequired />} />
               </Route>
 
               {/* 404 */}

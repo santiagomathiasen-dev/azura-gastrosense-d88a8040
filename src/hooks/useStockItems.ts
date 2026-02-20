@@ -33,8 +33,8 @@ export const UNIT_LABELS: Record<StockUnit, string> = {
   dz: 'dz',
 };
 
-export function getStockStatus(currentQty: number, minimumQty: number): 'green' | 'yellow' | 'red' {
-  if (currentQty <= minimumQty) return 'red';
+export function getStockStatus(currentQty: number, minimumQty: number, isExpired?: boolean): 'green' | 'yellow' | 'red' {
+  if (isExpired || currentQty <= minimumQty) return 'red';
   if (currentQty <= minimumQty * 1.2) return 'yellow';
   return 'green';
 }
@@ -68,11 +68,13 @@ export function useStockItems() {
     mutationFn: async (item: Omit<StockItemInsert, 'user_id'>) => {
       if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
       if (!ownerId) throw new Error('Usuário não autenticado');
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('stock_items')
-        .insert({ ...item, user_id: ownerId });
+        .insert({ ...item, user_id: ownerId })
+        .select()
+        .single();
       if (error) throw error;
-      return null;
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['stock_items'] });

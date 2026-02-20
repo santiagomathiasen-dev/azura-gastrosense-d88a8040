@@ -69,10 +69,9 @@ export function useStockMovements(stockItemId?: string) {
 
       if (error) throw error;
 
-      // 2. Process deductions if any
-      if (deductions && deductions.length > 0) {
+      // 2. Process deductions or adjustments to sync batches
+      if (movement.type === 'exit' && deductions && deductions.length > 0) {
         for (const deduction of deductions) {
-          // Get current quantity first
           const { data: batch } = await supabase
             .from('item_expiry_dates' as any)
             .select('quantity')
@@ -82,14 +81,24 @@ export function useStockMovements(stockItemId?: string) {
           if (batch) {
             const currentQty = (batch as any).quantity;
             const newQty = Math.max(0, Number(currentQty) - deduction.quantity);
-            const { error: updateError } = await supabase
+            await supabase
               .from('item_expiry_dates' as any)
               .update({ quantity: newQty } as any)
               .eq('id', deduction.id);
-
-            if (updateError) throw updateError;
           }
         }
+      } else if (movement.type === 'adjustment' && movement.quantity === 0) {
+        // If adjusted to zero, clear ALL batches for this item
+        await supabase
+          .from('item_expiry_dates' as any)
+          .update({ quantity: 0 } as any)
+          .eq('stock_item_id', movement.stock_item_id);
+
+        // ALSO clear the legacy expiration_date in stock_items to prevent phantom alerts
+        await supabase
+          .from('stock_items')
+          .update({ expiration_date: null })
+          .eq('id', movement.stock_item_id);
       }
 
       return data;

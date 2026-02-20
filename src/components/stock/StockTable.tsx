@@ -17,6 +17,8 @@ import {
   getStockStatus,
   type StockCategory,
 } from '@/hooks/useStockItems';
+import { parseSafeDate } from '@/hooks/useExpiryDates';
+import { getNow } from '@/lib/utils';
 import {
   MobileList,
   MobileListItem,
@@ -98,7 +100,8 @@ export function StockTable({
       {items.map((item) => {
         const currentQty = Number(item.current_quantity);
         const minQty = Number(item.minimum_quantity);
-        const status = getStockStatus(currentQty, minQty);
+        const isExpired = currentQty > 0 && expiryMap[item.id] && parseSafeDate(expiryMap[item.id]) < getNow();
+        const status = getStockStatus(currentQty, minQty, !!isExpired);
         const unitLabel = UNIT_LABELS[item.unit as keyof typeof UNIT_LABELS];
         const categoryLabel = CATEGORY_LABELS[item.category as StockCategory];
         const isEditing = editingItemId === item.id;
@@ -169,9 +172,9 @@ export function StockTable({
             <div className="flex items-center gap-2">
               <MobileListTitle className="flex items-center gap-2">
                 {item.name}
-                {expiryMap[item.id] && (() => {
-                  const expiryDate = new Date(expiryMap[item.id]);
-                  const today = new Date();
+                {currentQty > 0 && expiryMap[item.id] && (() => {
+                  const expiryDate = parseSafeDate(expiryMap[item.id]);
+                  const today = getNow();
                   const diffTime = expiryDate.getTime() - today.getTime();
                   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 

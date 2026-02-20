@@ -10,6 +10,7 @@ export interface ExtractedIngredient {
   category: StockCategory;
   price?: number | null;
   supplier?: string | null;
+  expiration_date?: string | null;
   selected?: boolean;
 }
 
@@ -70,10 +71,11 @@ export function useIngredientImport() {
         return null;
       }
 
-      console.log(`Sending ${fileType} to extract-ingredients, base64 length: ${content.length}`);
+      const mimeType = file.type;
+      console.log(`Sending ${fileType} to extract-ingredients, mimeType: ${mimeType}, base64 length: ${content.length}`);
 
       const { data, error } = await supabase.functions.invoke('extract-ingredients', {
-        body: { fileType, content, extractRecipe },
+        body: { fileType, content, extractRecipe, mimeType },
       });
 
       console.log('Edge function response:', { data, error });
@@ -95,7 +97,7 @@ export function useIngredientImport() {
 
       setExtractedIngredients(ingredients);
       setSummary(data.summary || '');
-      
+
       // Extract recipe data if available
       const extractedRecipeData: RecipeData | undefined = (data.recipeName || data.preparationMethod) ? {
         recipeName: data.recipeName,
@@ -103,7 +105,7 @@ export function useIngredientImport() {
         yieldQuantity: data.yieldQuantity,
         preparationTime: data.preparationTime,
       } : undefined;
-      
+
       if (extractedRecipeData) {
         setRecipeData(extractedRecipeData);
       }

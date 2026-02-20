@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/select';
 import { type StockItem, UNIT_LABELS } from '@/hooks/useStockItems';
 import { type MovementType } from '@/hooks/useStockMovements';
-import { useExpiryDates } from '@/hooks/useExpiryDates';
+import { useExpiryDates, parseSafeDate } from '@/hooks/useExpiryDates';
 import { cn } from '@/lib/utils';
 
 interface StockMovementDialogProps {
@@ -139,7 +139,7 @@ export function StockMovementDialog({
               <div className="text-right">
                 <p className="text-[10px] text-muted-foreground uppercase font-bold">Próx. Vencimento</p>
                 <Badge variant="outline" className="text-[10px]">
-                  {new Date(availableBatches[0].expiry_date).toLocaleDateString()}
+                  {parseSafeDate(availableBatches[0].expiry_date).toLocaleDateString()}
                 </Badge>
               </div>
             )}
@@ -215,7 +215,7 @@ export function StockMovementDialog({
                         {batch.batch_name || "Lote s/ nome"}
                       </p>
                       <p className="text-[9px] text-muted-foreground uppercase">
-                        Venc: {new Date(batch.expiry_date).toLocaleDateString()}
+                        Venc: {parseSafeDate(batch.expiry_date).toLocaleDateString()}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">

@@ -32,16 +32,15 @@ export function IngredientConfirmationList({
       {ingredients.map((ingredient, index) => (
         <div
           key={index}
-          className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
-            ingredient.selected ? 'bg-muted/50 border-primary/30' : 'bg-muted/20 border-transparent opacity-60'
-          }`}
+          className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${ingredient.selected ? 'bg-muted/50 border-primary/30' : 'bg-muted/20 border-transparent opacity-60'
+            }`}
         >
           <Checkbox
             checked={ingredient.selected}
             onCheckedChange={() => onToggle(index)}
             className="mt-2"
           />
-          
+
           <div className="flex-1 space-y-2">
             {/* Nome do ingrediente */}
             <Input
@@ -50,7 +49,7 @@ export function IngredientConfirmationList({
               placeholder="Nome do ingrediente"
               className="font-medium"
             />
-            
+
             {/* Quantidade, Unidade, Categoria */}
             <div className="flex gap-2">
               <Input
@@ -60,7 +59,7 @@ export function IngredientConfirmationList({
                 placeholder="Qtd"
                 className="w-20"
               />
-              
+
               <Select
                 value={ingredient.unit}
                 onValueChange={(value) => onUpdate(index, { unit: value as StockUnit })}
@@ -76,7 +75,7 @@ export function IngredientConfirmationList({
                   ))}
                 </SelectContent>
               </Select>
-              
+
               <Select
                 value={ingredient.category}
                 onValueChange={(value) => onUpdate(index, { category: value as StockCategory })}
@@ -107,16 +106,23 @@ export function IngredientConfirmationList({
                   className="pl-8"
                 />
               </div>
-              
+
               <Input
                 value={ingredient.supplier ?? ''}
                 onChange={(e) => onUpdate(index, { supplier: e.target.value || null })}
                 placeholder="Fornecedor (opcional)"
                 className="flex-1"
               />
+
+              <Input
+                type="date"
+                value={ingredient.expiration_date || ''}
+                onChange={(e) => onUpdate(index, { expiration_date: e.target.value || null })}
+                className="w-36"
+              />
             </div>
           </div>
-          
+
           <Button
             variant="ghost"
             size="icon"

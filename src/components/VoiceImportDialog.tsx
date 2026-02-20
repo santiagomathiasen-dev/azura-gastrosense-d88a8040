@@ -47,15 +47,16 @@ export interface ExtractedItem {
   category: string;
   price?: number | null;
   supplier?: string | null;
+  expiration_date?: string | null;
 }
 
 interface VoiceImportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onImport: (items: ExtractedItem[]) => Promise<void>;
+  onImport: (items: ExtractedItem[], recipeName?: string, preparationMethod?: string) => Promise<void>;
   title?: string;
   description?: string;
-  mode: 'ingredients' | 'recipe';
+  mode: 'ingredients' | 'recipe' | 'products';
 }
 
 type Step = 'listening' | 'processing' | 'done';
@@ -75,6 +76,8 @@ export function VoiceImportDialog({
   const [transcript, setTranscript] = useState('');
   const [finalTranscript, setFinalTranscript] = useState('');
   const [extractedItems, setExtractedItems] = useState<ExtractedItem[]>([]);
+  const [extractedRecipeName, setExtractedRecipeName] = useState<string | undefined>();
+  const [extractedPrepMethod, setExtractedPrepMethod] = useState<string | undefined>();
   const [isSaving, setIsSaving] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -96,6 +99,8 @@ export function VoiceImportDialog({
     setTranscript('');
     setFinalTranscript('');
     setExtractedItems([]);
+    setExtractedRecipeName(undefined);
+    setExtractedPrepMethod(undefined);
     setIsSaving(false);
     clearSilenceTimeout();
     hasSpokenRef.current = false;
@@ -258,10 +263,19 @@ export function VoiceImportDialog({
     setStep('processing');
 
     try {
+      const now = new Date();
+      const dateContext = `Data atual: ${now.toLocaleDateString('pt-BR')} (${now.toLocaleDateString('pt-BR', { weekday: 'long' })}).`;
+
       const systemPrompt = mode === 'ingredients'
-        ? `Você é um assistente que extrai ingredientes de texto falado em português brasileiro.
-Retorne SOMENTE um array JSON válido com os ingredientes extraídos.
-Cada ingrediente deve ter: name, quantity (número), unit (kg, g, l, ml, unidade, caixa, dz), category (laticinios, secos_e_graos, hortifruti, carnes_e_peixes, embalagens, limpeza, outros).
+        ? `${dateContext}
+Você é um assistente que extrai ingredientes e suas validades de texto falado em português brasileiro.
+Retorne SOMENTE um array JSON válido com os itens extraídos.
+Cada item deve ter: name, quantity (número), unit (kg, g, l, ml, unidade, caixa, dz), category (laticinios, secos_e_graos, hortifruti, carnes_e_peixes, embalagens, limpeza, outros), e expiration_date (no formato YYYY-MM-DD ou null).
+
+IMPORTANTE para validades:
+- Se falarem "validade amanhã", calcule a data baseada na data atual fornecida.
+- Se falarem "vencimento 10 de maio", use o ano corrente ou o próximo se já passou.
+- Formatos aceitos para expiration_date no JSON: "YYYY-MM-DD".
 
 IMPORTANTE para números decimais:
 - Reconheça "vírgula" como separador decimal: "125 vírgula 033" = 125.033
@@ -269,17 +283,25 @@ IMPORTANTE para números decimais:
 - Exemplos: "dois vírgula cinco kg" = 2.5, "três vírgula dois litros" = 3.2
 
 Se não conseguir determinar quantidade, use 1. Se não conseguir determinar unidade, use "unidade".
-Exemplo: [{"name": "Farinha de trigo", "quantity": 5, "unit": "kg", "category": "secos_e_graos"}]`
-        : `Você é um assistente que extrai ingredientes de receitas de texto falado em português brasileiro.
-Retorne SOMENTE um array JSON válido com os ingredientes extraídos.
-Cada ingrediente deve ter: name, quantity (número), unit (kg, g, l, ml, unidade, caixa, dz), category (laticinios, secos_e_graos, hortifruti, carnes_e_peixes, embalagens, limpeza, outros).
+Exemplo: [{"name": "Farinha", "quantity": 5, "unit": "kg", "category": "secos_e_graos", "expiration_date": "2026-05-10"}]`
+        : mode === 'recipe'
+          ? `${dateContext}
+Você é um assistente que extrai ingredientes de receitas de texto falado em português brasileiro.
+Retorne SOMENTE um objeto JSON válido com a estrutura:
+{
+  "recipeName": "nome da receita extraído",
+  "preparationMethod": "passo a passo detalhado",
+  "ingredients": [{"name": string, "quantity": number, "unit": string, "category": string}]
+}`
+          : `Você é um assistente que extrai produtos para venda de texto falado em português brasileiro.
+Retorne SOMENTE um array JSON válido com os produtos extraídos.
+Cada produto deve ter: name (nome do produto), price (número decimal para o preço de venda).
 
-IMPORTANTE para números decimais:
-- Reconheça "vírgula" como separador decimal: "125 vírgula 033" = 125.033
-- Aceite formato brasileiro: "125,033" = 125.033
-- Exemplos: "dois vírgula cinco kg" = 2.5, "três vírgula dois litros" = 3.2
+Exemplo: [{"name": "Kit Festa 1", "price": 150.00}, {"name": "Bolo Chocolate", "price": 85.50}]
 
-Se não conseguir determinar quantidade, use 1. Se não conseguir determinar unidade, use "unidade".`;
+IMPORTANTE:
+- Extraia o preço corretamente mesmo se falarem "reais" ou símbolos.
+- Se não houver preço, use null.`;
 
       const { data, error } = await supabase.functions.invoke('process-voice-text', {
         body: {
@@ -297,6 +319,8 @@ Se não conseguir determinar quantidade, use 1. Se não conseguir determinar uni
       }
 
       const items: ExtractedItem[] = data.ingredients || [];
+      const recipeName = data.recipeName || undefined;
+      const preparationMethod = data.preparationMethod || undefined;
 
       if (items.length === 0) {
         toast.error('Não foi possível extrair ingredientes. Tente novamente.');
@@ -306,10 +330,12 @@ Se não conseguir determinar quantidade, use 1. Se não conseguir determinar uni
       }
 
       setExtractedItems(items);
+      setExtractedRecipeName(recipeName);
+      setExtractedPrepMethod(preparationMethod);
       setStep('done');
 
       // Auto-import without confirmation
-      await handleImport(items);
+      await handleImport(items, recipeName, preparationMethod);
     } catch (error) {
       console.error('Error processing voice input:', error);
       toast.error('Erro ao processar. Tente novamente.');
@@ -317,10 +343,10 @@ Se não conseguir determinar quantidade, use 1. Se não conseguir determinar uni
     }
   };
 
-  const handleImport = async (items: ExtractedItem[]) => {
+  const handleImport = async (items: ExtractedItem[], recipeName?: string, preparationMethod?: string) => {
     setIsSaving(true);
     try {
-      await onImport(items);
+      await onImport(items, recipeName, preparationMethod);
       toast.success(`${items.length} ingrediente(s) cadastrado(s)!`);
       handleClose();
     } catch (error) {

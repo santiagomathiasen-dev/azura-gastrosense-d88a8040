@@ -2,6 +2,17 @@ import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { getNow } from '@/lib/utils';
+
+/**
+ * Parses a YYYY-MM-DD string into a Date object at local time midnight.
+ * This prevents timezone shifts (e.g., Brazil UTC-3 seeing the previous day).
+ */
+export function parseSafeDate(dateStr: string): Date {
+    if (!dateStr) return new Date();
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+}
 
 export interface ExpiryDate {
     id: string;
@@ -116,15 +127,15 @@ export function useExpiryDates(stockItemId?: string) {
 
     // Get all expiry alerts (items near or past expiry)
     const getExpiryAlerts = (allDates: ExpiryDate[], daysThreshold = 7) => {
-        const now = new Date();
-        const thresholdDate = new Date();
+        const now = getNow();
+        const thresholdDate = new Date(now);
         thresholdDate.setDate(now.getDate() + daysThreshold);
 
         return allDates.filter(d => {
-            const expiry = new Date(d.expiry_date);
+            const expiry = parseSafeDate(d.expiry_date);
             return expiry <= thresholdDate;
         }).map(d => {
-            const expiry = new Date(d.expiry_date);
+            const expiry = parseSafeDate(d.expiry_date);
             const daysUntil = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
             return {
                 ...d,
@@ -192,17 +203,17 @@ export function useAllExpiryAlerts(daysThreshold = 7) {
         },
     });
 
-    const now = new Date();
-    const thresholdDate = new Date();
+    const now = getNow();
+    const thresholdDate = new Date(now);
     thresholdDate.setDate(now.getDate() + daysThreshold);
 
     const alerts = allExpiryDates
         .filter(d => {
-            const expiry = new Date(d.expiry_date);
-            return expiry <= thresholdDate;
+            const expiry = parseSafeDate(d.expiry_date);
+            return expiry <= thresholdDate && Number(d.quantity) > 0;
         })
         .map(d => {
-            const expiry = new Date(d.expiry_date);
+            const expiry = parseSafeDate(d.expiry_date);
             const daysUntil = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
             return {
                 ...d,

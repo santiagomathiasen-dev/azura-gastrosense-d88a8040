@@ -50,6 +50,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 import { useSalesForecasts } from '@/hooks/useSalesForecasts';
 import { useForecastExplosion } from '@/hooks/useForecastExplosion';
+import { parseSafeDate } from '@/hooks/useExpiryDates';
 import {
     useForecastProductionOrders,
     PRACA_LABELS,
@@ -347,11 +348,11 @@ function ProductionOrdersTab() {
         }
     };
 
-    const nextStatus = (current: string) => {
+    const nextStatus = (current: string): 'pending' | 'in_progress' | 'completed' | 'cancelled' => {
         switch (current) {
             case 'pending': return 'in_progress';
             case 'in_progress': return 'completed';
-            default: return current;
+            default: return current as any;
         }
     };
 
@@ -466,7 +467,7 @@ function ProductionOrdersTab() {
                                                     <ArrowRight className="h-3 w-3" />
                                                     <span>
                                                         Consumo:{' '}
-                                                        {format(new Date(order.target_consumption_date + 'T12:00:00'), 'dd/MM')}
+                                                        {format(parseSafeDate(order.target_consumption_date), 'dd/MM')}
                                                     </span>
                                                 </div>
                                             </div>

@@ -767,7 +767,7 @@ export default function ProdutosVenda() {
         onImport={handleVoiceImport}
         title="Falar Produtos"
         description="Fale os nomes e preços dos produtos. Ex: 'Kit festa 150 reais, Bolo decorado 80 reais'"
-        mode="ingredients"
+        mode="products"
       />
 
       {/* AI Import Dialog */}

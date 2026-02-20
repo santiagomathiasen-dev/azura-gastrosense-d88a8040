@@ -27,6 +27,7 @@ export interface ExtractedIngredient {
   price?: number | null;
   supplier?: string | null;
   minimum_quantity?: number | null;
+  expiration_date?: string | null;
   selected?: boolean;
 }
 
@@ -138,6 +139,7 @@ export function IngredientFileImportDialog({
         body: {
           fileType,
           content,
+          mimeType: file.type,
           extractRecipe: false
         },
       });
@@ -380,6 +382,15 @@ export function IngredientFileImportDialog({
                                 ))}
                               </SelectContent>
                             </Select>
+                          </div>
+                          <div className="col-span-3 mt-2">
+                            <Label className="text-xs text-muted-foreground">Validade</Label>
+                            <Input
+                              type="date"
+                              value={ing.expiration_date || ''}
+                              onChange={(e) => updateIngredient(index, { expiration_date: e.target.value })}
+                              className="h-8"
+                            />
                           </div>
                         </div>
                       </div>

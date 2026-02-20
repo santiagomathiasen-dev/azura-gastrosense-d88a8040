@@ -9,6 +9,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { parseSafeDate } from '@/hooks/useExpiryDates';
 
 interface ReceitaIngrediente {
   id: string;
@@ -113,7 +114,7 @@ export function ProductionPreviewDialog({
                 <div>
                   <p className="text-muted-foreground">Data</p>
                   <p className="font-medium">
-                    {new Date(producao.dataAgendada).toLocaleDateString('pt-BR')}
+                    {parseSafeDate(producao.dataAgendada).toLocaleDateString('pt-BR')}
                   </p>
                 </div>
                 <div>

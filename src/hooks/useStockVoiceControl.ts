@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import type { StockItem } from './useStockItems';
 import { addDays, format, isValid } from 'date-fns';
 import { getNow } from '@/lib/utils';
@@ -230,7 +231,7 @@ export function useStockVoiceControl({ stockItems, onQuantityUpdate, onExpiryUpd
     const recognition = recognitionRef.current;
     if (!recognition) return;
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
+    recognition.onresult = async (event: SpeechRecognitionEvent) => {
       let finalTranscript = '';
       let interimTranscript = '';
 
@@ -243,71 +244,63 @@ export function useStockVoiceControl({ stockItems, onQuantityUpdate, onExpiryUpd
         }
       }
 
-      // Reset timeout on every speech event (user is still talking)
+      // Reset timeout on every speech event
       resetVoiceTimeout();
-
       setTranscript(finalTranscript || interimTranscript);
 
-      if (finalTranscript) {
+      if (event.results[event.results.length - 1].isFinal && finalTranscript.trim()) {
         const cleanFinal = finalTranscript.toLowerCase().trim();
 
-        // If we have an active item, parse quantity/unit OR date
-        if (activeItemId) {
-          const item = stockItems.find(i => i.id === activeItemId);
-          if (!item) return;
+        // Stop listening to process with AI
+        stopListening();
+        toast.info('Processando áudio com IA...');
 
-          if (cleanFinal.includes('validade') || cleanFinal.includes('vencimento') || cleanFinal.includes('vence') || cleanFinal.includes('dia')) {
-            const date = parseDate(cleanFinal);
-            if (date && onExpiryUpdate) {
-              const formattedDate = format(date, 'yyyy-MM-dd');
-              onExpiryUpdate(activeItemId, formattedDate);
-              toast.success(`${item.name}: validade atualizada para ${format(date, 'dd/MM/yyyy')}`);
-            } else {
-              toast.error('Não entendi a data de validade.');
-            }
-          } else {
-            const quantity = parseQuantity(cleanFinal);
-            const unit = parseUnit(cleanFinal);
-            if (quantity !== null) {
-              onQuantityUpdate(activeItemId, quantity);
-              const displayUnit = unit || item.unit;
-              toast.success(`${item.name}: ${quantity} ${displayUnit}`);
-            } else {
-              toast.error('Não entendi a quantidade.');
-            }
+        try {
+          const now = new Date();
+          const dateContext = `Data atual: ${now.toLocaleDateString('pt-BR')} (${now.toLocaleDateString('pt-BR', { weekday: 'long' })}).`;
+
+          const systemPrompt = `${dateContext}
+Você é um assistente que atualiza itens de estoque a partir de áudio.
+Determine o item mencionado e extraia a quantidade (que deve ser número decimal caso falarem "vírgula") e a validade (YYYY-MM-DD ou null).
+Retorne APENAS um array JSON: [{"name": string, "quantity": number, "expiration_date": string | null}]`;
+
+          const { data, error } = await supabase.functions.invoke('process-voice-text', {
+            body: { text: cleanFinal, systemPrompt }
+          });
+
+          if (error || !data.ingredients || data.ingredients.length === 0) {
+            throw new Error('Não consegui entender o comando.');
           }
-        } else {
-          const item = findItemByVoice(cleanFinal);
+
+          const extracted = data.ingredients[0];
+
+          // Match extracted item with stockItems
+          const item = activeItemId
+            ? stockItems.find(i => i.id === activeItemId)
+            : findItemByVoice(extracted.name);
+
           if (item) {
-            if (cleanFinal.includes('validade') || cleanFinal.includes('vencimento') || cleanFinal.includes('vence')) {
-              const date = parseDate(cleanFinal);
-              if (date && onExpiryUpdate) {
-                const formattedDate = format(date, 'yyyy-MM-dd');
-                onExpiryUpdate(item.id, formattedDate);
-                toast.success(`${item.name}: validade atualizada para ${format(date, 'dd/MM/yyyy')}`);
-              } else {
-                setActiveItemId(item.id);
-                toast.info(`${item.name} selecionado. Diga a data de validade.`);
-              }
-            } else {
-              const quantity = parseQuantity(cleanFinal);
-              const unit = parseUnit(cleanFinal);
-              if (quantity !== null) {
-                onQuantityUpdate(item.id, quantity);
-                const displayUnit = unit || item.unit;
-                toast.success(`${item.name}: ${quantity} ${displayUnit}`);
-              } else {
-                setActiveItemId(item.id);
-                toast.info(`${item.name} selecionado. Diga a quantidade.`);
-              }
+            // Update quantity if present
+            if (extracted.quantity !== null && extracted.quantity !== undefined) {
+              onQuantityUpdate(item.id, extracted.quantity);
+              toast.success(`${item.name}: ${extracted.quantity} ${item.unit}`);
+            }
+
+            // Update expiry if present
+            if (extracted.expiration_date && onExpiryUpdate) {
+              onExpiryUpdate(item.id, extracted.expiration_date);
+              toast.success(`${item.name}: validade para ${new Date(extracted.expiration_date + 'T12:00:00').toLocaleDateString('pt-BR')}`);
             }
           } else {
-            toast.error('Não entendi. Diga o nome do ingrediente e a quantidade ou validade.');
+            toast.error(`Não encontrei o item "${extracted.name}"`);
           }
+        } catch (err) {
+          console.error('Erro no processamento de voz AI:', err);
+          toast.error('Erro ao processar áudio. Tente novamente.');
+        } finally {
+          setActiveItemId(null);
+          setTranscript('');
         }
-        // Don't stop listening in continuous mode - let the timeout handle it
-        setActiveItemId(null);
-        setTranscript('');
       }
     };
 

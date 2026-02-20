@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Trash2, Plus, Calendar, Package, Hash, Save } from 'lucide-react';
-import { useExpiryDates } from '@/hooks/useExpiryDates';
+import { useExpiryDates, parseSafeDate } from '@/hooks/useExpiryDates';
 import { toast } from 'sonner';
 
 interface BatchManagementDialogProps {
@@ -109,13 +109,13 @@ export function BatchManagementDialog({
                             </div>
                         ) : (
                             <div className="grid gap-2">
-                                {expiryDates.map((batch) => (
+                                {expiryDates.filter(b => Number(b.quantity) > 0).map((batch) => (
                                     <div key={batch.id} className="flex items-center gap-3 p-3 bg-background rounded-lg border shadow-sm group">
                                         <div className="flex-1 grid grid-cols-12 gap-2">
                                             <div className="col-span-5 flex items-center gap-2">
                                                 <Calendar className="h-3 w-3 text-muted-foreground" />
                                                 <span className="font-medium text-sm">
-                                                    {new Date(batch.expiry_date).toLocaleDateString('pt-BR')}
+                                                    {parseSafeDate(batch.expiry_date).toLocaleDateString('pt-BR')}
                                                 </span>
                                             </div>
                                             <div className="col-span-4 flex items-center gap-2 truncate">

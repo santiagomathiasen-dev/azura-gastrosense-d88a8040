@@ -16,7 +16,7 @@ serve(async (req) => {
       throw new Error("GEMINI_API_KEY is not configured");
     }
 
-    const { content, fileType, extractRecipe } = await req.json();
+    const { content, fileType, extractRecipe, mimeType: customMimeType } = await req.json();
 
     if (!content) {
       return new Response(
@@ -30,35 +30,43 @@ serve(async (req) => {
 Sua tarefa é extrair itens, produtos ou ingredientes de documentos (PDFs, fotos, textos).
 
 REGRAS CRÍTICAS:
-1. Analise INTEGRALMENTE o documento, percorrendo todas as páginas e colunas.
-2. Identifique nomes de produtos, quantidades, unidades de medida e preços.
-3. Se for uma Nota Fiscal (NF), extraia os itens listados.
+1. Analise INTEGRALMENTE o documento, percorrendo todas as páginas e colunas (especialmente em notas fiscais e listas longas).
+2. Identifique nomes de produtos, quantidades, unidades de medida, preços unitários ou totais e, SE DISPONÍVEL, a data de validade/vencimento.
+3. Se for uma Nota Fiscal (NF), extraia cada item da lista de produtos.
 4. Categorias válidas: laticinios, secos_e_graos, hortifruti, carnes_e_peixes, embalagens, limpeza, outros.
 5. Unidades permitidas: kg, g, L, ml, unidade, caixa, dz.
 6. Retorne SEMPRE um JSON válido.
-7. No campo "summary", descreva brevemente o que encontrou ou por que não conseguiu extrair (se for o caso).`;
+7. No campo "summary", descreva brevemente o que encontrou.`;
 
     let userPrompt = "";
     if (extractRecipe) {
-      userPrompt = `Extraia os dados da receita e produtos para este JSON:
+      userPrompt = `Extraia os dados da receita e cada ingrediente individual para este JSON:
 {
-  "recipeName": "nome",
-  "preparationMethod": "passo a passo",
-  "preparationTime": minutos,
-  "yieldQuantity": porções,
-  "ingredients": [{"name": string, "quantity": number, "unit": string, "category": string, "price": number, "supplier": string, "minimum_quantity": number}],
-  "summary": "resumo do que foi lido"
+  "recipeName": "nome da receita",
+  "preparationMethod": "passo a passo detalhado",
+  "preparationTime": minutos (número),
+  "yieldQuantity": porções (número),
+  "ingredients": [{"name": string, "quantity": number, "unit": string, "category": string, "price": number, "supplier": string, "minimum_quantity": number, "expiration_date": "YYYY-MM-DD" ou null}],
+  "summary": "resumo do que foi extraído"
 }`;
     } else {
-      userPrompt = `Extraia todos os itens encontrados no documento para este JSON:
+      userPrompt = `Extraia todos os itens e produtos encontrados no documento para este JSON:
 {
-  "ingredients": [{"name": string, "quantity": number, "unit": string, "category": string, "price": number, "supplier": string, "minimum_quantity": number}],
-  "summary": "resumo do que foi lido"
+  "ingredients": [{"name": string, "quantity": number, "unit": string, "category": string, "price": number, "supplier": string, "minimum_quantity": number, "expiration_date": "YYYY-MM-DD" ou null}],
+  "summary": "resumo do que foi extraído"
 }`;
     }
 
-    // Map file types to mime types
-    const mimeType = fileType === "pdf" ? "application/pdf" : (fileType === "image" ? "image/jpeg" : "text/plain");
+    // Determine MIME type
+    let mimeType = customMimeType;
+    if (!mimeType) {
+      if (fileType === "pdf") mimeType = "application/pdf";
+      else if (fileType === "image") mimeType = "image/jpeg";
+      else if (fileType === "text" || fileType === "excel") mimeType = "text/plain";
+      else mimeType = "text/plain";
+    }
+
+    console.log(`Analyzing file with mimeType: ${mimeType}`);
 
     const geminiBody = {
       system_instruction: {
@@ -68,7 +76,7 @@ REGRAS CRÍTICAS:
         {
           parts: [
             mimeType === "text/plain"
-              ? { text: `Documento para analisar:\n${content}\n\n${userPrompt}` }
+              ? { text: `Documento para analisar (pode conter texto ou base64):\n${content}\n\n${userPrompt}` }
               : {
                 inlineData: {
                   mimeType,
@@ -80,7 +88,7 @@ REGRAS CRÍTICAS:
         },
       ],
       generationConfig: {
-        temperature: 0,
+        temperature: 0.1,
         responseMimeType: "application/json",
       },
       safetySettings: [
@@ -92,7 +100,7 @@ REGRAS CRÍTICAS:
     };
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -118,22 +126,16 @@ REGRAS CRÍTICAS:
       return new Response(
         JSON.stringify({
           ingredients: [],
-          summary: `A IA não conseguiu processar o documento. Motivo: ${finishReason}. Tente novamente.`
+          summary: `A IA não conseguiu processar o documento. Motivo: ${finishReason}.`
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log("Raw response preview:", assistantMessage.slice(0, 150));
-
     let result: any = { ingredients: [], summary: "" };
 
     try {
-      let cleaned = assistantMessage.trim();
-      if (cleaned.startsWith("```")) {
-        cleaned = cleaned.replace(/^```[a-z]*\n/i, "").replace(/\n```$/i, "").trim();
-      }
-      const parsed = JSON.parse(cleaned);
+      const parsed = JSON.parse(assistantMessage.trim());
       result = {
         ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : (Array.isArray(parsed) ? parsed : []),
         summary: parsed.summary || "",
@@ -143,8 +145,7 @@ REGRAS CRÍTICAS:
         yieldQuantity: parsed.yieldQuantity,
       };
     } catch (e) {
-      console.error("Parse failure:", e);
-      // Regex fallback
+      console.error("Parse failure, attempting regex recovery");
       const match = assistantMessage.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
       if (match) {
         try {
@@ -152,9 +153,13 @@ REGRAS CRÍTICAS:
           result = {
             ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : (Array.isArray(parsed) ? parsed : []),
             summary: parsed.summary || "Recuperado via regex",
+            recipeName: parsed.recipeName,
+            preparationMethod: parsed.preparationMethod,
+            preparationTime: parsed.preparationTime,
+            yieldQuantity: parsed.yieldQuantity,
           };
         } catch (e2) {
-          result.summary = "Erro ao processar formato da resposta.";
+          result.summary = "Erro de formato na resposta da IA.";
         }
       }
     }
@@ -186,6 +191,7 @@ REGRAS CRÍTICAS:
           price: ing.price ?? ing.preco ?? ing.valor ?? null,
           supplier: ing.supplier ?? ing.fornecedor ?? null,
           minimum_quantity: ing.minimum_quantity ?? ing.estoque_minimo ?? null,
+          expiration_date: ing.expiration_date ?? ing.validade ?? ing.vencimento ?? null,
         };
       })
       .filter(Boolean);

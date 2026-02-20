@@ -94,19 +94,19 @@ export function formatCurrency(value: number): string {
 }
 
 /**
- * Get the current date/time in Buenos Aires timezone (America/Argentina/Buenos_Aires).
+ * Get the current date/time in Brasília timezone (America/Sao_Paulo).
  * This ensures consistent date handling regardless of the user's browser timezone.
  */
 export function getNow(): Date {
   const now = new Date();
-  const buenosAiresTime = new Date(
-    now.toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' })
+  const brasiliaTime = new Date(
+    now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' })
   );
-  return buenosAiresTime;
+  return brasiliaTime;
 }
 
 /**
- * Get today's date as YYYY-MM-DD string in Buenos Aires timezone.
+ * Get today's date as YYYY-MM-DD string in Brasília timezone.
  */
 export function getTodayStr(): string {
   const now = getNow();

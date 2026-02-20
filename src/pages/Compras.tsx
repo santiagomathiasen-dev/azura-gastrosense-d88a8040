@@ -24,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { parseSafeDate } from '@/hooks/useExpiryDates';
 import {
   Select,
   SelectContent,
@@ -645,7 +646,8 @@ export default function Compras() {
 
                   {item.isPurchased ? (
                     <span className="text-emerald-600">
-                      Comprado: <strong>{item.orderedQuantity} {item.unit}</strong>
+                      Comprado: {formatQuantity(Number(item.ordered_quantity))} {item.stock_item?.unit}
+                      {item.order_date && ` em ${parseSafeDate(item.order_date).toLocaleDateString('pt-BR')}`}
                     </span>
                   ) : (
                     <span>Comprar: <strong>{item.suggestedQuantity} {item.unit}</strong></span>

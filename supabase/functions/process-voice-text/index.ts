@@ -73,6 +73,8 @@ serve(async (req) => {
 
     // Extract JSON array from the response with cleaning and recovery
     let ingredients: any[] = [];
+    let recipeName: string | null = null;
+    let preparationMethod: string | null = null;
     try {
       let cleanedMessage = assistantMessage.trim();
       if (cleanedMessage.startsWith("```")) {
@@ -81,6 +83,8 @@ serve(async (req) => {
 
       const parsed = JSON.parse(cleanedMessage);
       ingredients = Array.isArray(parsed) ? parsed : (parsed.ingredients || []);
+      recipeName = parsed.recipeName || null;
+      preparationMethod = parsed.preparationMethod || null;
     } catch (parseError) {
       console.error("Parse error, trying regex recovery:", parseError);
       try {
@@ -88,6 +92,8 @@ serve(async (req) => {
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
           ingredients = Array.isArray(parsed) ? parsed : (parsed.ingredients || []);
+          recipeName = parsed.recipeName || null;
+          preparationMethod = parsed.preparationMethod || null;
         }
       } catch (e) {
         console.error("Regex recovery failed:", e);
@@ -123,12 +129,17 @@ serve(async (req) => {
           category: validCategories.includes(categoryRaw) ? categoryRaw : "outros",
           price: ing.price ?? ing.preco ?? null,
           supplier: ing.supplier ?? ing.fornecedor ?? null,
+          expiration_date: ing.expiration_date || ing.validade || null,
         };
       })
       .filter(Boolean);
 
     return new Response(
-      JSON.stringify({ ingredients: normalizedIngredients }),
+      JSON.stringify({
+        ingredients: normalizedIngredients,
+        recipeName: recipeName,
+        preparationMethod: preparationMethod
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {

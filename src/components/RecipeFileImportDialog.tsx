@@ -38,12 +38,12 @@ export function RecipeFileImportDialog({
   const [isProcessing, setIsProcessing] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>('');
-  
+
   // Extracted data
   const [recipeData, setRecipeData] = useState<RecipeData>({});
   const [ingredients, setIngredients] = useState<ExtractedIngredient[]>([]);
   const [summary, setSummary] = useState('');
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -78,7 +78,7 @@ export function RecipeFileImportDialog({
       'application/pdf',
       'text/plain',
     ];
-    
+
     if (!validTypes.includes(file.type)) {
       toast.error('Tipo de arquivo não suportado. Use imagem, PDF ou texto.');
       return;
@@ -122,9 +122,10 @@ export function RecipeFileImportDialog({
       console.log(`Processing ${fileType} file for recipe extraction`);
 
       const { data, error } = await supabase.functions.invoke('extract-ingredients', {
-        body: { 
-          fileType, 
-          content, 
+        body: {
+          fileType,
+          content,
+          mimeType: file.type,
           extractRecipe: true // Tell the function to also extract recipe data
         },
       });
@@ -145,10 +146,10 @@ export function RecipeFileImportDialog({
         ...ing,
         selected: true,
       }));
-      
+
       setIngredients(extractedIngredients);
       setSummary(data.summary || '');
-      
+
       // Extract recipe metadata
       setRecipeData({
         recipeName: data.recipeName || '',
@@ -158,7 +159,7 @@ export function RecipeFileImportDialog({
       });
 
       setStep('review');
-      
+
       if (extractedIngredients.length > 0) {
         toast.success(`Extraídos ${extractedIngredients.length} ingredientes!`);
       } else {
@@ -183,7 +184,7 @@ export function RecipeFileImportDialog({
 
   const handleConfirmImport = async () => {
     const selectedIngredients = ingredients.filter((ing) => ing.selected);
-    
+
     // Allow import even without recipe name - use default
     const finalRecipeData = {
       ...recipeData,
@@ -368,6 +369,7 @@ export function RecipeFileImportDialog({
                           <p className="text-sm text-muted-foreground">
                             {ing.quantity > 0 ? `${ing.quantity} ${ing.unit}` : ing.unit}
                             {ing.price && ing.price > 0 && ` • R$ ${ing.price.toFixed(2)}`}
+                            {ing.expiration_date && ` • Val: ${ing.expiration_date}`}
                           </p>
                         </div>
                       </div>

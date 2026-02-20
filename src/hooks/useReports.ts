@@ -4,6 +4,7 @@ import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, format, subDays } from 'date-fns';
 import { getNow } from '@/lib/utils';
+import { parseSafeDate } from './useExpiryDates';
 
 export interface SalesReportItem {
   date: string;
@@ -193,7 +194,7 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
       if (error) throw error;
 
       return data.map(item => ({
-        date: item.actual_delivery_date ? format(new Date(item.actual_delivery_date), 'dd/MM/yyyy') : '-',
+        date: item.actual_delivery_date ? format(parseSafeDate(item.actual_delivery_date), 'dd/MM/yyyy') : '-',
         itemName: (item.stock_item as any)?.name || 'Item desconhecido',
         quantity: item.ordered_quantity || 0,
         unit: (item.stock_item as any)?.unit || 'un',
@@ -272,7 +273,7 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
 
       return data.map(item => ({
         date: item.order_date
-          ? format(new Date(item.order_date), 'dd/MM/yyyy')
+          ? format(parseSafeDate(item.order_date), 'dd/MM/yyyy')
           : format(new Date(item.created_at), 'dd/MM/yyyy'),
         itemName: (item.stock_item as any)?.name || 'Item desconhecido',
         quantity: item.ordered_quantity || item.suggested_quantity,

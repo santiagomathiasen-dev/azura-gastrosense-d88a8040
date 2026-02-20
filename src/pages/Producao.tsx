@@ -807,6 +807,27 @@ function ProductionPreviewSheet({
   // Get ingredients without a stage
   const unstagedIngredients = sheet.ingredients.filter((ing: any) => !ing.stage_id);
 
+  const handleCompleteFirstStage = async () => {
+    if (stages.length === 0) return;
+    const firstStage = stages[0];
+    const stepsToComplete = firstStage.steps.filter(step => !isStepCompleted(step.id));
+
+    if (stepsToComplete.length === 0) {
+      toast.info('A primeira etapa já está concluída');
+      return;
+    }
+
+    try {
+      for (const step of stepsToComplete) {
+        await toggleStepCompletion.mutateAsync({ stepId: step.id, completed: true });
+      }
+      toast.success('Primeira etapa concluída com sucesso!');
+    } catch (error) {
+      console.error('Error completing stage:', error);
+      toast.error('Erro ao concluir primeira etapa');
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
@@ -1016,16 +1037,30 @@ function ProductionPreviewSheet({
         <DialogFooter className="gap-2">
           <div className="flex-1 flex gap-2">
             {producao.status === 'in_progress' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => updateProduction.mutate({ id: producao.id, status: 'paused' })}
-                disabled={updateProduction.isPending}
-                className="gap-2"
-              >
-                <PauseCircle className="h-4 w-4" />
-                Pausar
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateProduction.mutate({ id: producao.id, status: 'paused' })}
+                  disabled={updateProduction.isPending}
+                  className="gap-2"
+                >
+                  <PauseCircle className="h-4 w-4" />
+                  Pausar
+                </Button>
+                {stages.length > 0 && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleCompleteFirstStage}
+                    disabled={toggleStepCompletion.isPending}
+                    className="gap-2"
+                  >
+                    <Check className="h-4 w-4" />
+                    Concluir 1ª Etapa
+                  </Button>
+                )}
+              </>
             )}
             {producao.status === 'paused' && (
               <Button
