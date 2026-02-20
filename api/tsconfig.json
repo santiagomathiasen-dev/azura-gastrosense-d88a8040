@@ -7,18 +7,19 @@
         "skipLibCheck": true,
         "strict": false,
         "noEmit": true,
-        "baseUrl": "..",
         "paths": {
             "@/*": [
-                "./src/*"
+                "../src/*"
             ]
         },
         "types": [
-            "node",
-            "@vercel/node"
+            "node"
         ]
     },
     "include": [
         "."
+    ],
+    "exclude": [
+        "../node_modules"
     ]
 }

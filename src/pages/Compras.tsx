@@ -74,6 +74,7 @@ export default function Compras() {
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
   const [newScheduleDay, setNewScheduleDay] = useState('1');
   const [filteredProductions, setFilteredProductions] = useState<ProductionWithSheet[]>([]);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'pending' | 'purchased' | 'urgent'>('all');
 
   // WhatsApp Dialog State
   const [whatsAppDialogData, setWhatsAppDialogData] = useState({
@@ -196,10 +197,23 @@ export default function Compras() {
   }, [purchaseNeeds, pendingItems, shoppingListItems]);
 
   // Filter items - exclude items that are already in stock (delivered status handled by usePurchaseCalculation)
-  const filteredItems = mergedPurchaseList.filter(item =>
-    item.name.toLowerCase().includes(search.toLowerCase()) ||
-    (item.supplierName?.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filteredItems = useMemo(() => {
+    let list = mergedPurchaseList.filter(item =>
+      item.name.toLowerCase().includes(search.toLowerCase()) ||
+      (item.supplierName?.toLowerCase().includes(search.toLowerCase()))
+    );
+
+    if (activeFilter === 'pending') {
+      return list.filter(item => !item.isPurchased);
+    }
+    if (activeFilter === 'purchased') {
+      return list.filter(item => item.isPurchased);
+    }
+    if (activeFilter === 'urgent') {
+      return list.filter(item => item.isUrgent && !item.isPurchased);
+    }
+    return list;
+  }, [mergedPurchaseList, search, activeFilter]);
 
   // Get only items that haven't been purchased yet
   const unpurchasedItems = filteredItems.filter(item => !item.isPurchased);
@@ -318,6 +332,72 @@ export default function Compras() {
       initialMessage: message
     });
     setSupplierPickerData({ open: false, item: null });
+  };
+
+  const handleSendGroupedWhatsApp = () => {
+    if (selectedItems.size === 0) return;
+
+    // Get selected items with details
+    const selectedDetails = mergedPurchaseList.filter(item => selectedItems.has(item.stockItemId));
+
+    // Identify suppliers
+    const suppliers = new Set(selectedDetails.map(item => item.supplierId).filter(Boolean));
+
+    if (suppliers.size === 0) {
+      toast.error('Nenhum dos itens selecionados possui fornecedor vinculado.');
+      return;
+    }
+
+    if (suppliers.size > 1) {
+      toast.error('Selecione itens de apenas um fornecedor por vez para enviar via WhatsApp.');
+      return;
+    }
+
+    const supplierId = Array.from(suppliers)[0] as string;
+    const supplierItem = selectedDetails.find(item => item.supplierId === supplierId);
+
+    if (!supplierItem || !supplierItem.supplierName || !supplierItem.supplierPhone) {
+      // Find supplier in allSuppliers to be sure
+      const supplier = allSuppliers.find((s: any) => s.id === supplierId);
+      if (!supplier) {
+        toast.error('Fornecedor não encontrado.');
+        return;
+      }
+      const phone = supplier.whatsapp_number || supplier.whatsapp || supplier.phone;
+      if (!phone) {
+        toast.error('Este fornecedor não possui WhatsApp cadastrado.');
+        return;
+      }
+
+      // Use details from allSuppliers
+      let message = `Olá ${supplier.name}, gostaria de fazer um pedido:\n`;
+      selectedDetails.filter(i => i.supplierId === supplierId).forEach(i => {
+        message += `• ${i.suggestedQuantity} ${i.unit} de ${i.name}\n`;
+      });
+
+      setWhatsAppDialogData({
+        open: true,
+        supplierName: supplier.name,
+        phoneNumber: phone,
+        supplierId: supplier.id,
+        initialMessage: message
+      });
+      return;
+    }
+
+    // All good, generate message
+    let message = `Olá ${supplierItem.supplierName}, gostaria de fazer um pedido:\n`;
+    selectedDetails.forEach(i => {
+      message += `• ${i.suggestedQuantity} ${i.unit} de ${i.name}\n`;
+    });
+
+    setWhatsAppDialogData({
+      open: true,
+      supplierName: supplierItem.supplierName,
+      phoneNumber: supplierItem.supplierPhone,
+      supplierId: supplierId,
+      initialMessage: message
+    });
   };
 
   const gerarListaCompras = () => {
@@ -469,29 +549,54 @@ export default function Compras() {
 
       {/* Stats - Mobile Friendly */}
       <div className="grid grid-cols-4 gap-2 mb-4">
-        <Card>
+        <Card
+          className={cn(
+            "cursor-pointer transition-all hover:border-primary/50",
+            activeFilter === 'pending' ? "ring-2 ring-primary border-primary bg-primary/5" : ""
+          )}
+          onClick={() => setActiveFilter(activeFilter === 'pending' ? 'all' : 'pending')}
+        >
           <CardContent className="p-3 text-center">
-            <ShoppingCart className="h-5 w-5 text-primary mx-auto mb-1" />
-            <p className="text-lg font-bold">{unpurchasedItems.length}</p>
+            <ShoppingCart className={cn("h-5 w-5 mx-auto mb-1", activeFilter === 'pending' ? "text-primary" : "text-muted-foreground")} />
+            <p className="text-lg font-bold">{mergedPurchaseList.filter(i => !i.isPurchased).length}</p>
             <p className="text-xs text-muted-foreground">Pendentes</p>
           </CardContent>
         </Card>
-        <Card className="border-emerald-500/30 bg-emerald-500/10">
+        <Card
+          className={cn(
+            "cursor-pointer transition-all hover:border-emerald-500/50",
+            activeFilter === 'purchased' ? "ring-2 ring-emerald-500 border-emerald-500 bg-emerald-500/5" : "border-emerald-500/30 bg-emerald-500/10"
+          )}
+          onClick={() => setActiveFilter(activeFilter === 'purchased' ? 'all' : 'purchased')}
+        >
           <CardContent className="p-3 text-center">
             <CheckCircle2 className="h-5 w-5 text-emerald-600 mx-auto mb-1" />
-            <p className="text-lg font-bold text-emerald-700">{filteredItems.length - unpurchasedItems.length}</p>
+            <p className="text-lg font-bold text-emerald-700">{mergedPurchaseList.filter(i => i.isPurchased).length}</p>
             <p className="text-xs text-emerald-600">Comprados</p>
           </CardContent>
         </Card>
-        <Card className={urgentCount > 0 ? 'border-warning/50 bg-warning/5' : ''}>
+        <Card
+          className={cn(
+            "cursor-pointer transition-all hover:border-warning/50",
+            activeFilter === 'urgent' ? "ring-2 ring-warning border-warning bg-warning/5" : (urgentCount > 0 ? 'border-warning/50 bg-warning/5' : '')
+          )}
+          onClick={() => setActiveFilter(activeFilter === 'urgent' ? 'all' : 'urgent')}
+        >
           <CardContent className="p-3 text-center">
-            <AlertTriangle className={cn("h-5 w-5 mx-auto mb-1", urgentCount > 0 ? "text-warning" : "text-muted-foreground")} />
-            <p className="text-lg font-bold">{urgentCount}</p>
+            <AlertTriangle className={cn("h-5 w-5 mx-auto mb-1", activeFilter === 'urgent' ? "text-warning" : "text-muted-foreground")} />
+            <p className="text-lg font-bold">{mergedPurchaseList.filter(i => i.isUrgent && !i.isPurchased).length}</p>
             <p className="text-xs text-muted-foreground">Urgentes</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={cn(
+            "cursor-pointer transition-all hover:border-primary/50",
+            activeFilter === 'all' ? "ring-2 ring-primary border-primary bg-primary/5" : ""
+          )}
+          onClick={() => setActiveFilter('all')}
+        >
           <CardContent className="p-3 text-center">
+            <Package className={cn("h-5 w-5 mx-auto mb-1", activeFilter === 'all' ? "text-primary" : "text-muted-foreground")} />
             <p className="text-lg font-bold text-primary">R$ {totalEstimatedCost.toFixed(0)}</p>
             <p className="text-xs text-muted-foreground">Total Est.</p>
           </CardContent>
@@ -510,14 +615,25 @@ export default function Compras() {
           <span className="text-sm font-medium flex-1">
             {selectedItems.size} selecionado(s)
           </span>
-          <Button
-            size="sm"
-            onClick={openOrderDialog}
-            className="h-8"
-          >
-            <ShoppingCart className="h-4 w-4 mr-1" />
-            Marcar Comprado
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleSendGroupedWhatsApp}
+              className="h-8 gap-1 bg-green-600 hover:bg-green-700 text-white border-0"
+            >
+              <MessageCircle className="h-4 w-4" />
+              Enviar WhatsApp
+            </Button>
+            <Button
+              size="sm"
+              onClick={openOrderDialog}
+              className="h-8 gap-1"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              Marcar Comprado
+            </Button>
+          </div>
         </div>
       )}
 
@@ -567,7 +683,7 @@ export default function Compras() {
             </div>
           )}
 
-          {filteredItems.filter(item => !item.isPurchased).map((item) => (
+          {filteredItems.map((item) => (
             <MobileListItem
               key={item.stockItemId}
               className={cn(

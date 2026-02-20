@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useOwnerId } from '@/hooks/useOwnerId';
 import {
     CalendarClock,
     Plus,
@@ -58,6 +60,9 @@ import {
 } from '@/hooks/useForecastProductionOrders';
 import { useSaleProducts } from '@/hooks/useSaleProducts';
 import { ProductionSheetDialog } from '@/components/production/ProductionSheetDialog';
+import { useSalesProductionHistory, ProductionHistoryItem } from '@/hooks/useSalesProductionHistory';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { supabase } from '@/integrations/supabase/client';
 
 // ---- Forecast Input Tab ----
 
@@ -515,6 +520,196 @@ function ProductionOrdersTab() {
     );
 }
 
+// ---- History Analysis Tab ----
+
+function HistoryAnalysisTab() {
+    const [baseDate, setBaseDate] = useState<Date>(getNow());
+    const [days, setDays] = useState('7');
+    const [targetDate, setTargetDate] = useState<Date>(addDays(getNow(), 1));
+
+    const { data: history = [], isLoading } = useSalesProductionHistory(baseDate, parseInt(days, 10));
+    const queryClient = useQueryClient();
+    const { ownerId } = useOwnerId();
+
+    const handleCreateSchedule = async () => {
+        if (!ownerId) return;
+        if (history.length === 0) {
+            toast.error('Não há dados históricos para gerar cronograma.');
+            return;
+        }
+
+        const dateStr = format(targetDate, 'yyyy-MM-dd');
+
+        try {
+            // Delete existing pending orders for date
+            await supabase
+                .from('forecast_production_orders')
+                .delete()
+                .eq('user_id', ownerId)
+                .eq('target_consumption_date', dateStr)
+                .eq('status', 'pending');
+
+            const ordersToInsert = history
+                .filter(item => item.toProduce > 0)
+                .map(item => ({
+                    user_id: ownerId,
+                    technical_sheet_id: item.technicalSheetId,
+                    production_date: format(getNow(), 'yyyy-MM-dd'),
+                    target_consumption_date: dateStr,
+                    required_quantity: item.totalSales, // Or whatever logic the user wants
+                    existing_stock: item.currentStock,
+                    net_quantity: item.toProduce,
+                    praca: 'praca_quente' as any, // Default
+                    status: 'pending' as const,
+                }));
+
+            if (ordersToInsert.length === 0) {
+                toast.info('Não há itens com necessidade de produção.');
+                return;
+            }
+
+            const { error } = await supabase
+                .from('forecast_production_orders')
+                .insert(ordersToInsert);
+
+            if (error) throw error;
+
+            queryClient.invalidateQueries({ queryKey: ['forecast_production_orders'] });
+            toast.success(`Cronograma gerado com ${ordersToInsert.length} ordens!`);
+        } catch (err: any) {
+            toast.error(`Erro ao gerar cronograma: ${err.message}`);
+        }
+    };
+
+    return (
+        <div className="space-y-4">
+            <div className="flex items-center gap-3 flex-wrap bg-primary/5 p-4 rounded-lg border">
+                <div className="space-y-1">
+                    <Label className="text-xs uppercase text-muted-foreground">Base de análise</Label>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button variant="outline" size="sm" className="w-[180px] justify-start text-left font-normal">
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {format(baseDate, "dd/MM/yyyy")}
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                                mode="single"
+                                selected={baseDate}
+                                onSelect={(d) => d && setBaseDate(d)}
+                                locale={ptBR}
+                            />
+                        </PopoverContent>
+                    </Popover>
+                </div>
+
+                <div className="space-y-1">
+                    <Label className="text-xs uppercase text-muted-foreground">Período (dias)</Label>
+                    <Select value={days} onValueChange={setDays}>
+                        <SelectTrigger className="w-[120px] h-9">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="7">7 dias</SelectItem>
+                            <SelectItem value="15">15 dias</SelectItem>
+                            <SelectItem value="30">30 dias</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div className="space-y-1">
+                    <Label className="text-xs uppercase text-muted-foreground">Data para Produção</Label>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button variant="outline" size="sm" className="w-[180px] justify-start text-left font-normal border-primary/30">
+                                <ChefHat className="mr-2 h-4 w-4 text-primary" />
+                                {format(targetDate, "dd/MM/yyyy")}
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                                mode="single"
+                                selected={targetDate}
+                                onSelect={(d) => d && setTargetDate(d)}
+                                locale={ptBR}
+                            />
+                        </PopoverContent>
+                    </Popover>
+                </div>
+
+                <Button
+                    className="ml-auto gap-2 bg-primary hover:bg-primary/90"
+                    onClick={handleCreateSchedule}
+                    disabled={isLoading || history.length === 0}
+                >
+                    <Zap className="h-4 w-4" /> Gerar Cronograma
+                </Button>
+            </div>
+
+            <Card>
+                <CardHeader className="py-4">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                        <History className="h-5 w-5 text-primary" />
+                        Análise de Necessidade de Produção
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Ficha Técnica</TableHead>
+                                    <TableHead className="text-center">Vendas Realizadas</TableHead>
+                                    <TableHead className="text-center">Produção Utilizada</TableHead>
+                                    <TableHead className="text-center">Estoque Atual</TableHead>
+                                    <TableHead className="text-center bg-primary/5 text-primary font-bold">Produção a Realizar</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {isLoading ? (
+                                    <TableRow>
+                                        <TableCell colSpan={5} className="h-32 text-center">
+                                            <Skeleton className="h-4 w-[200px] mx-auto mb-2" />
+                                            <Skeleton className="h-4 w-[150px] mx-auto" />
+                                        </TableCell>
+                                    </TableRow>
+                                ) : history.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
+                                            Nenhum dado encontrado para o período selecionado.
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    history.map((item) => (
+                                        <TableRow key={item.technicalSheetId}>
+                                            <TableCell className="font-medium">{item.name}</TableCell>
+                                            <TableCell className="text-center">{item.totalSales.toLocaleString()} {item.unit}</TableCell>
+                                            <TableCell className="text-center">{item.productionUsed.toLocaleString()} {item.unit}</TableCell>
+                                            <TableCell className="text-center">{item.currentStock.toLocaleString()} {item.unit}</TableCell>
+                                            <TableCell className="text-center font-bold text-primary bg-primary/5">
+                                                {item.toProduce > 0 ? (
+                                                    <Badge className="bg-orange-500 hover:bg-orange-600">
+                                                        {item.toProduce.toLocaleString()} {item.unit}
+                                                    </Badge>
+                                                ) : (
+                                                    <span className="text-green-600 flex items-center justify-center gap-1">
+                                                        <CheckCircle2 className="h-4 w-4" /> Estoque OK
+                                                    </span>
+                                                )}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
 // ---- Main Page ----
 
 export default function PrevisaoVendas() {
@@ -525,9 +720,12 @@ export default function PrevisaoVendas() {
                 description="Defina previsões de vendas e gere automaticamente as ordens de produção por praça."
             />
             <Tabs defaultValue="previsao" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 max-w-md">
+                <TabsList className="grid w-full grid-cols-3 max-w-xl">
                     <TabsTrigger value="previsao" className="gap-2">
                         <CalendarClock className="h-4 w-4" /> Previsão
+                    </TabsTrigger>
+                    <TabsTrigger value="historico" className="gap-2">
+                        <History className="h-4 w-4" /> Histórico
                     </TabsTrigger>
                     <TabsTrigger value="ordens" className="gap-2">
                         <ChefHat className="h-4 w-4" /> Ordens de Produção
@@ -535,6 +733,9 @@ export default function PrevisaoVendas() {
                 </TabsList>
                 <TabsContent value="previsao">
                     <ForecastInputTab />
+                </TabsContent>
+                <TabsContent value="historico">
+                    <HistoryAnalysisTab />
                 </TabsContent>
                 <TabsContent value="ordens">
                     <ProductionOrdersTab />

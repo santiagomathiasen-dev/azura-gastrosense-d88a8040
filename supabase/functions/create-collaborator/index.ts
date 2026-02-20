@@ -76,16 +76,15 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims?.sub) {
+    const { data: { user: gestorUser }, error: userError } = await userClient.auth.getUser();
+    if (userError || !gestorUser) {
       return new Response(JSON.stringify({ error: "Token inválido" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const gestorId = claimsData.claims.sub as string;
+    const gestorId = gestorUser.id;
     const admin = createClient(url, serviceRoleKey);
 
     // Get gestor's email for verification
@@ -147,7 +146,7 @@ serve(async (req) => {
     // 2) Update the profile to set gestor_id (trigger creates profile automatically)
     const { error: profileError } = await admin
       .from("profiles")
-      .update({ 
+      .update({
         gestor_id: gestorId,
         full_name: name,
       })

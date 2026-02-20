@@ -42,16 +42,15 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims?.sub) {
+    const { data: { user: gestorUser }, error: userError } = await userClient.auth.getUser();
+    if (userError || !gestorUser) {
       return new Response(JSON.stringify({ error: "Token inválido" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const gestorId = claimsData.claims.sub as string;
+    const gestorId = gestorUser.id;
     const admin = createClient(url, serviceRoleKey);
 
     const body = (await req.json().catch(() => null)) as RequestBody | null;

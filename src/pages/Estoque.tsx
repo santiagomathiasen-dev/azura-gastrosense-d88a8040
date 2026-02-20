@@ -101,6 +101,11 @@ export default function Estoque() {
   const [batchDialogOpen, setBatchDialogOpen] = useState(false);
   const [batchItem, setBatchItem] = useState<StockItem | null>(null);
 
+  // Duplicate item detection state
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
+  const [duplicateItem, setDuplicateItem] = useState<StockItem | null>(null);
+  const [pendingData, setPendingData] = useState<any>(null);
+
   // Voice control for inline quantity updates
   const handleQuantityUpdate = useCallback((itemId: string, quantity: number) => {
     createMovement.mutate(
@@ -201,8 +206,32 @@ export default function Estoque() {
   };
 
   const handleCreateItem = (data: any) => {
+    const existingItem = items.find(
+      (item) => item.name.trim().toLowerCase() === data.name.trim().toLowerCase()
+    );
+
+    if (existingItem) {
+      setDuplicateItem(existingItem);
+      setPendingData(data);
+      setDuplicateDialogOpen(true);
+      return;
+    }
+
     createItem.mutate(data, {
       onSuccess: () => setFormOpen(false),
+    });
+  };
+
+  const handleReplaceDuplicate = () => {
+    if (!duplicateItem || !pendingData) return;
+
+    updateItem.mutate({ id: duplicateItem.id, ...pendingData }, {
+      onSuccess: () => {
+        setDuplicateDialogOpen(false);
+        setFormOpen(false);
+        setDuplicateItem(null);
+        setPendingData(null);
+      },
     });
   };
 
@@ -903,6 +932,25 @@ export default function Estoque() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div >
+      {/* Duplicate Item Confirmation Dialog */}
+      <AlertDialog open={duplicateDialogOpen} onOpenChange={setDuplicateDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Item já existe</AlertDialogTitle>
+            <AlertDialogDescription>
+              Já existe um item chamado "{duplicateItem?.name}" no estoque.
+              Deseja substituir as informações do item existente pelas novas?
+              Esta ação manterá o histórico e vínculos do item original.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleReplaceDuplicate}>
+              Substituir Item
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   );
 }
