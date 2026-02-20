@@ -20,6 +20,7 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { useCollaboratorContext } from '@/contexts/CollaboratorContext';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useProfile } from '@/hooks/useProfile';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,7 @@ export function Sidebar() {
   const { logout, user } = useAuth();
   const { collaborator, isCollaboratorMode, clearCollaboratorSession, hasAccess } = useCollaboratorContext();
   const { isAdmin } = useUserRole();
+  const { profile } = useProfile();
   const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
 
@@ -67,8 +69,8 @@ export function Sidebar() {
       }
       return true;
     }),
-    // Admin-only: Gestores
-    ...(isAdmin ? [{ to: '/gestores', icon: Shield, label: 'Gestores', permission: null }] : []),
+    // Admin or Gestor: Gestores
+    ...((isAdmin || profile?.role === 'gestor') ? [{ to: '/gestores', icon: Shield, label: 'Gestores', permission: null }] : []),
   ];
   return (
     <aside

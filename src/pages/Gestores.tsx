@@ -1,297 +1,215 @@
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { useState, useMemo } from 'react';
+import { useGestaoUsuarios, Profile, BusinessRole } from '@/hooks/useGestaoUsuarios';
 import { PageHeader } from '@/components/PageHeader';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { toast } from 'sonner';
-import { Plus, Loader2, UserCheck, UserX, Trash2, Eye, EyeOff, QrCode, Copy, Users, Clock } from 'lucide-react';
-
-interface Gestor {
-  id: string;
-  email: string;
-  full_name: string;
-  role: string;
-  status_pagamento: boolean;
-  created_at: string;
-  last_sign_in_at?: string | null;
-}
+import { Loader2, Search, Users, ShieldAlert } from 'lucide-react';
+import { useUserRole } from '@/hooks/useUserRole';
+import { useProfile } from '@/hooks/useProfile';
 
 export default function Gestores() {
-  const queryClient = useQueryClient();
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const { profiles, isLoading, updateStatus, updateRole } = useGestaoUsuarios();
+  const { profile: currentProfile, isLoading: profileLoading } = useProfile();
+  const { isAdmin } = useUserRole();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState<string>('all');
 
-  const { data: gestors = [], isLoading } = useQuery({
-    queryKey: ['gestors'],
-    queryFn: async () => {
-      const { data: session } = await supabase.auth.getSession();
-      const res = await supabase.functions.invoke('manage-gestors', {
-        method: 'GET',
-      });
-      if (res.error) throw new Error(res.error.message);
-      return (res.data?.gestors || []) as Gestor[];
-    },
-  });
+  const filteredProfiles = useMemo(() => {
+    return profiles.filter(p => {
+      const pName = p.full_name || '';
+      const pEmail = p.email || '';
+      const matchesSearch =
+        pName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        pEmail.toLowerCase().includes(searchTerm.toLowerCase());
 
-  const createGestor = useMutation({
-    mutationFn: async () => {
-      const res = await supabase.functions.invoke('manage-gestors', {
-        body: { action: 'create', email: email.trim(), name: name.trim(), password },
-      });
-      if (res.error) throw new Error(res.error.message);
-      if (res.data?.error) throw new Error(res.data.error);
-      return res.data;
-    },
-    onSuccess: () => {
-      toast.success('Gestor criado com sucesso! Email de confirmação enviado.');
-      queryClient.invalidateQueries({ queryKey: ['gestors'] });
-      setDialogOpen(false);
-      setName('');
-      setEmail('');
-      setPassword('');
-    },
-    onError: (err: Error) => {
-      toast.error(err.message);
-    },
-  });
+      const matchesRole = roleFilter === 'all' || p.role === roleFilter;
 
-  const toggleStatus = useMutation({
-    mutationFn: async ({ gestorId, active }: { gestorId: string; active: boolean }) => {
-      const res = await supabase.functions.invoke('manage-gestors', {
-        body: { action: 'toggle_status', gestorId, active },
-      });
-      if (res.error) throw new Error(res.error.message);
-      if (res.data?.error) throw new Error(res.data.error);
-    },
-    onSuccess: () => {
-      toast.success('Status atualizado!');
-      queryClient.invalidateQueries({ queryKey: ['gestors'] });
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
+      return matchesSearch && matchesRole;
+    });
+  }, [profiles, searchTerm, roleFilter]);
 
-  const deleteGestor = useMutation({
-    mutationFn: async (gestorId: string) => {
-      const res = await supabase.functions.invoke('manage-gestors', {
-        body: { action: 'delete', gestorId },
-      });
-      if (res.error) throw new Error(res.error.message);
-      if (res.data?.error) throw new Error(res.data.error);
-    },
-    onSuccess: () => {
-      toast.success('Gestor excluído!');
-      queryClient.invalidateQueries({ queryKey: ['gestors'] });
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
+  // Permission check: admin or gestor
+  const hasAccess = isAdmin || currentProfile?.role === 'gestor';
+
+  if (isLoading || profileLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <ShieldAlert className="h-12 w-12 text-destructive mb-4" />
+        <h2 className="text-xl font-bold">Acesso Restrito</h2>
+        <p className="text-muted-foreground">Apenas administradores ou gestores podem acessar esta página.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <PageHeader
-          title="Gestão de Gestores"
-          description="Cadastre e gerencie os gestores do sistema"
-        />
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Novo Gestor
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Cadastrar Novo Gestor</DialogTitle>
-            </DialogHeader>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                createGestor.mutate();
-              }}
-              className="space-y-4"
-            >
-              <div className="space-y-2">
-                <Label>Nome</Label>
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Nome do gestor"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Email</Label>
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="email@exemplo.com"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Senha inicial</Label>
-                <div className="relative">
-                  <Input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Mínimo 6 caracteres"
-                    required
-                    minLength={6}
-                    className="pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                O gestor receberá um email de confirmação e só poderá acessar após confirmar.
-              </p>
-              <Button type="submit" className="w-full" disabled={createGestor.isPending}>
-                {createGestor.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                Cadastrar Gestor
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
+      <PageHeader
+        title="Gestão de Usuários"
+        description="Gerencie os status e cargos dos colaboradores e gestores do sistema"
+      />
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card className="bg-primary/5 border-primary/20">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <QrCode className="h-4 w-4 text-primary" />
-              Chave PIX Gestores
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between gap-2 bg-background p-2 rounded border border-primary/10">
-              <code className="text-xs font-mono font-bold text-primary">000.000.000-00</code>
-              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => {
-                navigator.clipboard.writeText("000.000.000-00");
-                toast.success("Copiado!");
-              }}>
-                <Copy className="h-3 w-3" />
-              </Button>
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-2">
-              Exiba esta chave para novos gestores realizarem o pagamento.
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Users className="h-4 w-4 text-primary" />
-              Resumo de Acesso
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex justify-between items-end">
+      {/* Stats Summary */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="bg-primary/5">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-bold">{gestors.length}</p>
-                <p className="text-xs text-muted-foreground">Total de Gestores</p>
+                <p className="text-sm font-medium text-muted-foreground">Total de Usuários</p>
+                <p className="text-3xl font-bold">{profiles.length}</p>
               </div>
-              <div className="text-right">
-                <p className="text-2xl font-bold text-green-600">
-                  {gestors.filter(g => g.status_pagamento).length}
-                </p>
-                <p className="text-xs text-muted-foreground">Ativos (Pagos)</p>
-              </div>
+              <Users className="h-8 w-8 text-primary opacity-20" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-green-500/5">
+          <CardContent className="pt-6">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Usuários Ativos</p>
+              <p className="text-3xl font-bold text-green-600">
+                {profiles.filter(p => p.status === 'ativo').length}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-destructive/5">
+          <CardContent className="pt-6">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Usuários Inativos</p>
+              <p className="text-3xl font-bold text-destructive/70">
+                {profiles.filter(p => p.status === 'inativo').length}
+              </p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {isLoading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      {/* Filters */}
+      <div className="flex flex-col md:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por nome ou e-mail..."
+            className="pl-9"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
-      ) : gestors.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            Nenhum gestor cadastrado ainda.
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {gestors.map((g) => (
-            <Card key={g.id}>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">{g.full_name || 'Sem nome'}</CardTitle>
-                  <Badge variant={g.status_pagamento ? 'default' : 'secondary'}>
-                    {g.status_pagamento ? 'Ativo' : 'Inativo'}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground truncate">{g.email}</p>
-                <div className="grid grid-cols-2 gap-2 py-1">
-                  <div className="space-y-1">
-                    <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                      <Clock className="h-3 w-3" /> Cadastro
-                    </p>
-                    <p className="text-[10px] font-medium">
-                      {new Date(g.created_at).toLocaleDateString('pt-BR')}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                      <Clock className="h-3 w-3" /> Último Acesso
-                    </p>
-                    <p className="text-[10px] font-medium">
-                      {g.last_sign_in_at
-                        ? new Date(g.last_sign_in_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-                        : 'Nunca'}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    variant="outline"
-                    className="flex-1 h-8 text-xs"
-                    onClick={() => toggleStatus.mutate({ gestorId: g.id, active: !g.status_pagamento })}
-                  >
-                    {g.status_pagamento ? (
-                      <><UserX className="h-3 w-3 mr-1" /> Desativar</>
-                    ) : (
-                      <><UserCheck className="h-3 w-3 mr-1" /> Ativar</>
-                    )}
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="h-8 px-2"
-                    onClick={() => {
-                      if (confirm('Tem certeza que deseja excluir este gestor?')) {
-                        deleteGestor.mutate(g.id);
-                      }
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="w-full md:w-[200px]">
+          <Select value={roleFilter} onValueChange={setRoleFilter}>
+            <SelectTrigger>
+              <SelectValue placeholder="Filtrar por Cargo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os Cargos</SelectItem>
+              <SelectItem value="gestor">Gestores</SelectItem>
+              <SelectItem value="producao">Produção</SelectItem>
+              <SelectItem value="estoque">Estoque</SelectItem>
+              <SelectItem value="venda">Venda</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-      )}
+      </div>
+
+      {/* Main Table */}
+      <Card>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nome</TableHead>
+                <TableHead>E-mail</TableHead>
+                <TableHead>Cargo</TableHead>
+                <TableHead className="text-right">Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredProfiles.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                    Nenhum usuário encontrado.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredProfiles.map((p) => (
+                  <TableRow key={p.id}>
+                    <TableCell className="font-medium">
+                      {p.full_name || 'Sem nome'}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {p.email}
+                    </TableCell>
+                    <TableCell>
+                      {isAdmin ? (
+                        <Select
+                          value={p.role}
+                          onValueChange={(value) => updateRole.mutate({ id: p.id, role: value as BusinessRole })}
+                          disabled={updateRole.isPending}
+                        >
+                          <SelectTrigger className="h-8 w-[140px] text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="gestor">Gestor</SelectItem>
+                            <SelectItem value="producao">Produção</SelectItem>
+                            <SelectItem value="estoque">Estoque</SelectItem>
+                            <SelectItem value="venda">Venda</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Badge variant="outline" className="capitalize">
+                          {p.role}
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-3">
+                        <span className={p.status === 'ativo' ? 'text-green-600 font-medium' : 'text-muted-foreground'}>
+                          {p.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                        </span>
+                        <Switch
+                          checked={p.status === 'ativo'}
+                          disabled={updateStatus.isPending || (p.id === currentProfile?.id)}
+                          onCheckedChange={(checked) => {
+                            updateStatus.mutate({
+                              id: p.id,
+                              status: checked ? 'ativo' : 'inativo'
+                            });
+                          }}
+                        />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </Card>
     </div>
   );
 }
