@@ -57,6 +57,17 @@ REGRAS CRÍTICAS:
 }`;
     }
 
+    // Normalization Helpers
+    const validUnits = ["kg", "g", "L", "ml", "unidade", "caixa", "dz"];
+    const validCategories = ["laticinios", "secos_e_graos", "hortifruti", "carnes_e_peixes", "embalagens", "limpeza", "outros"];
+
+    const toNumber = (v: any) => {
+      if (typeof v === 'number') return v;
+      if (!v) return 0;
+      const n = parseFloat(String(v).replace(',', '.'));
+      return isNaN(n) ? 0 : n;
+    };
+
     // Determine MIME type
     let mimeType = customMimeType;
     if (!mimeType) {
@@ -139,10 +150,10 @@ REGRAS CRÍTICAS:
       result = {
         ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : (Array.isArray(parsed) ? parsed : []),
         summary: parsed.summary || "",
-        recipeName: parsed.recipeName,
-        preparationMethod: parsed.preparationMethod,
-        preparationTime: parsed.preparationTime,
-        yieldQuantity: parsed.yieldQuantity,
+        recipeName: parsed.recipeName ? String(parsed.recipeName).trim() : undefined,
+        preparationMethod: parsed.preparationMethod ? String(parsed.preparationMethod).trim() : undefined,
+        preparationTime: toNumber(parsed.preparationTime),
+        yieldQuantity: toNumber(parsed.yieldQuantity),
       };
     } catch (e) {
       console.error("Parse failure, attempting regex recovery");
@@ -153,27 +164,16 @@ REGRAS CRÍTICAS:
           result = {
             ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : (Array.isArray(parsed) ? parsed : []),
             summary: parsed.summary || "Recuperado via regex",
-            recipeName: parsed.recipeName,
-            preparationMethod: parsed.preparationMethod,
-            preparationTime: parsed.preparationTime,
-            yieldQuantity: parsed.yieldQuantity,
+            recipeName: parsed.recipeName ? String(parsed.recipeName).trim() : undefined,
+            preparationMethod: parsed.preparationMethod ? String(parsed.preparationMethod).trim() : undefined,
+            preparationTime: toNumber(parsed.preparationTime),
+            yieldQuantity: toNumber(parsed.yieldQuantity),
           };
         } catch (e2) {
           result.summary = "Erro de formato na resposta da IA.";
         }
       }
     }
-
-    // Normalization
-    const validUnits = ["kg", "g", "L", "ml", "unidade", "caixa", "dz"];
-    const validCategories = ["laticinios", "secos_e_graos", "hortifruti", "carnes_e_peixes", "embalagens", "limpeza", "outros"];
-
-    const toNumber = (v: any) => {
-      if (typeof v === 'number') return v;
-      if (!v) return 0;
-      const n = parseFloat(String(v).replace(',', '.'));
-      return isNaN(n) ? 0 : n;
-    };
 
     result.ingredients = (result.ingredients || [])
       .map((ing: any) => {

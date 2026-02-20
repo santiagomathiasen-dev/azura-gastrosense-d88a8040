@@ -74,21 +74,54 @@ REGRAS:
 
         if (!response.ok) {
             const errorText = await response.text();
+            console.error("Gemini API error:", errorText);
             return new Response(
-                JSON.stringify({ error: "Erro no Gemini", details: errorText }),
-                { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                JSON.stringify({ error: "Erro na API do Gemini", details: errorText }),
+                { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
         }
 
         const aiResponse = await response.json();
-        const assistantMessage = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+        let assistantMessage = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+
+        // Clean up markdown code blocks if present
+        assistantMessage = assistantMessage.replace(/```json/g, "").replace(/```/g, "").trim();
+
+        let result;
+        try {
+            result = JSON.parse(assistantMessage);
+        } catch (e) {
+            console.error("Parse failure, attempting regex recovery:", e);
+            const match = assistantMessage.match(/\{[\s\S]*\}/);
+            if (match) {
+                try {
+                    result = JSON.parse(match[0]);
+                } catch (e2) {
+                    throw new Error("Falha ao processar resposta da IA");
+                }
+            } else {
+                throw new Error("Resposta da IA formatada incorretamente");
+            }
+        }
+
+        // Sanitize numeric fields
+        const sanitizeNumber = (v: any) => {
+            if (typeof v === 'number') return v;
+            const n = parseInt(String(v).replace(/\D/g, ''));
+            return isNaN(n) ? null : n;
+        };
+
+        if (result.estimated_time !== undefined) {
+            result.estimated_time = sanitizeNumber(result.estimated_time);
+        }
 
         return new Response(
-            assistantMessage,
+            JSON.stringify(result),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
 
     } catch (error) {
+        console.error("Function error:", error);
         return new Response(
             JSON.stringify({ error: error.message }),
             { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

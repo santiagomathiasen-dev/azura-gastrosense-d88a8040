@@ -226,8 +226,8 @@ export default function Fichas() {
         name: recipeInfo.recipeName || 'Receita Importada',
         description: '',
         preparation_method: recipeInfo.preparationMethod || null,
-        preparation_time: recipeInfo.preparationTime || null,
-        yield_quantity: recipeInfo.yieldQuantity || 1,
+        preparation_time: recipeInfo.preparationTime ? Number(recipeInfo.preparationTime) : null,
+        yield_quantity: recipeInfo.yieldQuantity ? Number(recipeInfo.yieldQuantity) : 1,
         yield_unit: 'un',
       });
 
@@ -264,7 +264,14 @@ export default function Fichas() {
         body: { videoUrl: formData.video_url },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Edge function error:', error);
+        throw new Error(error.message || 'Erro na comunicação com o servidor');
+      }
+
+      if (data && data.error) {
+        throw new Error(data.error);
+      }
 
       if (data.preparation_method) {
         if (stages.length === 0) {
