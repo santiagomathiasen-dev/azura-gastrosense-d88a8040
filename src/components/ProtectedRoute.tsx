@@ -34,8 +34,11 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
-  // Check payment status for non-admin gestors
-  if (user && !isAdmin && profile && !profile.status_pagamento && location.pathname !== '/payment-required') {
+  // Check payment/active status for non-admin profiles
+  const isSantiago = profile?.email === 'santiago.aloom@gmail.com';
+  const isInactive = profile && (profile.status_pagamento === false || (profile as any).status === 'inativo');
+
+  if (user && !isAdmin && !isSantiago && isInactive && location.pathname !== '/payment-required') {
     return <Navigate to="/payment-required" replace />;
   }
 

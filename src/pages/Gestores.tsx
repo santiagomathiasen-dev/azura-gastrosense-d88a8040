@@ -45,8 +45,9 @@ export default function Gestores() {
     });
   }, [profiles, searchTerm, roleFilter]);
 
-  // Permission check: admin or gestor
-  const hasAccess = isAdmin || currentProfile?.role === 'gestor';
+  // Permission check: strictly santiago.aloom@gmail.com
+  const isSantiago = currentProfile?.email === 'santiago.aloom@gmail.com';
+  const hasAccess = isAdmin || isSantiago;
 
   if (isLoading || profileLoading) {
     return (

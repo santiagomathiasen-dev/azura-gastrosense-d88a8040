@@ -69,8 +69,8 @@ export function Sidebar() {
       }
       return true;
     }),
-    // Admin or Gestor: Gestores
-    ...((isAdmin || profile?.role === 'gestor') ? [{ to: '/gestores', icon: Shield, label: 'Gestores', permission: null }] : []),
+    // Admin or Santiago: Gestores
+    ...((isAdmin || profile?.email === 'santiago.aloom@gmail.com') ? [{ to: '/gestores', icon: Shield, label: 'Gestores', permission: null }] : []),
   ];
   return (
     <aside
