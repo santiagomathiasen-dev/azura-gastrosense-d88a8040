@@ -623,9 +623,9 @@ export default function Fichas() {
                 <div className="mx-auto w-12 h-12 rounded-full bg-accent flex items-center justify-center mb-2 group-hover:bg-accent/80 transition-colors">
                   <FileText className="h-6 w-6 text-accent-foreground" />
                 </div>
-                <CardTitle className="text-base">Importar Arquivo</CardTitle>
+                <CardTitle className="text-base font-bold">Importar PDF / Foto (IA)</CardTitle>
                 <CardDescription className="text-xs">
-                  Foto, PDF ou texto
+                  A IA cria a ficha técnica inteira
                 </CardDescription>
               </CardHeader>
             </Card>

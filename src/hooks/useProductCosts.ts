@@ -11,6 +11,10 @@ export interface ProductCostBreakdown {
     currentSalePrice?: number;
     suggestedSalePrice: number;
     margin: number; // Percentage
+    laborCost: number;
+    energyCost: number;
+    otherCosts: number;
+    ingredientCost: number;
     components: {
         name: string;
         quantity: number;
@@ -33,11 +37,16 @@ export function useProductCosts() {
             const sheet = technicalSheets.find(s => s.id === sheetId);
             if (!sheet || !sheet.ingredients) return 0;
 
-            const total = sheet.ingredients.reduce((acc, ing) => {
+            const ingredientsTotal = sheet.ingredients.reduce((acc, ing) => {
                 const item = stockItems.find(si => si.id === ing.stock_item_id);
                 const unitPrice = Number(item?.unit_price || 0);
                 return acc + (Number(ing.quantity) * unitPrice);
             }, 0);
+
+            const total = ingredientsTotal +
+                Number(sheet.labor_cost || 0) +
+                Number(sheet.energy_cost || 0) +
+                Number(sheet.other_costs || 0);
 
             memo[sheetId] = total;
             return total;
@@ -85,16 +94,24 @@ export function useProductCosts() {
             });
 
             const salePrice = Number(product.sale_price || 0);
-            const suggestedPrice = totalCMV / 0.3; // 30% Target CMV
-            const profit = salePrice - (totalCMV + (salePrice * 0.15) + (salePrice * 0.25) + (salePrice * 0.10));
-            // Simplified: CMV is 30% of target. Margin currently is whatever is left.
-            const margin = salePrice > 0 ? ((salePrice - totalCMV) / salePrice) * 100 : 0;
+            const laborCost = Number(product.labor_cost || 0);
+            const energyCost = Number(product.energy_cost || 0);
+            const otherCosts = Number(product.other_costs || 0);
+
+            const totalCost = totalCMV + laborCost + energyCost + otherCosts;
+            const suggestedPrice = totalCost / 0.3; // 30% Target CMV (now including OPEX)
+
+            const margin = salePrice > 0 ? ((salePrice - totalCost) / salePrice) * 100 : 0;
 
             return {
                 id: product.id,
                 name: product.name,
                 type: 'sale_product',
-                totalCost: totalCMV,
+                totalCost: totalCost,
+                ingredientCost: totalCMV,
+                laborCost,
+                energyCost,
+                otherCosts,
                 currentSalePrice: salePrice,
                 suggestedSalePrice: suggestedPrice,
                 margin,

@@ -17,6 +17,9 @@ export interface TechnicalSheetWithIngredients extends TechnicalSheet {
   production_type: ProductionType;
   minimum_stock: number;
   video_url?: string | null;
+  labor_cost: number;
+  energy_cost: number;
+  other_costs: number;
   ingredients: (TechnicalSheetIngredient & {
     stock_item: { name: string; unit: string; unit_price: number | null } | null;
     stage_id?: string | null;
@@ -61,7 +64,13 @@ export function useTechnicalSheets() {
       if (!ownerId) throw new Error('Usuário não autenticado');
       const { data, error } = await supabase
         .from('technical_sheets')
-        .insert({ ...sheet, user_id: ownerId })
+        .insert({
+          ...sheet,
+          user_id: ownerId,
+          labor_cost: Number((sheet as any).labor_cost || 0),
+          energy_cost: Number((sheet as any).energy_cost || 0),
+          other_costs: Number((sheet as any).other_costs || 0),
+        })
         .select()
         .single();
       if (error) throw error;

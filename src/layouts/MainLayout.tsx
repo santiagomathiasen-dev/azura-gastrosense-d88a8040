@@ -3,13 +3,14 @@ import { Sidebar } from '@/components/Sidebar';
 import { MobileNav } from '@/components/MobileNav';
 import { MobileHeader } from '@/components/MobileHeader';
 import { useGlobalRealtimeSync } from '@/hooks/useRealtimeSubscription';
+import { AIAssistant } from '@/components/AIAssistant';
 
 export function MainLayout() {
   // Enable global realtime sync for all data tables
   useGlobalRealtimeSync();
 
   return (
-    <div className="h-screen flex w-full bg-background overflow-hidden">
+    <div className="h-screen flex w-full bg-background overflow-hidden relative">
       <Sidebar />
       <MobileNav />
       <div className="flex-1 flex flex-col h-screen md:ml-56 ml-16 overflow-hidden">
@@ -20,6 +21,7 @@ export function MainLayout() {
           </div>
         </main>
       </div>
+      <AIAssistant />
     </div>
   );
 }

@@ -28,6 +28,9 @@ export interface SaleProduct {
   is_active: boolean;
   ready_quantity: number;
   minimum_stock: number;
+  labor_cost?: number;
+  energy_cost?: number;
+  other_costs?: number;
   created_at: string;
   updated_at: string;
   components?: SaleProductComponent[];
@@ -89,6 +92,9 @@ export function useSaleProducts() {
           sale_price: data.sale_price,
           image_url: data.image_url,
           minimum_stock: data.minimum_stock || 0,
+          labor_cost: (data as any).labor_cost || 0,
+          energy_cost: (data as any).energy_cost || 0,
+          other_costs: (data as any).other_costs || 0,
         })
         .select()
         .single();
@@ -129,6 +135,9 @@ export function useSaleProducts() {
       image_url?: string;
       is_active?: boolean;
       minimum_stock?: number;
+      labor_cost?: number;
+      energy_cost?: number;
+      other_costs?: number;
       components?: ComponentInput[];
     }) => {
       const { id, components, ...updates } = data;

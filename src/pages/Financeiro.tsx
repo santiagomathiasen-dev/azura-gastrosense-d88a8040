@@ -26,11 +26,36 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { toast } from 'sonner';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+    Factory,
+    Zap,
+    PackagePlus,
+    Edit,
+    ChevronDown,
+    ChevronUp
+} from 'lucide-react';
 
 export default function Financeiro() {
     const { productCosts, isLoading: isCostsLoading } = useProductCosts();
     const { updateSaleProduct } = useSaleProducts();
     const [targetCMV, setTargetCMV] = useState(30); // Default 30%
+
+    const [editingProduct, setEditingProduct] = useState<any | null>(null);
+    const [editValues, setEditValues] = useState({
+        labor: '0',
+        energy: '0',
+        other: '0'
+    });
 
     const handleApplyPrice = (productId: string, price: number) => {
         updateSaleProduct.mutate({
@@ -39,6 +64,31 @@ export default function Financeiro() {
         }, {
             onSuccess: () => {
                 toast.success('Preço atualizado com sucesso!');
+            }
+        });
+    };
+
+    const handleOpenEdit = (product: any) => {
+        setEditingProduct(product);
+        setEditValues({
+            labor: (product.laborCost || 0).toString(),
+            energy: (product.energyCost || 0).toString(),
+            other: (product.otherCosts || 0).toString()
+        });
+    };
+
+    const handleSaveCosts = () => {
+        if (!editingProduct) return;
+
+        updateSaleProduct.mutate({
+            id: editingProduct.id,
+            labor_cost: Number(editValues.labor),
+            energy_cost: Number(editValues.energy),
+            other_costs: Number(editValues.other)
+        } as any, {
+            onSuccess: () => {
+                toast.success('Custos individuais atualizados!');
+                setEditingProduct(null);
             }
         });
     };
@@ -155,7 +205,8 @@ export default function Financeiro() {
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Produto</TableHead>
-                                        <TableHead className="text-right">Custo Insumos (CMV)</TableHead>
+                                        <TableHead className="text-right">Breakdown do Custo</TableHead>
+                                        <TableHead className="text-right">Custo Total</TableHead>
                                         <TableHead className="text-right">Preço Sugerido</TableHead>
                                         <TableHead className="text-right">Preço Atual</TableHead>
                                         <TableHead className="text-right">Margem Atual</TableHead>
@@ -171,9 +222,38 @@ export default function Financeiro() {
                                             : 0;
 
                                         return (
-                                            <TableRow key={p.id}>
-                                                <TableCell className="font-bold">{p.name}</TableCell>
-                                                <TableCell className="text-right">R$ {p.totalCost.toFixed(2)}</TableCell>
+                                            <TableRow key={p.id} className="group">
+                                                <TableCell className="font-bold">
+                                                    <div className="flex flex-col">
+                                                        <span>{p.name}</span>
+                                                        <Button
+                                                            variant="link"
+                                                            size="sm"
+                                                            className="h-auto p-0 text-[10px] text-primary w-fit flex items-center gap-1"
+                                                            onClick={() => handleOpenEdit(p)}
+                                                        >
+                                                            <Edit className="h-2 w-2" /> Editar Custos Indiv.
+                                                        </Button>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex flex-col items-end gap-1">
+                                                        <div className="flex gap-1.5 overflow-hidden rounded-sm h-1.5 w-24 bg-muted">
+                                                            <div style={{ width: `${(p.ingredientCost / p.totalCost) * 100}%` }} className="bg-primary" title="Insumos" />
+                                                            <div style={{ width: `${(p.laborCost / p.totalCost) * 100}%` }} className="bg-emerald-500" title="Mão de Obra" />
+                                                            <div style={{ width: `${(p.energyCost / p.totalCost) * 100}%` }} className="bg-blue-500" title="Energia" />
+                                                            <div style={{ width: `${(p.otherCosts / p.totalCost) * 100}%` }} className="bg-orange-500" title="Outros" />
+                                                        </div>
+                                                        <div className="flex gap-2 text-[9px] text-muted-foreground font-medium">
+                                                            <span title="Insumos">INS: R${p.ingredientCost.toFixed(2)}</span>
+                                                            <span title="Mão de Obra">MOD: R${p.laborCost.toFixed(2)}</span>
+                                                            <span title="Energia/OPEX">OPX: R${(p.energyCost + p.otherCosts).toFixed(2)}</span>
+                                                        </div>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-right font-black text-foreground">
+                                                    R$ {p.totalCost.toFixed(2)}
+                                                </TableCell>
                                                 <TableCell className="text-right">
                                                     <div className="flex flex-col items-end">
                                                         <span className="font-black text-primary">R$ {dynamicSuggested.toFixed(2)}</span>
@@ -221,6 +301,77 @@ export default function Financeiro() {
                     )}
                 </CardContent>
             </Card>
+
+            {/* Edit Costs Dialog */}
+            <Dialog open={!!editingProduct} onOpenChange={(open) => !open && setEditingProduct(null)}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>Custos Individuais - {editingProduct?.name}</DialogTitle>
+                        <DialogDescription>
+                            Defina os custos operacionais exclusivos deste produto. Estes valores serão somados ao custo dos insumos.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label className="text-right flex items-center justify-end gap-2">
+                                <Factory className="h-4 w-4 text-emerald-500" />
+                                M.O.
+                            </Label>
+                            <div className="col-span-3 relative">
+                                <DollarSign className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    type="number"
+                                    value={editValues.labor}
+                                    onChange={(e) => setEditValues({ ...editValues, labor: e.target.value })}
+                                    className="pl-8"
+                                    placeholder="0.00"
+                                />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label className="text-right flex items-center justify-end gap-2">
+                                <Zap className="h-4 w-4 text-blue-500" />
+                                Energia
+                            </Label>
+                            <div className="col-span-3 relative">
+                                <DollarSign className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    type="number"
+                                    value={editValues.energy}
+                                    onChange={(e) => setEditValues({ ...editValues, energy: e.target.value })}
+                                    className="pl-8"
+                                    placeholder="0.00"
+                                />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label className="text-right flex items-center justify-end gap-2">
+                                <PackagePlus className="h-4 w-4 text-orange-500" />
+                                Outros
+                            </Label>
+                            <div className="col-span-3 relative">
+                                <DollarSign className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    type="number"
+                                    value={editValues.other}
+                                    onChange={(e) => setEditValues({ ...editValues, other: e.target.value })}
+                                    className="pl-8"
+                                    placeholder="0.00"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <div className="bg-muted/30 p-3 rounded-lg border border-dashed text-xs text-muted-foreground">
+                        <p><strong>Nota:</strong> O custo dos insumos (R$ {editingProduct?.ingredientCost.toFixed(2)}) é calculado automaticamente com base na ficha técnica.</p>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setEditingProduct(null)}>Cancelar</Button>
+                        <Button onClick={handleSaveCosts} disabled={updateSaleProduct.isPending}>
+                            {updateSaleProduct.isPending ? "Salvando..." : "Salvar Custos"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

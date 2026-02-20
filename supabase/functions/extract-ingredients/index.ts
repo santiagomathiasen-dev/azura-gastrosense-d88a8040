@@ -13,20 +13,36 @@ serve(async (req) => {
   try {
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     if (!GEMINI_API_KEY) {
+      console.error("GEMINI_API_KEY not found");
       return new Response(
         JSON.stringify({ error: "Erro de configuração: Chave da IA (GEMINI_API_KEY) não encontrada no servidor." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const { content, fileType, extractRecipe, mimeType: customMimeType } = await req.json();
+    const requestBody = await req.json();
+    const { content, fileType, extractRecipe, mimeType: customMimeType } = requestBody;
+
+    console.log(`Extraction request: fileType=${fileType}, extractRecipe=${extractRecipe}, mimeType=${customMimeType}`);
 
     if (!content) {
+      console.error("Content is missing in request body");
       return new Response(
         JSON.stringify({ error: "Conteúdo ausente" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Determine MIME type
+    let mimeType = customMimeType;
+    if (!mimeType) {
+      if (fileType === "pdf") mimeType = "application/pdf";
+      else if (fileType === "image") mimeType = "image/jpeg";
+      else if (fileType === "text" || fileType === "excel") mimeType = "text/plain";
+      else mimeType = "text/plain";
+    }
+
+    console.log(`Effective mimeType: ${mimeType}, content length: ${content.length}`);
 
     // System instruction for better compliance
     const systemPrompt = `Você é um assistente especializado em gestão de estoque e culinária profissional.
@@ -39,7 +55,7 @@ REGRAS CRÍTICAS:
 4. Categorias válidas: laticinios, secos_e_graos, hortifruti, carnes_e_peixes, embalagens, limpeza, outros.
 5. Unidades permitidas: kg, g, L, ml, unidade, caixa, dz.
 6. Retorne SEMPRE um JSON válido.
-7. No campo "summary", descreva brevemente o que encontrou.`;
+7. Se o documento for um PDF, certifique-se de ler TODOS os dados contidos nele.`;
 
     let userPrompt = "";
     if (extractRecipe) {
@@ -71,50 +87,36 @@ REGRAS CRÍTICAS:
       return isNaN(n) ? 0 : n;
     };
 
-    // Determine MIME type
-    let mimeType = customMimeType;
-    if (!mimeType) {
-      if (fileType === "pdf") mimeType = "application/pdf";
-      else if (fileType === "image") mimeType = "image/jpeg";
-      else if (fileType === "text" || fileType === "excel") mimeType = "text/plain";
-      else mimeType = "text/plain";
-    }
-
-    console.log(`Analyzing file with mimeType: ${mimeType}`);
+    const isBase64 = mimeType !== "text/plain";
 
     const geminiBody = {
-      system_instruction: {
-        parts: [{ text: systemPrompt }]
-      },
       contents: [
         {
           parts: [
-            mimeType === "text/plain"
-              ? { text: `Documento para analisar (pode conter texto ou base64):\n${content}\n\n${userPrompt}` }
-              : {
+            isBase64
+              ? {
                 inlineData: {
                   mimeType,
                   data: content,
                 },
-              },
-            mimeType !== "text/plain" ? { text: userPrompt } : null,
-          ].filter(Boolean),
+              }
+              : { text: content },
+            { text: `Instrução do Sistema: ${systemPrompt}\n\nTarefa: ${userPrompt}` },
+          ],
         },
       ],
       generationConfig: {
         temperature: 0.1,
         responseMimeType: "application/json",
       },
-      safetySettings: [
-        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
-      ],
     };
 
+    console.log("Calling Gemini API...");
+    // Use gemini-1.5-flash for speed, or gemini-1.5-pro for better PDF parsing if flash fails
+    const model = fileType === "pdf" ? "gemini-1.5-flash" : "gemini-1.5-flash"; // Flash is generally enough for PDFs if prompt is good
+
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -124,7 +126,7 @@ REGRAS CRÍTICAS:
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Gemini request failed:", response.status, errorText);
+      console.error(`Gemini request failed with status ${response.status}:`, errorText);
       return new Response(
         JSON.stringify({ error: "Erro na api do gemini", details: errorText }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -132,15 +134,19 @@ REGRAS CRÍTICAS:
     }
 
     const aiResponse = await response.json();
+    console.log("Gemini response received");
+
     const assistantMessage = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     if (!assistantMessage) {
       const finishReason = aiResponse.candidates?.[0]?.finishReason || "UNKNOWN";
-      console.warn("Gemini returned empty message. Finish reason:", finishReason);
+      const safetyRatings = aiResponse.candidates?.[0]?.safetyRatings;
+      console.warn("Gemini returned empty message. Finish reason:", finishReason, "Safety:", JSON.stringify(safetyRatings));
+
       return new Response(
         JSON.stringify({
           ingredients: [],
-          summary: `A IA não conseguiu processar o documento. Motivo: ${finishReason}.`
+          summary: `A IA não conseguiu processar o documento. Motivo: ${finishReason}. Verifique se o conteúdo é sensível ou se o arquivo está corrompido.`
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -149,7 +155,8 @@ REGRAS CRÍTICAS:
     let result: any = { ingredients: [], summary: "" };
 
     try {
-      const parsed = JSON.parse(assistantMessage.trim());
+      const cleanMessage = assistantMessage.trim();
+      const parsed = JSON.parse(cleanMessage);
       result = {
         ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : (Array.isArray(parsed) ? parsed : []),
         summary: parsed.summary || "",
@@ -159,7 +166,8 @@ REGRAS CRÍTICAS:
         yieldQuantity: toNumber(parsed.yieldQuantity),
       };
     } catch (e) {
-      console.error("Parse failure, attempting regex recovery");
+      console.error("Failed to parse Gemini response as JSON. Content:", assistantMessage.substring(0, 200));
+      // Fallback regex attempt
       const match = assistantMessage.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
       if (match) {
         try {
@@ -199,14 +207,16 @@ REGRAS CRÍTICAS:
       })
       .filter(Boolean);
 
+    console.log(`Successfully extracted ${result.ingredients.length} ingredients`);
+
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Critical error:", error);
+    console.error("Critical Edge Function Error:", error);
     return new Response(
       JSON.stringify({
-        error: "Erro na extração de ingredientes. Verifique se o arquivo é um PDF/Imagem válido e se a chave GEMINI_API_KEY está configurada.",
+        error: "Erro na extração de ingredientes. Verifique se o arquivo é um PDF/Imagem válido.",
         details: error instanceof Error ? error.message : String(error)
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
