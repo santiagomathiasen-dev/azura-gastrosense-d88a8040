@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
 import { getNow } from '@/lib/utils';
 
@@ -35,10 +36,12 @@ export interface CreateExpiryDate {
 
 export function useExpiryDates(stockItemId?: string) {
     const queryClient = useQueryClient();
+    const { ownerId } = useOwnerId();
 
     const { data: expiryDates = [], isLoading } = useQuery({
-        queryKey: ['expiry-dates', stockItemId],
+        queryKey: ['expiry-dates', stockItemId, ownerId],
         queryFn: async () => {
+            if (!ownerId) return [];
             let query = supabase
                 .from('item_expiry_dates' as any)
                 .select('*')
@@ -52,18 +55,17 @@ export function useExpiryDates(stockItemId?: string) {
             if (error) throw error;
             return (data || []) as unknown as ExpiryDate[];
         },
-        enabled: true,
+        enabled: !!ownerId,
     });
 
     const addExpiryDate = useMutation({
         mutationFn: async (newDate: CreateExpiryDate) => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('Usuário não autenticado');
+            if (!ownerId) throw new Error('Usuário não autenticado');
 
             const { data, error } = await supabase
                 .from('item_expiry_dates' as any)
                 .insert({
-                    user_id: user.id,
+                    user_id: ownerId,
                     stock_item_id: newDate.stock_item_id,
                     expiry_date: newDate.expiry_date,
                     batch_name: newDate.batch_name || null,

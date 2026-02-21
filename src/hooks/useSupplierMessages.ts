@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
 import { getNow } from '@/lib/utils';
 
@@ -12,10 +13,13 @@ interface SendMessageParams {
 
 export function useSupplierMessages() {
     const [isSending, setIsSending] = useState(false);
+    const { ownerId } = useOwnerId();
 
     const sendWhatsAppMessage = async ({ supplierId, phoneNumber, message, purchaseListId }: SendMessageParams) => {
         setIsSending(true);
         try {
+            if (!ownerId) throw new Error('Usuário não autenticado');
+
             // 1. Log message in database as 'pending'
             const { data: messageRecord, error: dbError } = await supabase
                 .from('supplier_messages')
@@ -24,8 +28,7 @@ export function useSupplierMessages() {
                     message_text: message,
                     whatsapp_status: 'pending',
                     purchase_list_id: purchaseListId,
-                    user_id: (await supabase.auth.getUser()).data.user?.id!,
-                    // Note: RLS should handle user_id, but good to be explicit if table requires
+                    user_id: ownerId,
                 })
                 .select()
                 .single();

@@ -37,6 +37,7 @@ export function useProductionStageExecution(productionId?: string) {
             const { data, error } = await supabase
                 .from('production_stage_executions')
                 .upsert({
+                    user_id: ownerId,
                     production_id: productionId,
                     stage_id: stageId,
                     started_at: getNow().toISOString(),

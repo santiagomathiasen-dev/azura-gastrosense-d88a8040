@@ -30,7 +30,7 @@ import { Shield } from 'lucide-react';
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Painel', permission: 'can_access_dashboard' },
-  { to: '/colaboradores', icon: Users, label: 'Colaboradores', permission: null, gestorOnly: true },
+  { to: '/cadastros', icon: Users, label: 'Cadastros', permission: null, managementOnly: true },
   { to: '/estoque', icon: Package, label: 'Estoque Central', permission: 'can_access_estoque' },
   { to: '/estoque-producao', icon: Boxes, label: 'Estoque Produção', permission: 'can_access_estoque_producao' },
   { to: '/estoque-insumos-produzidos', icon: UtensilsCrossed, label: 'Insumos Produzidos', permission: 'can_access_estoque_producao' },
@@ -48,7 +48,7 @@ const navItems = [
 export function Sidebar() {
   const { logout, user } = useAuth();
   const { collaborator, isCollaboratorMode, clearCollaboratorSession, hasAccess } = useCollaboratorContext();
-  const { isAdmin } = useUserRole();
+  const { isAdmin, isGestor } = useUserRole();
   const { profile } = useProfile();
   const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
@@ -63,29 +63,22 @@ export function Sidebar() {
   };
 
   // Build visible nav items
-  const visibleNavItems = [
-    ...navItems.filter(item => {
-      // Admin bypass (Santiago or Admin role)
-      if (isAdmin || profile?.email === 'santiago.aloom@gmail.com') return true;
+  const visibleNavItems = navItems.filter(item => {
+    // Admin bypass (Santiago or Admin role)
+    if (isAdmin || profile?.email === 'santiago.aloom@gmail.com') return true;
 
-      // Colaboradores or Gestores: strictly respect permission flags
-      if (item.permission) {
-        return (profile as any)?.[item.permission] === true;
-      }
+    // Colaboradores or Gestores: strictly respect permission flags
+    if (item.permission) {
+      return (profile as any)?.[item.permission] === true;
+    }
 
-      // Special pages: Gestores management only for Admin (handled below)
-      if (item.to === '/gestores') return false;
+    // "Cadastros" (managementOnly) for Gestores or Admins
+    if (item.managementOnly) {
+      return isAdmin || isGestor;
+    }
 
-      // Page for management of collaborators: only for Gestors or if permitted
-      if (item.gestorOnly) {
-        return profile?.role === 'gestor';
-      }
-
-      return true;
-    }),
-    // Admin: Gestores management
-    ...((isAdmin || profile?.email === 'santiago.aloom@gmail.com') ? [{ to: '/gestores', icon: Shield, label: 'Gestores', permission: null }] : []),
-  ];
+    return true;
+  });
   return (
     <aside
       className={cn(

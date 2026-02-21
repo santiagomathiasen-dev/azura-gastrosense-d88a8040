@@ -50,6 +50,7 @@ export function useProductionStepExecution(productionId?: string) {
       if (newStepIds.length === 0) return [];
 
       const executions = newStepIds.map(stepId => ({
+        user_id: ownerId,
         production_id: productionId,
         step_id: stepId,
         completed: false,
@@ -92,6 +93,7 @@ export function useProductionStepExecution(productionId?: string) {
         const { data, error } = await supabase
           .from('production_step_executions')
           .insert({
+            user_id: ownerId,
             production_id: productionId!,
             step_id: stepId,
             completed,

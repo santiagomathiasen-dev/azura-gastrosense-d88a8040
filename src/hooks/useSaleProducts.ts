@@ -102,6 +102,7 @@ export function useSaleProducts() {
 
       if (data.components.length > 0) {
         const componentsToInsert = data.components.map(c => ({
+          user_id: ownerId,
           sale_product_id: product.id,
           component_type: c.component_type,
           component_id: c.component_id,
@@ -155,6 +156,7 @@ export function useSaleProducts() {
 
         if (components.length > 0) {
           const componentsToInsert = components.map(c => ({
+            user_id: ownerId,
             sale_product_id: id,
             component_type: c.component_type,
             component_id: c.component_id,

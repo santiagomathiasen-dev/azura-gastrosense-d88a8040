@@ -37,7 +37,7 @@ export function useTechnicalSheetStages(technicalSheetId?: string) {
     queryKey: ['technical_sheet_stages', technicalSheetId],
     queryFn: async () => {
       if (!technicalSheetId || (!user?.id && !ownerId)) return [];
-      
+
       const { data, error } = await supabase
         .from('technical_sheet_stages')
         .select(`
@@ -46,9 +46,9 @@ export function useTechnicalSheetStages(technicalSheetId?: string) {
         `)
         .eq('technical_sheet_id', technicalSheetId)
         .order('order_index');
-      
+
       if (error) throw error;
-      
+
       // Sort steps within each stage
       return (data || []).map(stage => ({
         ...stage,
@@ -60,9 +60,10 @@ export function useTechnicalSheetStages(technicalSheetId?: string) {
 
   const createStage = useMutation({
     mutationFn: async (stage: Omit<TechnicalSheetStage, 'id' | 'created_at'>) => {
+      if (!ownerId) throw new Error('Usuário não autenticado');
       const { data, error } = await supabase
         .from('technical_sheet_stages')
-        .insert(stage)
+        .insert({ ...stage, user_id: ownerId })
         .select()
         .single();
       if (error) throw error;
@@ -115,9 +116,10 @@ export function useTechnicalSheetStages(technicalSheetId?: string) {
 
   const createStep = useMutation({
     mutationFn: async (step: Omit<TechnicalSheetStageStep, 'id' | 'created_at'>) => {
+      if (!ownerId) throw new Error('Usuário não autenticado');
       const { data, error } = await supabase
         .from('technical_sheet_stage_steps')
-        .insert(step)
+        .insert({ ...step, user_id: ownerId })
         .select()
         .single();
       if (error) throw error;

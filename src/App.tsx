@@ -22,8 +22,7 @@ const EstoqueProducao = lazy(() => import("@/pages/EstoqueProducao"));
 const EstoqueFinalizados = lazy(() => import("@/pages/EstoqueFinalizados"));
 const EstoqueInsumosProduzidos = lazy(() => import("@/pages/EstoqueInsumosProduzidos"));
 const ProdutosVenda = lazy(() => import("@/pages/ProdutosVenda"));
-const Colaboradores = lazy(() => import("@/pages/Colaboradores"));
-const Gestores = lazy(() => import("@/pages/Gestores"));
+const Cadastros = lazy(() => import("@/pages/Cadastros"));
 const Relatorios = lazy(() => import("@/pages/Relatorios"));
 const Financeiro = lazy(() => import("@/pages/Financeiro"));
 const Perdas = lazy(() => import("@/pages/Perdas"));
@@ -65,8 +64,7 @@ const App = () => (
                 >
                   <Route path="/" element={<Navigate to="/dashboard" replace />} />
                   <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/colaboradores" element={<Colaboradores />} />
-                  <Route path="/gestores" element={<Gestores />} />
+                  <Route path="/cadastros" element={<Cadastros />} />
                   <Route path="/estoque" element={<Estoque />} />
                   <Route path="/estoque-producao" element={<EstoqueProducao />} />
                   <Route path="/fichas" element={<Fichas />} />

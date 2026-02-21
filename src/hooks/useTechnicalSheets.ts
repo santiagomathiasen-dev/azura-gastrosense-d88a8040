@@ -130,9 +130,11 @@ export function useTechnicalSheets() {
       unit: string;
       stage_id?: string | null;
     }) => {
+      if (!ownerId) throw new Error('Usuário não autenticado');
       const { data, error } = await supabase
         .from('technical_sheet_ingredients')
         .insert({
+          user_id: ownerId,
           technical_sheet_id: ingredient.technical_sheet_id,
           stock_item_id: ingredient.stock_item_id,
           quantity: ingredient.quantity,
