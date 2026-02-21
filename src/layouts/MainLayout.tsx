@@ -10,7 +10,8 @@ import { XCircle } from 'lucide-react';
 export function MainLayout() {
   const { isImpersonating, stopImpersonation } = useCollaboratorContext();
   // Enable global realtime sync for all data tables
-  useGlobalRealtimeSync();
+  // useGlobalRealtimeSync();
+
 
   return (
     <div className="h-screen flex w-full bg-background overflow-hidden relative flex-col md:flex-row">

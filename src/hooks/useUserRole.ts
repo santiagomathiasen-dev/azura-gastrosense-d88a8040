@@ -12,19 +12,24 @@ export function useUserRole() {
   const { data: profile, isLoading } = useQuery({
     queryKey: ['user_profile_role', user?.id],
     queryFn: async () => {
-      if (!user?.id) return null;
-
+      console.log("useUserRole: Querying profile for user:", user?.id);
       const { data, error } = await supabase
         .from('profiles')
         .select('role, email, status')
         .eq('id', user.id)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('useUserRole: ERROR fetching profile:', error);
+        throw error;
+      }
+      console.log("useUserRole: Profile fetched successfully:", data);
       return data;
     },
     enabled: !!user?.id,
+    retry: false,
   });
+
 
   const userRole = profile?.role as AppRole;
   const isAdmin = userRole === 'admin';

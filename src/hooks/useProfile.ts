@@ -9,17 +9,24 @@ export function useProfile() {
         queryKey: ['profile', user?.id],
         queryFn: async () => {
             if (!user?.id) return null;
+            console.log("useProfile: fetching profile for", user.id);
             const { data, error } = await supabase
                 .from('profiles')
                 .select('*')
                 .eq('id', user.id)
                 .single();
 
-            if (error) throw error;
+            if (error) {
+                console.error("useProfile: ERROR", error);
+                throw error;
+            }
+            console.log("useProfile: SUCCESS", data);
             return data;
         },
         enabled: !!user?.id,
+        retry: false,
     });
+
 
     return {
         profile,
