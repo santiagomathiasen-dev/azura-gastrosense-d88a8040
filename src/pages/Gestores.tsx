@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
-import { useGestaoUsuarios, Profile, BusinessRole } from '@/hooks/useGestaoUsuarios';
+import { useGestaoUsuarios, Gestor } from '@/hooks/useGestaoUsuarios';
 import { PageHeader } from '@/components/PageHeader';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -11,49 +11,64 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
-import { Loader2, Search, Users, ShieldAlert } from 'lucide-react';
-import { useUserRole } from '@/hooks/useUserRole';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Label } from '@/components/ui/label';
+import { Loader2, Search, Users, ShieldAlert, Plus, Pencil, Trash2, KeyRound, Shield } from 'lucide-react';
 import { useProfile } from '@/hooks/useProfile';
 import { useCollaboratorContext } from '@/contexts/CollaboratorContext';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+
+const permissionLabels: Record<string, string> = {
+  can_access_dashboard: 'Painel',
+  can_access_estoque: 'Estoque Central',
+  can_access_estoque_producao: 'Estoque Produção',
+  can_access_fichas: 'Fichas Técnicas',
+  can_access_producao: 'Produções',
+  can_access_compras: 'Compras',
+  can_access_finalizados: 'Prod. Finalizadas',
+  can_access_produtos_venda: 'Produtos p/ Venda',
+};
 
 export default function Gestores() {
-  const { profiles, isLoading, updateStatus, updateRole } = useGestaoUsuarios();
+  const { profiles, isLoading, createGestor, updatePermissions, updateStatus, deleteGestor } = useGestaoUsuarios();
   const { setImpersonation } = useCollaboratorContext();
   const navigate = useNavigate();
   const { profile: currentProfile, isLoading: profileLoading } = useProfile();
-  const { isAdmin } = useUserRole();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState<string>('all');
 
-  const filteredProfiles = useMemo(() => {
-    return profiles.filter(p => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingGestor, setEditingGestor] = useState<Gestor | null>(null);
+
+  // Form state
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [permissions, setPermissions] = useState<Record<string, boolean>>({
+    can_access_dashboard: true,
+    can_access_estoque: true,
+    can_access_estoque_producao: true,
+    can_access_fichas: true,
+    can_access_producao: true,
+    can_access_compras: true,
+    can_access_finalizados: true,
+    can_access_produtos_venda: true,
+  });
+
+  const filteredGestors = useMemo(() => {
+    return profiles.filter(p => p.role === 'gestor').filter(p => {
       const pName = p.full_name || '';
       const pEmail = p.email || '';
-      const matchesSearch =
-        pName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      return pName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         pEmail.toLowerCase().includes(searchTerm.toLowerCase());
-
-      const matchesRole = roleFilter === 'all' || p.role === roleFilter;
-
-      return matchesSearch && matchesRole;
     });
-  }, [profiles, searchTerm, roleFilter]);
+  }, [profiles, searchTerm]);
 
-  // Permission check: strictly santiago.aloom@gmail.com
   const isSantiago = currentProfile?.email === 'santiago.aloom@gmail.com';
-  const hasAccess = isAdmin || isSantiago;
 
   if (isLoading || profileLoading) {
     return (
@@ -63,175 +78,188 @@ export default function Gestores() {
     );
   }
 
-  if (!hasAccess) {
+  if (!isSantiago) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <ShieldAlert className="h-12 w-12 text-destructive mb-4" />
         <h2 className="text-xl font-bold">Acesso Restrito</h2>
-        <p className="text-muted-foreground">Apenas administradores ou gestores podem acessar esta página.</p>
+        <p className="text-muted-foreground">Apenas o administrador principal pode gerenciar gestores.</p>
       </div>
     );
   }
 
+  const handleOpenCreate = () => {
+    setEditingGestor(null);
+    setName('');
+    setEmail('');
+    setPassword('');
+    setDialogOpen(true);
+  };
+
+  const handleOpenEdit = (gestor: Gestor) => {
+    setEditingGestor(gestor);
+    setPermissions({
+      can_access_dashboard: gestor.can_access_dashboard,
+      can_access_estoque: gestor.can_access_estoque,
+      can_access_estoque_producao: gestor.can_access_estoque_producao,
+      can_access_fichas: gestor.can_access_fichas,
+      can_access_producao: gestor.can_access_producao,
+      can_access_compras: gestor.can_access_compras,
+      can_access_finalizados: gestor.can_access_finalizados,
+      can_access_produtos_venda: gestor.can_access_produtos_venda,
+    });
+    setDialogOpen(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingGestor) {
+      await updatePermissions.mutateAsync({ gestorId: editingGestor.id, permissions });
+    } else {
+      await createGestor.mutateAsync({ name, email, password, permissions });
+    }
+    setDialogOpen(false);
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Gestão de Usuários"
-        description="Gerencie os status e cargos dos colaboradores e gestores do sistema"
+        title="Gestão de Gestores"
+        description="Controle quem são os administradores de unidades e suas permissões"
+        action={{
+          label: 'Novo Gestor',
+          onClick: handleOpenCreate,
+          icon: Plus,
+        }}
       />
 
-      {/* Stats Summary */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="bg-primary/5">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Total de Usuários</p>
-                <p className="text-3xl font-bold">{profiles.length}</p>
-              </div>
-              <Users className="h-8 w-8 text-primary opacity-20" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-green-500/5">
-          <CardContent className="pt-6">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Usuários Ativos</p>
-              <p className="text-3xl font-bold text-green-600">
-                {profiles.filter(p => p.status === 'ativo').length}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-destructive/5">
-          <CardContent className="pt-6">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Usuários Inativos</p>
-              <p className="text-3xl font-bold text-destructive/70">
-                {profiles.filter(p => p.status === 'inativo').length}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-col md:flex-row gap-4">
+      <div className="flex items-center gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar por nome ou e-mail..."
+            placeholder="Buscar gestor..."
             className="pl-9"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="w-full md:w-[200px]">
-          <Select value={roleFilter} onValueChange={setRoleFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder="Filtrar por Cargo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os Cargos</SelectItem>
-              <SelectItem value="admin">Administradores</SelectItem>
-              <SelectItem value="gestor">Gestores</SelectItem>
-              <SelectItem value="colaborador">Colaboradores</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
       </div>
 
-      {/* Main Table */}
-      <Card>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nome</TableHead>
-                <TableHead>E-mail</TableHead>
-                <TableHead>Cargo</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredProfiles.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                    Nenhum usuário encontrado.
-                  </TableCell>
-                </TableRow>
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingGestor ? 'Permissões do Gestor' : 'Novo Gestor'}</DialogTitle>
+            <DialogDescription>
+              {editingGestor ? `Ajuste o que ${editingGestor.full_name} pode acessar.` : 'Crie uma nova conta de gestor.'}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {!editingGestor && (
+              <>
+                <div className="space-y-2">
+                  <Label>Nome Completo</Label>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>E-mail</Label>
+                  <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Senha</Label>
+                  <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                </div>
+              </>
+            )}
 
-              ) : (
-                filteredProfiles.map((p) => (
-                  <TableRow key={p.id}>
-                    <TableCell className="font-medium">
-                      {p.full_name || 'Sem nome'}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {p.email}
-                    </TableCell>
-                    <TableCell>
-                      {isAdmin ? (
-                        <Select
-                          value={p.role}
-                          onValueChange={(value) => updateRole.mutate({ id: p.id, role: value as BusinessRole })}
-                          disabled={updateRole.isPending}
-                        >
-                          <SelectTrigger className="h-8 w-[140px] text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="admin">Admin</SelectItem>
-                            <SelectItem value="gestor">Gestor</SelectItem>
-                            <SelectItem value="colaborador">Colaborador</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Badge variant="outline" className="capitalize">
-                          {p.role}
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <span className={p.status === 'ativo' ? 'text-green-600 font-medium' : 'text-muted-foreground'}>
-                          {p.status === 'ativo' ? 'Ativo' : 'Inativo'}
-                        </span>
-                        <Switch
-                          checked={p.status === 'ativo'}
-                          disabled={updateStatus.isPending || (p.id === currentProfile?.id)}
-                          onCheckedChange={(checked) => {
-                            updateStatus.mutate({
-                              id: p.id,
-                              status: checked ? 'ativo' : 'inativo'
-                            });
-                          }}
-                        />
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {p.role === 'gestor' && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setImpersonation(p.id);
-                            toast.success(`Entrando como ${p.full_name || p.email}`);
-                            navigate('/dashboard');
-                          }}
-                        >
-                          Entrar como
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </Card>
+            <div className="space-y-3">
+              <Label className="flex items-center gap-2">
+                <Shield className="h-4 w-4" />
+                Permissões de Abas
+              </Label>
+              <div className="grid gap-2 p-3 bg-muted/50 rounded-lg">
+                {Object.keys(permissionLabels).map((key) => (
+                  <div key={key} className="flex items-center justify-between">
+                    <span className="text-sm">{permissionLabels[key]}</span>
+                    <Switch
+                      checked={permissions[key]}
+                      onCheckedChange={(checked) => setPermissions(prev => ({ ...prev, [key]: checked }))}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <Button type="submit" className="w-full" disabled={createGestor.isPending || updatePermissions.isPending}>
+              {editingGestor ? 'Salvar Permissões' : 'Criar Gestor'}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {filteredGestors.map((gestor) => (
+          <Card key={gestor.id} className={gestor.status !== 'ativo' ? 'opacity-60' : ''}>
+            <CardHeader className="pb-2">
+              <div className="flex items-start justify-between">
+                <div>
+                  <CardTitle className="text-base">{gestor.full_name}</CardTitle>
+                  <p className="text-xs text-muted-foreground">{gestor.email}</p>
+                </div>
+                <Switch
+                  checked={gestor.status === 'ativo'}
+                  onCheckedChange={(checked) => updateStatus.mutate({ id: gestor.id, status: checked ? 'ativo' : 'inativo' })}
+                />
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-1">
+                {Object.keys(permissionLabels).map(key => gestor[key as keyof Gestor] && (
+                  <Badge key={key} variant="secondary" className="text-[10px]">
+                    {permissionLabels[key]}
+                  </Badge>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="flex-1" onClick={() => handleOpenEdit(gestor)}>
+                  <Pencil className="h-3 w-3 mr-1" /> Permissões
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => {
+                    setImpersonation(gestor.id);
+                    toast.success(`Visualizando como ${gestor.full_name}`);
+                    navigate('/dashboard');
+                  }}
+                >
+                  <Users className="h-3 w-3 mr-1" /> Ver Dados
+                </Button>
+
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="ghost" size="sm" className="text-destructive">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Excluir Gestor?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Isso removerá a conta e todos os dados associados.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => deleteGestor.mutate(gestor.id)}>Excluir</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 }

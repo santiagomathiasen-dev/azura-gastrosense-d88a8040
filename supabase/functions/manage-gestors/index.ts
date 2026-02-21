@@ -111,7 +111,7 @@ serve(async (req) => {
 
       // CREATE gestor
       if (body.action === "create") {
-        const { email, name, password } = body;
+        const { email, name, password, permissions } = body;
 
         if (!email || !name || !password) {
           return new Response(JSON.stringify({ error: "Email, nome e senha são obrigatórios" }), {
@@ -120,18 +120,11 @@ serve(async (req) => {
           });
         }
 
-        if (password.length < 6) {
-          return new Response(JSON.stringify({ error: "Senha deve ter no mínimo 6 caracteres" }), {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-
-        // Create auth user (NOT auto-confirmed - requires email confirmation)
+        // Create auth user
         const { data: newUser, error: createError } = await admin.auth.admin.createUser({
           email: email.trim(),
           password,
-          email_confirm: false,
+          email_confirm: true,
           user_metadata: { name: name.trim(), full_name: name.trim() },
         });
 
@@ -146,13 +139,14 @@ serve(async (req) => {
           });
         }
 
-        // Update profile to gestor role with status_pagamento = true
+        // Update profile to gestor role with permissions
         const { error: profileError } = await admin
           .from("profiles")
           .update({
             role: "gestor",
             status_pagamento: true,
             full_name: name.trim(),
+            ...permissions
           })
           .eq("id", newUser.user.id);
 
@@ -160,22 +154,38 @@ serve(async (req) => {
           console.error("Error updating profile:", profileError);
         }
 
-        // Send confirmation email via Supabase magic link
-        // The user will receive an email to confirm their account
-        const { error: inviteError } = await admin.auth.admin.generateLink({
-          type: "signup",
-          email: email.trim(),
-          password,
-        });
-
-        if (inviteError) {
-          console.error("Invite link error (non-critical):", inviteError);
-        }
-
         return new Response(JSON.stringify({
           success: true,
-          message: "Gestor criado. Email de confirmação enviado."
+          message: "Gestor criado com sucesso."
         }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // UPDATE permissions
+      if (body.action === "update_permissions") {
+        const { gestorId, permissions } = body;
+        if (!gestorId || !permissions) {
+          return new Response(JSON.stringify({ error: "ID do gestor e permissões são obrigatórios" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const { error } = await admin
+          .from("profiles")
+          .update(permissions)
+          .eq("id", gestorId);
+
+        if (error) {
+          console.error("Error updating permissions:", error);
+          return new Response(JSON.stringify({ error: "Erro ao atualizar permissões" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response(JSON.stringify({ success: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -192,7 +202,7 @@ serve(async (req) => {
 
         const { error } = await admin
           .from("profiles")
-          .update({ status_pagamento: active })
+          .update({ status: active ? 'ativo' : 'inativo' } as any)
           .eq("id", gestorId);
 
         if (error) {

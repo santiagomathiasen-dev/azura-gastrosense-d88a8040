@@ -52,12 +52,23 @@ export function useCollaborators() {
     queryFn: async () => {
       if (!user?.id) return [];
 
-      const { data, error } = await supabase
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      let query = supabase
         .from('profiles')
         .select('*')
-        .eq('role', 'colaborador')
-        .eq('gestor_id', user.id)
-        .order('full_name');
+        .eq('role', 'colaborador');
+
+      // If not admin, filter by gestor_id
+      if (profile?.role !== 'admin') {
+        query = query.eq('gestor_id', user.id);
+      }
+
+      const { data, error } = await query.order('full_name');
 
       if (error) throw error;
 

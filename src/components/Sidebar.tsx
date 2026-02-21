@@ -65,20 +65,25 @@ export function Sidebar() {
   // Build visible nav items
   const visibleNavItems = [
     ...navItems.filter(item => {
-      // Admin sees everything
-      if (isAdmin) return true;
+      // Admin bypass (Santiago or Admin role)
+      if (isAdmin || profile?.email === 'santiago.aloom@gmail.com') return true;
 
-      // Colaboradores only see what's permitted
-      if (isCollaboratorMode) {
-        if (item.gestorOnly) return false;
-        if (item.permission) return hasAccess(item.to);
-        return true;
+      // Colaboradores or Gestores: strictly respect permission flags
+      if (item.permission) {
+        return (profile as any)?.[item.permission] === true;
       }
 
-      // Gestores see everything except explicitly Admin pages
-      return !item.to.includes('gestores');
+      // Special pages: Gestores management only for Admin (handled below)
+      if (item.to === '/gestores') return false;
+
+      // Page for management of collaborators: only for Gestors or if permitted
+      if (item.gestorOnly) {
+        return profile?.role === 'gestor';
+      }
+
+      return true;
     }),
-    // Admin or Santiago: Gestores management
+    // Admin: Gestores management
     ...((isAdmin || profile?.email === 'santiago.aloom@gmail.com') ? [{ to: '/gestores', icon: Shield, label: 'Gestores', permission: null }] : []),
   ];
   return (

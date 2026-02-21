@@ -14,6 +14,18 @@ export interface Profile {
     created_at: string;
 }
 
+export interface Gestor extends Profile {
+    can_access_dashboard: boolean;
+    can_access_estoque: boolean;
+    can_access_estoque_producao: boolean;
+    can_access_fichas: boolean;
+    can_access_producao: boolean;
+    can_access_compras: boolean;
+    can_access_finalizados: boolean;
+    can_access_produtos_venda: boolean;
+    status_pagamento: boolean;
+}
+
 export function useGestaoUsuarios() {
     const queryClient = useQueryClient();
 
@@ -22,65 +34,86 @@ export function useGestaoUsuarios() {
         queryFn: async () => {
             const { data, error } = await supabase
                 .from('profiles')
-                .select('id, full_name, email, role, status, created_at')
+                .select('*')
                 .order('created_at', { ascending: false });
 
-            if (error) {
-                console.error('Error fetching profiles:', error);
-                throw error;
-            }
-
-            // Map and ensure status has a default value
-            return ((data as any[]) || []).map(p => ({
+            if (error) throw error;
+            return (data || []).map(p => ({
                 ...p,
                 status: p.status || 'ativo'
-            })) as Profile[];
+            })) as Gestor[];
         },
+    });
+
+    const createGestor = useMutation({
+        mutationFn: async (data: any) => {
+            const { data: result, error } = await supabase.functions.invoke('manage-gestors', {
+                body: { action: 'create', ...data },
+            });
+            if (error) throw error;
+            if (result?.error) throw new Error(result.error);
+            return result;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['profiles-management'] });
+            toast.success('Gestor criado com sucesso');
+        },
+        onError: (error: any) => {
+            toast.error('Erro ao criar gestor: ' + error.message);
+        }
+    });
+
+    const updatePermissions = useMutation({
+        mutationFn: async ({ gestorId, permissions }: { gestorId: string; permissions: any }) => {
+            const { data: result, error } = await supabase.functions.invoke('manage-gestors', {
+                body: { action: 'update_permissions', gestorId, permissions },
+            });
+            if (error) throw error;
+            if (result?.error) throw new Error(result.error);
+            return result;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['profiles-management'] });
+            toast.success('Permissões atualizadas');
+        }
     });
 
     const updateStatus = useMutation({
         mutationFn: async ({ id, status }: { id: string; status: 'ativo' | 'inativo' }) => {
-            const { error } = await supabase
-                .from('profiles')
-                .update({ status } as any)
-                .eq('id', id);
-
+            const { data: result, error } = await supabase.functions.invoke('manage-gestors', {
+                body: { action: 'toggle_status', gestorId: id, active: status === 'ativo' },
+            });
             if (error) throw error;
+            if (result?.error) throw new Error(result.error);
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['profiles-management'] });
-            toast.success('Status atualizado com sucesso');
-        },
-        onError: (error: any) => {
-            console.error('Error updating status:', error);
-            toast.error('Erro ao atualizar status: ' + error.message);
+            toast.success('Status atualizado');
         },
     });
 
-    const updateRole = useMutation({
-        mutationFn: async ({ id, role }: { id: string; role: BusinessRole }) => {
-            const { error } = await supabase
-                .from('profiles')
-                .update({ role })
-                .eq('id', id);
-
+    const deleteGestor = useMutation({
+        mutationFn: async (id: string) => {
+            const { data: result, error } = await supabase.functions.invoke('manage-gestors', {
+                body: { action: 'delete', gestorId: id },
+            });
             if (error) throw error;
+            if (result?.error) throw new Error(result.error);
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['profiles-management'] });
-            toast.success('Cargo atualizado com sucesso');
-        },
-        onError: (error: any) => {
-            console.error('Error updating role:', error);
-            toast.error('Erro ao atualizar cargo: ' + error.message);
-        },
+            toast.success('Gestor excluído');
+        }
     });
 
     return {
         profiles,
         isLoading,
         error,
+        createGestor,
+        updatePermissions,
         updateStatus,
-        updateRole
+        deleteGestor
     };
 }
+
