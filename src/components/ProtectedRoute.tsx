@@ -25,24 +25,29 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const isEssentialLoading = authLoading;
   const isSecondaryLoading = roleLoading || profileLoading;
 
+  // EMERGENCY BYPASS: If the authenticated user is the admin, 
+  // we bypass loading guards to prevent the "Otimizando" hang.
+  const isAdminBypass = user?.email === 'santiago.aloom@gmail.com';
+
   useEffect(() => {
     let timer: NodeJS.Timeout;
-    if (isEssentialLoading || isSecondaryLoading) {
+    if ((isEssentialLoading || isSecondaryLoading) && !isAdminBypass) {
       timer = setTimeout(() => {
         setShowTimeoutMessage(true);
-      }, 10000); // 10 seconds timeout for smoother experience
+      }, 10000); // 10 seconds timeout
     }
     return () => clearTimeout(timer);
-  }, [isEssentialLoading, isSecondaryLoading]);
+  }, [isEssentialLoading, isSecondaryLoading, isAdminBypass]);
 
   // If essential auth is loading, show minimal loader
-  if (isEssentialLoading && !showTimeoutMessage) {
+  if (isEssentialLoading && !showTimeoutMessage && !isAdminBypass) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
+
 
   // Handle stuck loading
   if (showTimeoutMessage && (isEssentialLoading || isSecondaryLoading)) {
@@ -72,7 +77,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   // If we are logged in but profile is still loading, 
   // we can show a lighter loader or just continue to layout 
   // if the layout handles missing profile gracefully.
-  if (isSecondaryLoading && !profile && !isAdmin) {
+  if (isSecondaryLoading && !profile && !isAdmin && !isAdminBypass) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
