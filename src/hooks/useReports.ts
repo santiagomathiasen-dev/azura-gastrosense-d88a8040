@@ -98,13 +98,16 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
 
       if (error) throw error;
 
-      return data.map(sale => ({
-        date: format(new Date(sale.sale_date), 'dd/MM/yyyy HH:mm'),
-        productName: (sale.sale_product as any)?.name || 'Produto desconhecido',
-        quantity: sale.quantity_sold,
-        unitPrice: (sale.sale_product as any)?.sale_price || 0,
-        total: sale.quantity_sold * ((sale.sale_product as any)?.sale_price || 0),
-      })) as SalesReportItem[];
+      return data.map(sale => {
+        const dateObj = sale.sale_date ? new Date(sale.sale_date) : getNow();
+        return {
+          date: isNaN(dateObj.getTime()) ? '-' : format(dateObj, 'dd/MM/yyyy HH:mm'),
+          productName: (sale.sale_product as any)?.name || 'Produto desconhecido',
+          quantity: sale.quantity_sold,
+          unitPrice: (sale.sale_product as any)?.sale_price || 0,
+          total: sale.quantity_sold * ((sale.sale_product as any)?.sale_price || 0),
+        };
+      }) as SalesReportItem[];
     },
     enabled: !!user?.id || !!ownerId,
   });
@@ -144,28 +147,40 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
       if (legacyError) throw legacyError;
 
       // Combine both sources
-      const newLosses = (lossesData || []).map(loss => ({
-        date: format(new Date(loss.created_at), 'dd/MM/yyyy HH:mm'),
-        productName: loss.source_name,
-        quantity: Number(loss.quantity),
-        unit: loss.unit,
-        sourceType: loss.source_type,
-        estimatedValue: Number(loss.estimated_value) || 0,
-      }));
+      const newLosses = (lossesData || []).map(loss => {
+        const dateObj = loss.created_at ? new Date(loss.created_at) : getNow();
+        return {
+          date: isNaN(dateObj.getTime()) ? '-' : format(dateObj, 'dd/MM/yyyy HH:mm'),
+          productName: loss.source_name,
+          quantity: Number(loss.quantity),
+          unit: loss.unit,
+          sourceType: loss.source_type,
+          estimatedValue: Number(loss.estimated_value) || 0,
+        };
+      });
 
-      const legacyLosses = (legacyData || []).map(movement => ({
-        date: format(new Date(movement.created_at), 'dd/MM/yyyy HH:mm'),
-        productName: (movement.stock_item as any)?.name || 'Item desconhecido',
-        quantity: Number(movement.quantity),
-        unit: 'unidade',
-        sourceType: 'stock_item',
-        estimatedValue: Number(movement.quantity) * ((movement.stock_item as any)?.unit_price || 0),
-      }));
+      const legacyLosses = (legacyData || []).map(movement => {
+        const dateObj = movement.created_at ? new Date(movement.created_at) : getNow();
+        return {
+          date: isNaN(dateObj.getTime()) ? '-' : format(dateObj, 'dd/MM/yyyy HH:mm'),
+          productName: (movement.stock_item as any)?.name || 'Item desconhecido',
+          quantity: Number(movement.quantity),
+          unit: 'unidade',
+          sourceType: 'stock_item',
+          estimatedValue: Number(movement.quantity) * ((movement.stock_item as any)?.unit_price || 0),
+        };
+      });
 
-      return [...newLosses, ...legacyLosses].sort((a, b) =>
-        new Date(b.date.split(' ')[0].split('/').reverse().join('-')).getTime() -
-        new Date(a.date.split(' ')[0].split('/').reverse().join('-')).getTime()
-      ) as LossReportItem[];
+      return [...newLosses, ...legacyLosses].sort((a, b) => {
+        if (a.date === '-' || b.date === '-') return 0;
+        try {
+          const dateA = new Date(a.date.split(' ')[0].split('/').reverse().join('-')).getTime();
+          const dateB = new Date(b.date.split(' ')[0].split('/').reverse().join('-')).getTime();
+          return dateB - dateA;
+        } catch (e) {
+          return 0;
+        }
+      }) as LossReportItem[];
     },
     enabled: !!user?.id || !!ownerId,
   });
