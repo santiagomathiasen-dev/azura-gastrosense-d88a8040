@@ -15,9 +15,10 @@ export function useUserRole() {
       console.log("useUserRole: Querying profile for user:", user?.id);
       const { data, error } = await supabase
         .from('profiles')
-        .select('role, email, status')
+        .select('role, status')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
+
 
       if (error) {
         console.error('useUserRole: ERROR fetching profile:', error);

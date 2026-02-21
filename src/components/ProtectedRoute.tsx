@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
+
 import { useAuth } from '@/hooks/useAuth';
 import { useCollaboratorContext } from '@/contexts/CollaboratorContext';
 import { useUserRole } from '@/hooks/useUserRole';
@@ -14,20 +16,54 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { isCollaboratorMode, hasAccess } = useCollaboratorContext();
   const { isAdmin, isLoading: roleLoading } = useUserRole();
   const { profile, isLoading: profileLoading } = useProfile();
+  const isLoading = authLoading || roleLoading || profileLoading;
+  const [showTimeoutMessage, setShowTimeoutMessage] = useState(false);
+
   const location = useLocation();
 
-  const isLoading = authLoading || roleLoading || profileLoading;
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (isLoading) setShowTimeoutMessage(true);
+    }, 15000); // 15 seconds timeout
+    return () => clearTimeout(timer);
+  }, [isLoading]);
 
-  if (isLoading) {
+  if (isLoading && !showTimeoutMessage) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-muted-foreground">Carregando...</p>
+          <p className="text-muted-foreground">Carregando perfil...</p>
         </div>
       </div>
     );
   }
+
+  if (isLoading && showTimeoutMessage) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4 text-center">
+        <div className="max-w-md space-y-4">
+          <h1 className="text-xl font-bold">O carregamento está demorando...</h1>
+          <p className="text-muted-foreground">O banco de dados pode estar lento ou com erro de permissão.</p>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-primary text-primary-foreground px-4 py-2 rounded-md"
+            >
+              Tentar Novamente
+            </button>
+            <button
+              onClick={() => setShowTimeoutMessage(false)}
+              className="text-sm underline"
+            >
+              Continuar mesmo assim (pode falhar)
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
 
   // Allow access if user is logged in OR if collaborator is logged in
   if (!user && !isCollaboratorMode) {
