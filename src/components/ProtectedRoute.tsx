@@ -16,47 +16,47 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { isCollaboratorMode, hasAccess } = useCollaboratorContext();
   const { isAdmin, isLoading: roleLoading } = useUserRole();
   const { profile, isLoading: profileLoading } = useProfile();
-  const isLoading = authLoading || roleLoading || profileLoading;
   const [showTimeoutMessage, setShowTimeoutMessage] = useState(false);
-
   const location = useLocation();
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (isLoading) setShowTimeoutMessage(true);
-    }, 15000); // 15 seconds timeout
-    return () => clearTimeout(timer);
-  }, [isLoading]);
+  // Optimized loading check: 
+  // We only wait for auth to finish initially. 
+  // Role and profile can load "in the background" unless we are on a page that strictly requires them.
+  const isEssentialLoading = authLoading;
+  const isSecondaryLoading = roleLoading || profileLoading;
 
-  if (isLoading && !showTimeoutMessage) {
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (isEssentialLoading || isSecondaryLoading) {
+      timer = setTimeout(() => {
+        setShowTimeoutMessage(true);
+      }, 10000); // 10 seconds timeout for smoother experience
+    }
+    return () => clearTimeout(timer);
+  }, [isEssentialLoading, isSecondaryLoading]);
+
+  // If essential auth is loading, show minimal loader
+  if (isEssentialLoading && !showTimeoutMessage) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-muted-foreground">Carregando perfil...</p>
-        </div>
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
-  if (isLoading && showTimeoutMessage) {
+  // Handle stuck loading
+  if (showTimeoutMessage && (isEssentialLoading || isSecondaryLoading)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4 text-center">
         <div className="max-w-md space-y-4">
-          <h1 className="text-xl font-bold">O carregamento está demorando...</h1>
-          <p className="text-muted-foreground">O banco de dados pode estar lento ou com erro de permissão.</p>
+          <h1 className="text-xl font-bold">Otimizando carregamento...</h1>
+          <p className="text-muted-foreground">O sistema está verificando suas permissões.</p>
           <div className="flex flex-col gap-2">
-            <button
-              onClick={() => window.location.reload()}
-              className="bg-primary text-primary-foreground px-4 py-2 rounded-md"
-            >
-              Tentar Novamente
+            <button onClick={() => window.location.reload()} className="bg-primary text-primary-foreground px-4 py-2 rounded-md">
+              Recarregar Sistema
             </button>
-            <button
-              onClick={() => setShowTimeoutMessage(false)}
-              className="text-sm underline"
-            >
-              Continuar mesmo assim (pode falhar)
+            <button onClick={() => setShowTimeoutMessage(false)} className="text-sm underline">
+              Tentar entrar mesmo assim
             </button>
           </div>
         </div>
@@ -64,10 +64,23 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-
-  // Allow access if user is logged in OR if collaborator is logged in
-  if (!user && !isCollaboratorMode) {
+  // Redirect to auth if not logged in
+  if (!authLoading && !user && !isCollaboratorMode) {
     return <Navigate to="/auth" state={{ from: location }} replace />;
+  }
+
+  // If we are logged in but profile is still loading, 
+  // we can show a lighter loader or just continue to layout 
+  // if the layout handles missing profile gracefully.
+  if (isSecondaryLoading && !profile && !isAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-muted-foreground text-sm">Carregando permissões...</p>
+        </div>
+      </div>
+    );
   }
 
   // Check payment/active status for non-admin profiles
@@ -76,14 +89,13 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const isPaymentPending = profile?.status_pagamento === false;
 
   // Admins and Santiago are never blocked/payment-restricted here for management purposes
-  if (user && !isAdmin && !isSantiago) {
+  if (user && !isAdmin && !isSantiago && profile) {
     if (isBlocked) {
-      // If blocked, we could redirect to a specific "Account Blocked" page or just show a message
       return (
         <div className="min-h-screen flex items-center justify-center bg-background p-4 text-center">
           <div className="max-w-md space-y-4">
             <h1 className="text-2xl font-bold text-destructive">Conta Bloqueada</h1>
-            <p className="text-muted-foreground">Sua conta foi desativada pelo administrador do sistema. Entre em contato para mais informações.</p>
+            <p className="text-muted-foreground">Sua conta foi desativada pelo administrador.</p>
             <Navigate to="/auth" replace />
           </div>
         </div>
@@ -102,3 +114,4 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   return <>{children}</>;
 }
+

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -8,24 +9,35 @@ import { CollaboratorProvider } from "@/contexts/CollaboratorContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { MainLayout } from "@/layouts/MainLayout";
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
-import Auth from "@/pages/Auth";
-import Dashboard from "@/pages/Dashboard";
-import Estoque from "@/pages/Estoque";
-import Fichas from "@/pages/Fichas";
-import Producao from "@/pages/Producao";
-import Compras from "@/pages/Compras";
-import EstoqueProducao from "@/pages/EstoqueProducao";
-import EstoqueFinalizados from "@/pages/EstoqueFinalizados";
-import EstoqueInsumosProduzidos from "@/pages/EstoqueInsumosProduzidos";
-import ProdutosVenda from "@/pages/ProdutosVenda";
-import Colaboradores from "@/pages/Colaboradores";
-import Gestores from "@/pages/Gestores";
-import Relatorios from "@/pages/Relatorios";
-import Financeiro from "@/pages/Financeiro";
-import Perdas from "@/pages/Perdas";
-import PrevisaoVendas from "@/pages/PrevisaoVendas";
-import PaymentRequired from "@/pages/PaymentRequired";
-import NotFound from "@/pages/NotFound";
+import { Loader2 } from "lucide-react";
+
+// Lazy loading components for better performance
+const Auth = lazy(() => import("@/pages/Auth"));
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const Estoque = lazy(() => import("@/pages/Estoque"));
+const Fichas = lazy(() => import("@/pages/Fichas"));
+const Producao = lazy(() => import("@/pages/Producao"));
+const Compras = lazy(() => import("@/pages/Compras"));
+const EstoqueProducao = lazy(() => import("@/pages/EstoqueProducao"));
+const EstoqueFinalizados = lazy(() => import("@/pages/EstoqueFinalizados"));
+const EstoqueInsumosProduzidos = lazy(() => import("@/pages/EstoqueInsumosProduzidos"));
+const ProdutosVenda = lazy(() => import("@/pages/ProdutosVenda"));
+const Colaboradores = lazy(() => import("@/pages/Colaboradores"));
+const Gestores = lazy(() => import("@/pages/Gestores"));
+const Relatorios = lazy(() => import("@/pages/Relatorios"));
+const Financeiro = lazy(() => import("@/pages/Financeiro"));
+const Perdas = lazy(() => import("@/pages/Perdas"));
+const PrevisaoVendas = lazy(() => import("@/pages/PrevisaoVendas"));
+const PaymentRequired = lazy(() => import("@/pages/PaymentRequired"));
+const NotFound = lazy(() => import("@/pages/NotFound"));
+
+const LoadingFallback = () => (
+  <div className="h-screen w-screen flex flex-col items-center justify-center gap-4 bg-background">
+    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    <p className="text-muted-foreground animate-pulse">Carregando módulo...</p>
+  </div>
+);
+
 
 const queryClient = new QueryClient();
 
@@ -38,45 +50,48 @@ const App = () => (
           <Sonner />
           <PWAInstallPrompt />
           <BrowserRouter>
-            <Routes>
-              {/* Public Routes */}
-              <Route path="/auth" element={<Auth />} />
+            <Suspense fallback={<LoadingFallback />}>
+              <Routes>
+                {/* Public Routes */}
+                <Route path="/auth" element={<Auth />} />
 
-              {/* Protected Routes */}
-              <Route
-                element={
-                  <ProtectedRoute>
-                    <MainLayout />
-                  </ProtectedRoute>
-                }
-              >
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/colaboradores" element={<Colaboradores />} />
-                <Route path="/gestores" element={<Gestores />} />
-                <Route path="/estoque" element={<Estoque />} />
-                <Route path="/estoque-producao" element={<EstoqueProducao />} />
-                <Route path="/fichas" element={<Fichas />} />
-                <Route path="/producao" element={<Producao />} />
-                <Route path="/compras" element={<Compras />} />
-                <Route path="/estoque-finalizados" element={<EstoqueFinalizados />} />
-                <Route path="/estoque-insumos-produzidos" element={<EstoqueInsumosProduzidos />} />
-                <Route path="/produtos-venda" element={<ProdutosVenda />} />
-                <Route path="/perdas" element={<Perdas />} />
-                <Route path="/previsao-vendas" element={<PrevisaoVendas />} />
-                <Route path="/relatorios" element={<Relatorios />} />
-                <Route path="/financeiro" element={<Financeiro />} />
-                <Route path="/payment-required" element={<PaymentRequired />} />
-              </Route>
+                {/* Protected Routes */}
+                <Route
+                  element={
+                    <ProtectedRoute>
+                      <MainLayout />
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/colaboradores" element={<Colaboradores />} />
+                  <Route path="/gestores" element={<Gestores />} />
+                  <Route path="/estoque" element={<Estoque />} />
+                  <Route path="/estoque-producao" element={<EstoqueProducao />} />
+                  <Route path="/fichas" element={<Fichas />} />
+                  <Route path="/producao" element={<Producao />} />
+                  <Route path="/compras" element={<Compras />} />
+                  <Route path="/estoque-finalizados" element={<EstoqueFinalizados />} />
+                  <Route path="/estoque-insumos-produzidos" element={<EstoqueInsumosProduzidos />} />
+                  <Route path="/produtos-venda" element={<ProdutosVenda />} />
+                  <Route path="/perdas" element={<Perdas />} />
+                  <Route path="/previsao-vendas" element={<PrevisaoVendas />} />
+                  <Route path="/relatorios" element={<Relatorios />} />
+                  <Route path="/financeiro" element={<Financeiro />} />
+                  <Route path="/payment-required" element={<PaymentRequired />} />
+                </Route>
 
-              {/* 404 */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+                {/* 404 */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
           </BrowserRouter>
         </TooltipProvider>
       </CollaboratorProvider>
     </AuthProvider>
   </QueryClientProvider>
+
 );
 
 export default App;
