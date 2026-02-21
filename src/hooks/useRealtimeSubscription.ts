@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useCollaboratorContext } from '@/contexts/CollaboratorContext';
 
-type TableName = 
+type TableName =
   | 'stock_items'
   | 'technical_sheets'
   | 'productions'
@@ -49,7 +49,7 @@ export function useRealtimeSubscription({ tables }: UseRealtimeOptions) {
           },
           (payload) => {
             console.log(`Realtime update on ${table}:`, payload.eventType);
-            
+
             // Invalidate all related queries
             queryClient.invalidateQueries({ queryKey: [table] });
 
@@ -90,26 +90,30 @@ export function useRealtimeSubscription({ tables }: UseRealtimeOptions) {
   }, [user?.id, isCollaboratorMode, gestorId, tables, queryClient]);
 }
 
+const GLOBAL_TABLES: TableName[] = [
+  'stock_items',
+  'technical_sheets',
+  'productions',
+  'finished_productions_stock',
+  'production_stock',
+  'suppliers',
+  'stock_movements',
+  'purchase_list_items',
+  'sale_products',
+  'sales',
+  'technical_sheet_ingredients',
+  'sale_product_components',
+  'stock_requests',
+  'stock_transfers',
+];
+
 /**
  * Preset hook for subscribing to all main data tables
  */
 export function useGlobalRealtimeSync() {
   useRealtimeSubscription({
-    tables: [
-      'stock_items',
-      'technical_sheets',
-      'productions',
-      'finished_productions_stock',
-      'production_stock',
-      'suppliers',
-      'stock_movements',
-      'purchase_list_items',
-      'sale_products',
-      'sales',
-      'technical_sheet_ingredients',
-      'sale_product_components',
-      'stock_requests',
-      'stock_transfers',
-    ],
+    tables: GLOBAL_TABLES,
   });
 }
+
+
