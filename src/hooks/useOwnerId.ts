@@ -13,13 +13,18 @@ import { useCollaboratorContext } from '@/contexts/CollaboratorContext';
  */
 export function useOwnerId() {
   const { user } = useAuth();
-  const { isCollaboratorMode, gestorId } = useCollaboratorContext();
+  const { isCollaboratorMode, gestorId, impersonatedGestorId, isImpersonating } = useCollaboratorContext();
 
   // For collaborators, we already have the gestorId from context
-  // For gestors, we call the database function to get the owner_id
+  // For gestors/admins, we call the database function to get the owner_id
   const { data: ownerId, isLoading } = useQuery({
-    queryKey: ['owner_id', user?.id, isCollaboratorMode, gestorId],
+    queryKey: ['owner_id', user?.id, isCollaboratorMode, gestorId, impersonatedGestorId],
     queryFn: async () => {
+      // If Admin is impersonating a gestor, use that ID
+      if (isImpersonating && impersonatedGestorId) {
+        return impersonatedGestorId;
+      }
+
       // If in collaborator mode, use the gestorId from context
       if (isCollaboratorMode && gestorId) {
         return gestorId;
@@ -35,12 +40,12 @@ export function useOwnerId() {
       }
       return data as string;
     },
-    enabled: !!user?.id || isCollaboratorMode,
-    staleTime: Infinity, // This value won't change during a session
+    enabled: !!user?.id || isCollaboratorMode || isImpersonating,
+    staleTime: Infinity,
   });
 
   return {
-    ownerId: ownerId || gestorId || user?.id || null,
+    ownerId: ownerId || impersonatedGestorId || gestorId || user?.id || null,
     isLoading,
   };
 }

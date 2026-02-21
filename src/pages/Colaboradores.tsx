@@ -13,6 +13,7 @@ import { Plus, Pencil, Trash2, KeyRound, Users, Shield, Eye, EyeOff } from 'luci
 import { EmptyState } from '@/components/EmptyState';
 import { Loader2 } from 'lucide-react';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import { toast } from 'sonner';
 
 const defaultPermissions: CollaboratorPermissions = {
   can_access_dashboard: true,
@@ -41,6 +42,8 @@ export default function Colaboradores() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCollaborator, setEditingCollaborator] = useState<Collaborator | null>(null);
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pinError, setPinError] = useState('');
@@ -49,6 +52,8 @@ export default function Colaboradores() {
   const handleOpenCreate = () => {
     setEditingCollaborator(null);
     setName('');
+    setEmail('');
+    setPassword('');
     setPin('');
     setConfirmPin('');
     setPinError('');
@@ -59,6 +64,8 @@ export default function Colaboradores() {
   const handleOpenEdit = (collab: Collaborator) => {
     setEditingCollaborator(collab);
     setName(collab.name);
+    setEmail(collab.email || '');
+    setPassword('');
     setPin('');
     setConfirmPin('');
     setPinError('');
@@ -79,17 +86,27 @@ export default function Colaboradores() {
     e.preventDefault();
     if (!name.trim()) return;
 
-    // For new collaborators, PIN is required
+    // For new collaborators, email and password are required along with PIN
     if (!editingCollaborator) {
-      if (pin.length !== 6) {
+      if (!email.trim() || !password.trim()) {
+        toast.error('Email e senha são obrigatórios');
+        return;
+      }
+      if (pin.length > 0 && pin.length !== 6) {
         setPinError('PIN deve ter 6 dígitos');
         return;
       }
-      if (pin !== confirmPin) {
+      if (pin.length > 0 && pin !== confirmPin) {
         setPinError('Os PINs não coincidem');
         return;
       }
-      await createCollaborator.mutateAsync({ name: name.trim(), pin, permissions });
+      await createCollaborator.mutateAsync({
+        name: name.trim(),
+        email: email.trim(),
+        password: password.trim(),
+        pin: pin || undefined,
+        permissions
+      });
     } else {
       // For editing, PIN is optional (only update if provided)
       if (pin.length > 0 && pin.length !== 6) {
@@ -100,11 +117,11 @@ export default function Colaboradores() {
         setPinError('Os PINs não coincidem');
         return;
       }
-      await updateCollaborator.mutateAsync({ 
-        id: editingCollaborator.id, 
-        name: name.trim(), 
+      await updateCollaborator.mutateAsync({
+        id: editingCollaborator.id,
+        name: name.trim(),
         pin: pin.length === 6 ? pin : undefined,
-        permissions 
+        permissions
       });
     }
     setDialogOpen(false);
@@ -139,21 +156,50 @@ export default function Colaboradores() {
           <DialogHeader>
             <DialogTitle>{editingCollaborator ? 'Editar Colaborador' : 'Novo Colaborador'}</DialogTitle>
             <DialogDescription>
-              {editingCollaborator 
+              {editingCollaborator
                 ? 'Atualize os dados e permissões. Deixe o PIN vazio para manter o atual.'
                 : 'Preencha os dados do colaborador. O PIN será usado para login.'}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Nome do Colaborador</Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Nome completo"
-                required
-              />
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nome do Colaborador</Label>
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Nome completo"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="email@exemplo.com"
+                  required
+                  disabled={!!editingCollaborator}
+                />
+              </div>
+
+              {!editingCollaborator && (
+                <div className="space-y-2">
+                  <Label htmlFor="password">Senha Temporária</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Mínimo 6 caracteres"
+                    required
+                  />
+                </div>
+              )}
             </div>
 
             <div className="space-y-3">
@@ -262,6 +308,7 @@ export default function Colaboradores() {
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
                     <CardTitle className="text-base">{collab.name}</CardTitle>
+                    <p className="text-xs text-muted-foreground">{collab.email}</p>
                     <div className="flex gap-1.5">
                       {!collab.is_active && (
                         <Badge variant="destructive" className="text-xs">Inativo</Badge>
@@ -276,7 +323,7 @@ export default function Colaboradores() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex flex-wrap gap-1">
-                  {(Object.keys(permissionLabels) as Array<keyof CollaboratorPermissions>).map((key) => 
+                  {(Object.keys(permissionLabels) as Array<keyof CollaboratorPermissions>).map((key) =>
                     collab[key] && (
                       <Badge key={key} variant="outline" className="text-xs font-normal">
                         {permissionLabels[key]}
@@ -284,12 +331,12 @@ export default function Colaboradores() {
                     )
                   )}
                 </div>
-                
+
                 <div className="flex gap-1.5 pt-2">
                   <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(collab)}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
-                  
+
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">

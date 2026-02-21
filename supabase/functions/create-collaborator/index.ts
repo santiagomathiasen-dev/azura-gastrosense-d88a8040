@@ -9,7 +9,9 @@ const corsHeaders = {
 
 type RequestBody = {
   name: string;
-  pin: string;
+  email: string;
+  password?: string;
+  pin?: string;
   permissions: {
     can_access_dashboard: boolean;
     can_access_estoque: boolean;
@@ -28,12 +30,6 @@ async function hashPin(pin: string): Promise<string> {
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-function generateCollaboratorEmail(gestorId: string, name: string): string {
-  const sanitizedName = name.toLowerCase().replace(/[^a-z0-9]/g, "");
-  const randomSuffix = Math.random().toString(36).substring(2, 8);
-  return `collab_${sanitizedName}_${randomSuffix}@${gestorId.substring(0, 8)}.azura.local`;
 }
 
 function generatePassword(): string {
@@ -87,15 +83,6 @@ serve(async (req) => {
     const gestorId = gestorUser.id;
     const admin = createClient(url, serviceRoleKey);
 
-    // Get gestor's email for verification
-    const { data: gestorData } = await admin.auth.admin.getUserById(gestorId);
-    if (!gestorData?.user?.email) {
-      return new Response(JSON.stringify({ error: "Gestor não encontrado" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     const body = (await req.json().catch(() => null)) as RequestBody | null;
     if (!body) {
       return new Response(JSON.stringify({ error: "Corpo inválido" }), {
@@ -104,7 +91,7 @@ serve(async (req) => {
       });
     }
 
-    const { name, pin, permissions } = body;
+    const { name, email, password, pin, permissions } = body;
 
     if (!name || name.trim().length < 2) {
       return new Response(JSON.stringify({ error: "Nome inválido" }), {
@@ -113,19 +100,18 @@ serve(async (req) => {
       });
     }
 
-    if (!/^\d{6}$/.test(pin)) {
-      return new Response(JSON.stringify({ error: "PIN deve ter 6 dígitos" }), {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return new Response(JSON.stringify({ error: "Email inválido" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // 1) Create a Supabase Auth user for the collaborator
-    const collabEmail = generateCollaboratorEmail(gestorId, name);
-    const collabPassword = generatePassword();
+    const collabPassword = password || generatePassword();
 
     const { data: newUser, error: createUserError } = await admin.auth.admin.createUser({
-      email: collabEmail,
+      email: email,
       password: collabPassword,
       email_confirm: true, // Auto-confirm
       user_metadata: {
@@ -137,51 +123,33 @@ serve(async (req) => {
 
     if (createUserError || !newUser?.user) {
       console.error("Error creating auth user:", createUserError);
-      return new Response(JSON.stringify({ error: "Erro ao criar usuário" }), {
-        status: 500,
+      return new Response(JSON.stringify({ error: createUserError?.message || "Erro ao criar usuário" }), {
+        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // 2) Update the profile to set gestor_id (trigger creates profile automatically)
-    const { error: profileError } = await admin
+    // 2) Update the profile to set gestor_id, role, pins and permissions
+    const hashedPin = pin ? await hashPin(pin) : null;
+    const { data: collaborator, error: profileError } = await admin
       .from("profiles")
       .update({
         gestor_id: gestorId,
         full_name: name,
+        role: 'colaborador',
+        pin_hash: hashedPin,
+        ...permissions,
+        status: 'ativo'
       })
-      .eq("id", newUser.user.id);
+      .eq("id", newUser.user.id)
+      .select()
+      .single();
 
     if (profileError) {
       console.error("Error updating profile:", profileError);
       // Cleanup: delete the created user
       await admin.auth.admin.deleteUser(newUser.user.id);
       return new Response(JSON.stringify({ error: "Erro ao configurar perfil" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // 3) Create entry in collaborators table
-    const hashedPin = await hashPin(pin);
-
-    const { data: collaborator, error: collabError } = await admin
-      .from("collaborators")
-      .insert({
-        gestor_id: gestorId,
-        auth_user_id: newUser.user.id,
-        name: name.trim(),
-        pin_hash: hashedPin,
-        ...permissions,
-      })
-      .select()
-      .single();
-
-    if (collabError) {
-      console.error("Error creating collaborator:", collabError);
-      // Cleanup: delete the created user
-      await admin.auth.admin.deleteUser(newUser.user.id);
-      return new Response(JSON.stringify({ error: "Erro ao criar colaborador" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

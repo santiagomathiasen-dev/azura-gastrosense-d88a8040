@@ -470,8 +470,18 @@ export type Database = {
           gestor_id: string | null
           id: string
           role: Database["public"]["Enums"]["business_role"]
+          status: string | null
           status_pagamento: boolean
           updated_at: string
+          pin_hash: string | null
+          can_access_dashboard: boolean
+          can_access_estoque: boolean
+          can_access_estoque_producao: boolean
+          can_access_fichas: boolean
+          can_access_producao: boolean
+          can_access_compras: boolean
+          can_access_finalizados: boolean
+          can_access_produtos_venda: boolean
         }
         Insert: {
           created_at?: string
@@ -480,8 +490,18 @@ export type Database = {
           gestor_id?: string | null
           id: string
           role?: Database["public"]["Enums"]["business_role"]
+          status?: string | null
           status_pagamento?: boolean
           updated_at?: string
+          pin_hash?: string | null
+          can_access_dashboard?: boolean
+          can_access_estoque?: boolean
+          can_access_estoque_producao?: boolean
+          can_access_fichas?: boolean
+          can_access_producao?: boolean
+          can_access_compras?: boolean
+          can_access_finalizados?: boolean
+          can_access_produtos_venda?: boolean
         }
         Update: {
           created_at?: string
@@ -490,8 +510,18 @@ export type Database = {
           gestor_id?: string | null
           id?: string
           role?: Database["public"]["Enums"]["business_role"]
+          status?: string | null
           status_pagamento?: boolean
           updated_at?: string
+          pin_hash?: string | null
+          can_access_dashboard?: boolean
+          can_access_estoque?: boolean
+          can_access_estoque_producao?: boolean
+          can_access_fichas?: boolean
+          can_access_producao?: boolean
+          can_access_compras?: boolean
+          can_access_finalizados?: boolean
+          can_access_produtos_venda?: boolean
         }
         Relationships: [
           {
@@ -1396,7 +1426,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "user"
-      business_role: "gestor" | "producao" | "estoque" | "venda" | "teste"
+      business_role: "admin" | "gestor" | "colaborador"
       movement_source: "manual" | "production" | "audio" | "image"
       movement_type: "entry" | "exit" | "adjustment"
       production_period: "day" | "week" | "month" | "year" | "custom"
@@ -1408,12 +1438,12 @@ export type Database = {
       | "bar"
       forecast_order_status: "pending" | "in_progress" | "completed" | "cancelled"
       production_status:
-        | "requested"
-        | "planned"
-        | "in_progress"
-        | "completed"
-        | "cancelled"
-        | "paused"
+      | "requested"
+      | "planned"
+      | "in_progress"
+      | "completed"
+      | "cancelled"
+      | "paused"
       production_type: "insumo" | "final"
       purchase_status: "pending" | "ordered" | "delivered" | "cancelled"
       sale_component_type: "finished_production" | "stock_item" | "sale_product"
@@ -1554,7 +1584,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "user"],
-      business_role: ["gestor", "producao", "estoque", "venda", "teste"],
+      business_role: ["admin", "gestor", "colaborador"],
       movement_source: ["manual", "production", "audio", "image"],
       movement_type: ["entry", "exit", "adjustment"],
       production_period: ["day", "week", "month", "year", "custom"],

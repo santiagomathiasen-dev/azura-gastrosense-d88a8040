@@ -36,10 +36,27 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   // Check payment/active status for non-admin profiles
   const isSantiago = profile?.email === 'santiago.aloom@gmail.com';
-  const isInactive = profile && (profile.status_pagamento === false || (profile as any).status === 'inativo');
+  const isBlocked = profile?.status === 'inativo';
+  const isPaymentPending = profile?.status_pagamento === false;
 
-  if (user && !isAdmin && !isSantiago && isInactive && location.pathname !== '/payment-required') {
-    return <Navigate to="/payment-required" replace />;
+  // Admins and Santiago are never blocked/payment-restricted here for management purposes
+  if (user && !isAdmin && !isSantiago) {
+    if (isBlocked) {
+      // If blocked, we could redirect to a specific "Account Blocked" page or just show a message
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-background p-4 text-center">
+          <div className="max-w-md space-y-4">
+            <h1 className="text-2xl font-bold text-destructive">Conta Bloqueada</h1>
+            <p className="text-muted-foreground">Sua conta foi desativada pelo administrador do sistema. Entre em contato para mais informações.</p>
+            <Navigate to="/auth" replace />
+          </div>
+        </div>
+      );
+    }
+
+    if (isPaymentPending && location.pathname !== '/payment-required') {
+      return <Navigate to="/payment-required" replace />;
+    }
   }
 
   // Check route permission for collaborators

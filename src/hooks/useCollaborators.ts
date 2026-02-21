@@ -7,6 +7,7 @@ export interface Collaborator {
   id: string;
   gestor_id: string;
   name: string;
+  email: string | null;
   pin_hash: string | null;
   auth_user_id: string | null;
   is_active: boolean;
@@ -52,29 +53,36 @@ export function useCollaborators() {
       if (!user?.id) return [];
 
       const { data, error } = await supabase
-        .from('collaborators')
+        .from('profiles')
         .select('*')
+        .eq('role', 'colaborador')
         .eq('gestor_id', user.id)
-        .order('name');
+        .order('full_name');
 
       if (error) throw error;
-      return data as Collaborator[];
+
+      // Map back to interface expected by UI
+      return (data as any[]).map(p => ({
+        ...p,
+        name: p.full_name,
+        is_active: p.status === 'ativo'
+      })) as Collaborator[];
     },
     enabled: !!user?.id,
   });
 
   const createCollaborator = useMutation({
-    mutationFn: async ({ name, pin, permissions }: { name: string; pin: string; permissions: CollaboratorPermissions }) => {
+    mutationFn: async ({ name, email, password, pin, permissions }: { name: string; email: string; password?: string; pin?: string; permissions: CollaboratorPermissions }) => {
       if (!user?.id) throw new Error('Usuário não autenticado');
 
-      // Use Edge Function to create collaborator with Supabase Auth account
+      // Edge function still handles the complex Auth creation
       const { data, error } = await supabase.functions.invoke('create-collaborator', {
-        body: { name, pin, permissions },
+        body: { name, email, password, pin, permissions },
       });
 
       if (error) throw new Error(error.message);
       if (data?.error) throw new Error(data.error);
-      
+
       return data.collaborator;
     },
     onSuccess: () => {
@@ -89,18 +97,17 @@ export function useCollaborators() {
   const updateCollaborator = useMutation({
     mutationFn: async ({ id, name, pin, permissions }: { id: string; name: string; pin?: string; permissions: CollaboratorPermissions }) => {
       const updateData: Record<string, unknown> = {
-        name,
+        full_name: name,
         ...permissions,
       };
 
-      // Only update PIN if provided
       if (pin) {
         updateData.pin_hash = await hashPin(pin);
       }
 
       const { error } = await supabase
-        .from('collaborators')
-        .update(updateData)
+        .from('profiles')
+        .update(updateData as any)
         .eq('id', id);
 
       if (error) throw error;
@@ -116,7 +123,6 @@ export function useCollaborators() {
 
   const deleteCollaborator = useMutation({
     mutationFn: async (id: string) => {
-      // Use Edge Function to delete collaborator and their Supabase Auth account
       const { data, error } = await supabase.functions.invoke('delete-collaborator', {
         body: { collaboratorId: id },
       });
@@ -136,8 +142,8 @@ export function useCollaborators() {
   const toggleActive = useMutation({
     mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
       const { error } = await supabase
-        .from('collaborators')
-        .update({ is_active: isActive })
+        .from('profiles')
+        .update({ status: isActive ? 'ativo' : 'inativo' } as any)
         .eq('id', id);
 
       if (error) throw error;
@@ -150,15 +156,15 @@ export function useCollaborators() {
   const resetPin = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
-        .from('collaborators')
-        .update({ pin_hash: null })
+        .from('profiles')
+        .update({ pin_hash: null } as any)
         .eq('id', id);
 
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['collaborators'] });
-      toast.success('PIN resetado! O colaborador precisará definir um novo PIN no próximo acesso.');
+      toast.success('PIN resetado!');
     },
     onError: (err: Error) => {
       toast.error(`Erro ao resetar PIN: ${err.message}`);
@@ -176,59 +182,12 @@ export function useCollaborators() {
   };
 }
 
-// Hook for collaborator login flow
 export function useCollaboratorAuth() {
-  // Verify collaborator by gestor email + PIN directly
-  const verifyPinByEmail = async (gestorEmail: string, pin: string): Promise<{ 
-    collaborator: Collaborator; 
-    gestorId: string;
-    session?: { access_token: string; refresh_token: string };
-  } | null> => {
-    // Use backend function (avoids RLS issues for unauthenticated collaborator login)
-    const { data, error } = await supabase.functions.invoke('collaborator-login', {
-      body: { gestorEmail, pin },
-    });
-
-    if (error || !data?.collaborator || !data?.gestorId) {
-      return null;
-    }
-
-    return {
-      collaborator: data.collaborator as Collaborator,
-      gestorId: data.gestorId as string,
-      session: data.session,
-    };
-  };
-
-  // Legacy function for fetching collaborators by gestor email
-  const fetchCollaboratorsByGestorEmail = async (email: string): Promise<Collaborator[]> => {
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('email', email)
-      .eq('role', 'gestor')
-      .single();
-
-    if (profileError || !profile) {
-      return [];
-    }
-
-    const { data, error } = await supabase
-      .from('collaborators')
-      .select('*')
-      .eq('gestor_id', profile.id)
-      .eq('is_active', true)
-      .order('name');
-
-    if (error) return [];
-    return data as Collaborator[];
-  };
-
   const verifyPin = async (collaboratorId: string, pin: string): Promise<boolean> => {
     const hashedPin = await hashPin(pin);
-    
+
     const { data, error } = await supabase
-      .from('collaborators')
+      .from('profiles')
       .select('pin_hash')
       .eq('id', collaboratorId)
       .single();
@@ -239,18 +198,16 @@ export function useCollaboratorAuth() {
 
   const setPin = async (collaboratorId: string, pin: string): Promise<boolean> => {
     const hashedPin = await hashPin(pin);
-    
+
     const { error } = await supabase
-      .from('collaborators')
-      .update({ pin_hash: hashedPin })
+      .from('profiles')
+      .update({ pin_hash: hashedPin } as any)
       .eq('id', collaboratorId);
 
     return !error;
   };
 
   return {
-    verifyPinByEmail,
-    fetchCollaboratorsByGestorEmail,
     verifyPin,
     setPin,
   };

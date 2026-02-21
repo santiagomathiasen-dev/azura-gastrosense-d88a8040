@@ -62,20 +62,21 @@ serve(async (req) => {
     }
 
     // 1) Find the collaborator and verify ownership
-    const { data: collaborator, error: findError } = await admin
-      .from("collaborators")
-      .select("id, auth_user_id, gestor_id")
+    const { data: profile, error: findError } = await admin
+      .from("profiles")
+      .select("id, gestor_id, role")
       .eq("id", body.collaboratorId)
+      .eq("role", "colaborador")
       .single();
 
-    if (findError || !collaborator) {
+    if (findError || !profile) {
       return new Response(JSON.stringify({ error: "Colaborador não encontrado" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    if (collaborator.gestor_id !== gestorId) {
+    if (profile.gestor_id !== gestorId) {
       return new Response(JSON.stringify({ error: "Sem permissão para deletar este colaborador" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -83,21 +84,10 @@ serve(async (req) => {
     }
 
     // 2) Delete the auth user (this will cascade to profiles)
-    if (collaborator.auth_user_id) {
-      const { error: deleteUserError } = await admin.auth.admin.deleteUser(collaborator.auth_user_id);
-      if (deleteUserError) {
-        console.error("Error deleting auth user:", deleteUserError);
-      }
-    }
-
-    // 3) Delete the collaborator record
-    const { error: deleteError } = await admin
-      .from("collaborators")
-      .delete()
-      .eq("id", body.collaboratorId);
-
-    if (deleteError) {
-      return new Response(JSON.stringify({ error: "Erro ao deletar colaborador" }), {
+    const { error: deleteUserError } = await admin.auth.admin.deleteUser(profile.id);
+    if (deleteUserError) {
+      console.error("Error deleting auth user:", deleteUserError);
+      return new Response(JSON.stringify({ error: "Erro ao deletar usuário de autenticação" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

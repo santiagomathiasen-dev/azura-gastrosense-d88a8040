@@ -20,12 +20,18 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import { Loader2, Search, Users, ShieldAlert } from 'lucide-react';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useProfile } from '@/hooks/useProfile';
+import { useCollaboratorContext } from '@/contexts/CollaboratorContext';
+import { useNavigate } from 'react-router-dom';
 
 export default function Gestores() {
   const { profiles, isLoading, updateStatus, updateRole } = useGestaoUsuarios();
+  const { setImpersonation } = useCollaboratorContext();
+  const navigate = useNavigate();
   const { profile: currentProfile, isLoading: profileLoading } = useProfile();
   const { isAdmin } = useUserRole();
   const [searchTerm, setSearchTerm] = useState('');
@@ -127,10 +133,9 @@ export default function Gestores() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os Cargos</SelectItem>
+              <SelectItem value="admin">Administradores</SelectItem>
               <SelectItem value="gestor">Gestores</SelectItem>
-              <SelectItem value="producao">Produção</SelectItem>
-              <SelectItem value="estoque">Estoque</SelectItem>
-              <SelectItem value="venda">Venda</SelectItem>
+              <SelectItem value="colaborador">Colaboradores</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -145,7 +150,8 @@ export default function Gestores() {
                 <TableHead>Nome</TableHead>
                 <TableHead>E-mail</TableHead>
                 <TableHead>Cargo</TableHead>
-                <TableHead className="text-right">Status</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -175,10 +181,9 @@ export default function Gestores() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
+                            <SelectItem value="admin">Admin</SelectItem>
                             <SelectItem value="gestor">Gestor</SelectItem>
-                            <SelectItem value="producao">Produção</SelectItem>
-                            <SelectItem value="estoque">Estoque</SelectItem>
-                            <SelectItem value="venda">Venda</SelectItem>
+                            <SelectItem value="colaborador">Colaborador</SelectItem>
                           </SelectContent>
                         </Select>
                       ) : (
@@ -187,8 +192,8 @@ export default function Gestores() {
                         </Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-3">
+                    <TableCell>
+                      <div className="flex items-center gap-3">
                         <span className={p.status === 'ativo' ? 'text-green-600 font-medium' : 'text-muted-foreground'}>
                           {p.status === 'ativo' ? 'Ativo' : 'Inativo'}
                         </span>
@@ -203,6 +208,21 @@ export default function Gestores() {
                           }}
                         />
                       </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {p.role === 'gestor' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setImpersonation(p.id);
+                            toast.success(`Entrando como ${p.full_name || p.email}`);
+                            navigate('/dashboard');
+                          }}
+                        >
+                          Entrar como
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))

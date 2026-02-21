@@ -15,12 +15,11 @@ type LoginMode = 'gestor' | 'collaborator';
 
 export default function Auth() {
   const { user, login, signup, isLoading } = useAuth();
-  const { verifyPinByEmail } = useCollaboratorAuth();
-  const { setCollaboratorSession, isCollaboratorMode } = useCollaboratorContext();
+  const { isCollaboratorMode } = useCollaboratorContext();
   const location = useLocation();
   const navigate = useNavigate();
-  
-  // Gestor login state
+
+  // Standard login state
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,25 +29,11 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  
-  // Login mode toggle
-  const [loginMode, setLoginMode] = useState<LoginMode>('gestor');
-  
-  // Collaborator login state
-  const [gestorEmail, setGestorEmail] = useState('');
-  const [pin, setPin] = useState('');
-  const [collabLoading, setCollabLoading] = useState(false);
-  const [showPin, setShowPin] = useState(false);
 
   const from = location.state?.from?.pathname || '/dashboard';
 
-  // If user is logged in as gestor, redirect
-  if (user && !isCollaboratorMode) {
-    return <Navigate to={from} replace />;
-  }
-
-  // If collaborator is logged in, redirect
-  if (isCollaboratorMode) {
+  // If user is logged in, redirect
+  if (user) {
     return <Navigate to={from} replace />;
   }
 
@@ -60,7 +45,7 @@ export default function Auth() {
     );
   }
 
-  const handleGestorSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -71,7 +56,7 @@ export default function Auth() {
 
     setLoading(true);
 
-    const result = isLogin 
+    const result = isLogin
       ? await login(email, password)
       : await signup(email, password, name);
 
@@ -79,52 +64,6 @@ export default function Auth() {
       setError(result.error);
     }
     setLoading(false);
-  };
-
-  const handleCollaboratorLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (pin.length !== 6) {
-      setError('Digite o PIN de 6 dígitos');
-      return;
-    }
-    
-    setCollabLoading(true);
-    setError('');
-
-    try {
-      const result = await verifyPinByEmail(gestorEmail.trim(), pin);
-      
-      if (result) {
-        // If we received a session from the backend, set it in Supabase
-        if (result.session) {
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token: result.session.access_token,
-            refresh_token: result.session.refresh_token,
-          });
-          
-          if (sessionError) {
-            console.error('Error setting session:', sessionError);
-          }
-        }
-        
-        setCollaboratorSession(result.collaborator, result.gestorId);
-        toast.success(`Bem-vindo, ${result.collaborator.name}!`);
-        navigate('/dashboard');
-      } else {
-        setError('Email ou PIN incorretos');
-        setPin('');
-      }
-    } catch (err: any) {
-      setError('Erro ao fazer login');
-    }
-    
-    setCollabLoading(false);
-  };
-
-  const resetCollaboratorFlow = () => {
-    setGestorEmail('');
-    setPin('');
-    setError('');
   };
 
   return (
@@ -139,219 +78,125 @@ export default function Auth() {
           <p className="text-sm text-muted-foreground">Gestão Gastronômica</p>
         </div>
 
-        {/* Login Mode Toggle */}
-        <div className="flex gap-2 mb-4">
-          <Button
-            variant={loginMode === 'gestor' ? 'default' : 'outline'}
-            className="flex-1"
-            onClick={() => { setLoginMode('gestor'); resetCollaboratorFlow(); setError(''); }}
-          >
-            <User className="h-4 w-4 mr-2" />
-            Gestor
-          </Button>
-          <Button
-            variant={loginMode === 'collaborator' ? 'default' : 'outline'}
-            className="flex-1"
-            onClick={() => { setLoginMode('collaborator'); setError(''); }}
-          >
-            <Users className="h-4 w-4 mr-2" />
-            Colaborador
-          </Button>
-        </div>
-
         <Card className="border-border/50 shadow-xl">
-          {loginMode === 'gestor' ? (
-            <>
-              <CardHeader className="text-center pb-3">
-                <CardTitle className="text-lg">{isLogin ? 'Bem-vindo de volta' : 'Criar conta'}</CardTitle>
-                <CardDescription className="text-xs">
-                  {isLogin 
-                    ? 'Entre com suas credenciais para acessar' 
-                    : 'Preencha os dados para criar sua conta'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleGestorSubmit} className="space-y-3">
-                  {!isLogin && (
-                    <div className="space-y-1.5">
-                      <Label htmlFor="name" className="text-xs">Nome</Label>
-                      <div className="relative">
-                        <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          id="name"
-                          type="text"
-                          placeholder="Seu nome"
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          className="pl-10 h-9"
-                        />
-                      </div>
-                    </div>
-                  )}
-                  
-                  <div className="space-y-1.5">
-                    <Label htmlFor="email" className="text-xs">Email</Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="seu@email.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="pl-10 h-9"
-                      />
-                    </div>
+          <CardHeader className="text-center pb-3">
+            <CardTitle className="text-lg">{isLogin ? 'Bem-vindo de volta' : 'Criar conta'}</CardTitle>
+            <CardDescription className="text-xs">
+              {isLogin
+                ? 'Entre com seu email e senha para acessar'
+                : 'Preencha os dados para criar sua conta'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-3">
+              {!isLogin && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="name" className="text-xs">Nome</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="name"
+                      type="text"
+                      placeholder="Seu nome"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="pl-10 h-9"
+                    />
                   </div>
+                </div>
+              )}
 
-                  <div className="space-y-1.5">
-                    <Label htmlFor="password" className="text-xs">Senha</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="password"
-                        type={showPassword ? 'text' : 'password'}
-                        placeholder="••••••••"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="pl-10 pr-10 h-9"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="text-xs">Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="seu@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="pl-10 h-9"
+                  />
+                </div>
+              </div>
 
-                  {!isLogin && (
-                    <div className="space-y-1.5">
-                      <Label htmlFor="confirmPassword" className="text-xs">Confirmar Senha</Label>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          id="confirmPassword"
-                          type={showConfirmPassword ? 'text' : 'password'}
-                          placeholder="••••••••"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          className="pl-10 pr-10 h-9"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {error && (
-                    <div className="p-2 rounded-lg bg-destructive/10 text-destructive text-xs">
-                      {error}
-                    </div>
-                  )}
-
-                  <Button type="submit" className="w-full h-9" disabled={loading}>
-                    {loading ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : null}
-                    {isLogin ? 'Entrar' : 'Criar conta'}
-                  </Button>
-                </form>
-
-                <div className="mt-4 text-center">
+              <div className="space-y-1.5">
+                <Label htmlFor="password" className="text-xs">Senha</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pl-10 pr-10 h-9"
+                  />
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsLogin(!isLogin);
-                      setError('');
-                      setConfirmPassword('');
-                    }}
-                    className="text-xs text-primary hover:underline"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    {isLogin 
-                      ? 'Não tem conta? Criar agora' 
-                      : 'Já tem conta? Entrar'}
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-              </CardContent>
-            </>
-          ) : (
-            <>
-              <CardHeader className="text-center pb-3">
-                <CardTitle className="text-lg flex items-center justify-center gap-2">
-                  <KeyRound className="h-5 w-5" />
-                  Login Colaborador
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  Digite o email da empresa e seu PIN pessoal
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleCollaboratorLogin} className="space-y-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="gestorEmail" className="text-xs">Email da Empresa</Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="gestorEmail"
-                        type="email"
-                        placeholder="empresa@email.com"
-                        value={gestorEmail}
-                        onChange={(e) => setGestorEmail(e.target.value)}
-                        className="pl-10 h-9"
-                        required
-                      />
-                    </div>
+              </div>
+
+              {!isLogin && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="confirmPassword" className="text-xs">Confirmar Senha</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="confirmPassword"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      placeholder="••••••••"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="pl-10 pr-10 h-9"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
                   </div>
+                </div>
+              )}
 
-                  <div className="space-y-2">
-                    <Label className="text-xs">Seu PIN (6 dígitos)</Label>
-                    <div className="relative">
-                      <Input
-                        type={showPin ? 'text' : 'password'}
-                        inputMode="numeric"
-                        autoComplete="one-time-code"
-                        placeholder="••••••"
-                        value={pin}
-                        onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
-                        className="h-9 pr-10"
-                        aria-label="PIN de 6 dígitos"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPin((v) => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                        aria-label={showPin ? 'Ocultar PIN' : 'Mostrar PIN'}
-                      >
-                        {showPin ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
+              {error && (
+                <div className="p-2 rounded-lg bg-destructive/10 text-destructive text-xs text-center">
+                  {error}
+                </div>
+              )}
 
-                  {error && (
-                    <div className="p-2 rounded-lg bg-destructive/10 text-destructive text-xs text-center">
-                      {error}
-                    </div>
-                  )}
+              <Button type="submit" className="w-full h-9" disabled={loading}>
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : null}
+                {isLogin ? 'Entrar' : 'Criar conta'}
+              </Button>
+            </form>
 
-                  <Button 
-                    type="submit"
-                    className="w-full h-9" 
-                    disabled={pin.length !== 6 || !gestorEmail || collabLoading}
-                  >
-                    {collabLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                    Entrar
-                  </Button>
-                </form>
-              </CardContent>
-            </>
-          )}
+            <div className="mt-4 text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsLogin(!isLogin);
+                  setError('');
+                  setConfirmPassword('');
+                }}
+                className="text-xs text-primary hover:underline"
+              >
+                {isLogin
+                  ? 'Não tem conta? Criar agora'
+                  : 'Já tem conta? Entrar'}
+              </button>
+            </div>
+          </CardContent>
         </Card>
       </div>
     </div>

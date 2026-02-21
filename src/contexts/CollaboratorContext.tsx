@@ -1,35 +1,84 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Collaborator } from '@/hooks/useCollaborators';
+import { supabase } from '@/integrations/supabase/client';
 
 interface CollaboratorContextType {
   collaborator: Collaborator | null;
   gestorId: string | null;
+  impersonatedGestorId: string | null;
   isCollaboratorMode: boolean;
+  isImpersonating: boolean;
   setCollaboratorSession: (collaborator: Collaborator, gestorId: string) => void;
+  setImpersonation: (gestorId: string) => void;
   clearCollaboratorSession: () => void;
+  stopImpersonation: () => void;
   hasAccess: (route: string) => boolean;
 }
 
 const CollaboratorContext = createContext<CollaboratorContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'azura_collaborator_session';
+const IMPERSONATION_KEY = 'azura_impersonation_id';
 
 export function CollaboratorProvider({ children }: { children: ReactNode }) {
   const [collaborator, setCollaborator] = useState<Collaborator | null>(null);
   const [gestorId, setGestorId] = useState<string | null>(null);
+  const [impersonatedGestorId, setImpersonatedGestorId] = useState<string | null>(null);
 
-  // Load session from localStorage on mount
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
+    // 1. Initial check for stored session (backwards compatibility)
+    const collabStored = localStorage.getItem(STORAGE_KEY);
+    if (collabStored) {
       try {
-        const parsed = JSON.parse(stored);
+        const parsed = JSON.parse(collabStored);
         setCollaborator(parsed.collaborator);
         setGestorId(parsed.gestorId);
       } catch {
         localStorage.removeItem(STORAGE_KEY);
       }
     }
+
+    // 2. Load impersonation from storage
+    const impStored = localStorage.getItem(IMPERSONATION_KEY);
+    if (impStored) {
+      setImpersonatedGestorId(impStored);
+    }
+
+    // 3. Listen for Auth changes to automatically resolve Collaborator sessions
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        // Fetch profile to check if it's a collaborator
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (!error && profile && profile.role === 'colaborador') {
+          const collabData = {
+            ...profile,
+            name: profile.full_name,
+            is_active: profile.status === 'ativo'
+          } as Collaborator;
+
+          setCollaborator(collabData);
+          setGestorId(profile.gestor_id);
+          // Sync to localStorage for consistency
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ collaborator: collabData, gestorId: profile.gestor_id }));
+        } else {
+          // If not a collaborator, or sign-out event
+          clearCollaboratorSession();
+          if (event === 'SIGNED_OUT') {
+            stopImpersonation();
+          }
+        }
+      } else {
+        clearCollaboratorSession();
+        stopImpersonation();
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const setCollaboratorSession = (collab: Collaborator, gId: string) => {
@@ -38,15 +87,25 @@ export function CollaboratorProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ collaborator: collab, gestorId: gId }));
   };
 
+  const setImpersonation = (gId: string) => {
+    setImpersonatedGestorId(gId);
+    localStorage.setItem(IMPERSONATION_KEY, gId);
+  };
+
   const clearCollaboratorSession = () => {
     setCollaborator(null);
     setGestorId(null);
     localStorage.removeItem(STORAGE_KEY);
   };
 
+  const stopImpersonation = () => {
+    setImpersonatedGestorId(null);
+    localStorage.removeItem(IMPERSONATION_KEY);
+  };
+
   const hasAccess = (route: string): boolean => {
-    if (!collaborator) return true; // Gestor has full access
-    
+    if (!collaborator) return true; // Gestor or Admin has full access
+
     const routePermissions: Record<string, keyof Collaborator> = {
       '/dashboard': 'can_access_dashboard',
       '/estoque': 'can_access_estoque',
@@ -60,7 +119,7 @@ export function CollaboratorProvider({ children }: { children: ReactNode }) {
 
     const permission = routePermissions[route];
     if (!permission) return true;
-    
+
     return collaborator[permission] as boolean;
   };
 
@@ -69,9 +128,13 @@ export function CollaboratorProvider({ children }: { children: ReactNode }) {
       value={{
         collaborator,
         gestorId,
+        impersonatedGestorId,
         isCollaboratorMode: !!collaborator,
+        isImpersonating: !!impersonatedGestorId,
         setCollaboratorSession,
+        setImpersonation,
         clearCollaboratorSession,
+        stopImpersonation,
         hasAccess,
       }}
     >
