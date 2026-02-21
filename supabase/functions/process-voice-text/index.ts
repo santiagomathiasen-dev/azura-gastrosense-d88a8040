@@ -78,6 +78,13 @@ serve(async (req) => {
     let ingredients: any[] = [];
     let recipeName: string | null = null;
     let preparationMethod: string | null = null;
+    let preparationTime: number | null = null;
+    let yieldQuantity: number | null = null;
+    let labor_cost: number | null = null;
+    let energy_cost: number | null = null;
+    let other_costs: number | null = null;
+    let markup: number | null = null;
+    let praca: string | null = null;
     try {
       let cleanedMessage = assistantMessage.trim();
       if (cleanedMessage.startsWith("```")) {
@@ -97,6 +104,13 @@ serve(async (req) => {
           ingredients = Array.isArray(parsed) ? parsed : (parsed.ingredients || []);
           recipeName = parsed.recipeName || null;
           preparationMethod = parsed.preparationMethod || null;
+          preparationTime = parsed.preparationTime || null;
+          yieldQuantity = parsed.yieldQuantity || null;
+          labor_cost = parsed.labor_cost || null;
+          energy_cost = parsed.energy_cost || null;
+          other_costs = parsed.other_costs || null;
+          markup = parsed.markup || null;
+          praca = parsed.praca || null;
         }
       } catch (e) {
         console.error("Regex recovery failed:", e);
@@ -141,7 +155,14 @@ serve(async (req) => {
       JSON.stringify({
         ingredients: normalizedIngredients,
         recipeName: recipeName,
-        preparationMethod: preparationMethod
+        preparationMethod: preparationMethod,
+        preparationTime,
+        yieldQuantity,
+        labor_cost,
+        energy_cost,
+        other_costs,
+        markup,
+        praca
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

@@ -1193,18 +1193,25 @@ export type Database = {
           cost_per_unit: number | null
           created_at: string
           description: string | null
+          energy_cost: number | null
           id: string
           image_url: string | null
+          labor_cost: number | null
           lead_time_hours: number | null
+          markup: number | null
           name: string
           minimum_stock: number | null
+          other_costs: number | null
+          praca: string | null
           preparation_method: string | null
           preparation_time: number | null
           production_type: Database["public"]["Enums"]["production_type"]
           shelf_life_hours: number | null
+          target_price: number | null
           total_cost: number | null
           updated_at: string
           user_id: string
+          video_url: string | null
           yield_quantity: number
           yield_unit: string
         }
@@ -1212,18 +1219,25 @@ export type Database = {
           cost_per_unit?: number | null
           created_at?: string
           description?: string | null
+          energy_cost?: number | null
           id?: string
           image_url?: string | null
+          labor_cost?: number | null
           lead_time_hours?: number | null
+          markup?: number | null
           minimum_stock?: number | null
           name: string
+          other_costs?: number | null
+          praca?: string | null
           preparation_method?: string | null
           preparation_time?: number | null
           production_type?: Database["public"]["Enums"]["production_type"]
           shelf_life_hours?: number | null
+          target_price?: number | null
           total_cost?: number | null
           updated_at?: string
           user_id: string
+          video_url?: string | null
           yield_quantity?: number
           yield_unit?: string
         }
@@ -1231,18 +1245,25 @@ export type Database = {
           cost_per_unit?: number | null
           created_at?: string
           description?: string | null
+          energy_cost?: number | null
           id?: string
           image_url?: string | null
+          labor_cost?: number | null
           lead_time_hours?: number | null
+          markup?: number | null
           minimum_stock?: number | null
           name?: string
+          other_costs?: number | null
+          praca?: string | null
           preparation_method?: string | null
           preparation_time?: number | null
           production_type?: Database["public"]["Enums"]["production_type"]
           shelf_life_hours?: number | null
+          target_price?: number | null
           total_cost?: number | null
           updated_at?: string
           user_id?: string
+          video_url?: string | null
           yield_quantity?: number
           yield_unit?: string
         }

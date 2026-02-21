@@ -65,6 +65,11 @@ REGRAS CRÍTICAS:
   "preparationMethod": "passo a passo detalhado",
   "preparationTime": minutos (número),
   "yieldQuantity": porções (número),
+  "labor_cost": número decimal (mão de obra),
+  "energy_cost": número decimal (energia/gás),
+  "other_costs": número decimal (outros),
+  "markup": número decimal (markup desejado),
+  "praca": "setor/praça",
   "ingredients": [{"name": string, "quantity": number, "unit": string, "category": string, "price": number, "supplier": string, "minimum_quantity": number, "expiration_date": "YYYY-MM-DD" ou null}],
   "summary": "resumo do que foi extraído"
 }`;
@@ -164,6 +169,11 @@ REGRAS CRÍTICAS:
         preparationMethod: parsed.preparationMethod ? String(parsed.preparationMethod).trim() : undefined,
         preparationTime: toNumber(parsed.preparationTime),
         yieldQuantity: toNumber(parsed.yieldQuantity),
+        labor_cost: toNumber(parsed.labor_cost),
+        energy_cost: toNumber(parsed.energy_cost),
+        other_costs: toNumber(parsed.other_costs),
+        markup: toNumber(parsed.markup),
+        praca: parsed.praca ? String(parsed.praca).trim() : undefined,
       };
     } catch (e) {
       console.error("Failed to parse Gemini response as JSON. Content:", assistantMessage.substring(0, 200));
@@ -179,6 +189,11 @@ REGRAS CRÍTICAS:
             preparationMethod: parsed.preparationMethod ? String(parsed.preparationMethod).trim() : undefined,
             preparationTime: toNumber(parsed.preparationTime),
             yieldQuantity: toNumber(parsed.yieldQuantity),
+            labor_cost: toNumber(parsed.labor_cost),
+            energy_cost: toNumber(parsed.energy_cost),
+            other_costs: toNumber(parsed.other_costs),
+            markup: toNumber(parsed.markup),
+            praca: parsed.praca ? String(parsed.praca).trim() : undefined,
           };
         } catch (e2) {
           result.summary = "Erro de formato na resposta da IA.";

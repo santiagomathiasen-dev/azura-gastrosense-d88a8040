@@ -16,10 +16,13 @@ export type { TechnicalSheet, TechnicalSheetInsert, TechnicalSheetUpdate, Techni
 export interface TechnicalSheetWithIngredients extends TechnicalSheet {
   production_type: ProductionType;
   minimum_stock: number;
-  video_url?: string | null;
+  video_url: string | null;
   labor_cost: number;
   energy_cost: number;
   other_costs: number;
+  markup: number;
+  target_price: number | null;
+  praca: string | null;
   ingredients: (TechnicalSheetIngredient & {
     stock_item: { name: string; unit: string; unit_price: number | null } | null;
     stage_id?: string | null;
@@ -42,17 +45,23 @@ export function useTechnicalSheets() {
           *,
           ingredients:technical_sheet_ingredients(
             *,
-            stock_item:stock_items(name, unit)
+            stock_item:stock_items(name, unit, unit_price)
           )
         `)
         .order('name');
       if (error) throw error;
-      // Cast production_type since it's added via migration
+
       return (data || []).map(sheet => ({
         ...sheet,
-        production_type: (sheet as any).production_type || 'final',
-        minimum_stock: Number((sheet as any).minimum_stock || 0),
-        video_url: (sheet as any).video_url || null,
+        production_type: (sheet.production_type as ProductionType) || 'final',
+        minimum_stock: Number(sheet.minimum_stock || 0),
+        video_url: sheet.video_url || null,
+        labor_cost: Number(sheet.labor_cost || 0),
+        energy_cost: Number(sheet.energy_cost || 0),
+        other_costs: Number(sheet.other_costs || 0),
+        markup: Number(sheet.markup || 0),
+        target_price: sheet.target_price || null,
+        praca: sheet.praca || null,
       })) as TechnicalSheetWithIngredients[];
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
@@ -67,9 +76,10 @@ export function useTechnicalSheets() {
         .insert({
           ...sheet,
           user_id: ownerId,
-          labor_cost: Number((sheet as any).labor_cost || 0),
-          energy_cost: Number((sheet as any).energy_cost || 0),
-          other_costs: Number((sheet as any).other_costs || 0),
+          labor_cost: Number(sheet.labor_cost || 0),
+          energy_cost: Number(sheet.energy_cost || 0),
+          other_costs: Number(sheet.other_costs || 0),
+          markup: Number(sheet.markup || 0),
         })
         .select()
         .single();
@@ -89,7 +99,13 @@ export function useTechnicalSheets() {
     mutationFn: async ({ id, ...updates }: TechnicalSheetUpdate & { id: string }) => {
       const { data, error } = await supabase
         .from('technical_sheets')
-        .update(updates)
+        .update({
+          ...updates,
+          labor_cost: updates.labor_cost !== undefined ? Number(updates.labor_cost || 0) : undefined,
+          energy_cost: updates.energy_cost !== undefined ? Number(updates.energy_cost || 0) : undefined,
+          other_costs: updates.other_costs !== undefined ? Number(updates.other_costs || 0) : undefined,
+          markup: updates.markup !== undefined ? Number(updates.markup || 0) : undefined,
+        })
         .eq('id', id)
         .select()
         .single();

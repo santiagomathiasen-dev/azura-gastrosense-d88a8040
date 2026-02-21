@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import type { RecipeData } from '@/hooks/useIngredientImport';
 import { Mic, MicOff, Loader2, CheckCircle2, Sparkles } from 'lucide-react';
 import {
   Dialog,
@@ -53,7 +54,7 @@ export interface ExtractedItem {
 interface VoiceImportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onImport: (items: ExtractedItem[], recipeName?: string, preparationMethod?: string) => Promise<void>;
+  onImport: (items: ExtractedItem[], recipeData?: RecipeData) => Promise<void>;
   title?: string;
   description?: string;
   mode: 'ingredients' | 'recipe' | 'products';
@@ -76,8 +77,7 @@ export function VoiceImportDialog({
   const [transcript, setTranscript] = useState('');
   const [finalTranscript, setFinalTranscript] = useState('');
   const [extractedItems, setExtractedItems] = useState<ExtractedItem[]>([]);
-  const [extractedRecipeName, setExtractedRecipeName] = useState<string | undefined>();
-  const [extractedPrepMethod, setExtractedPrepMethod] = useState<string | undefined>();
+  const [extractedRecipeData, setExtractedRecipeData] = useState<RecipeData | undefined>();
   const [isSaving, setIsSaving] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -99,8 +99,7 @@ export function VoiceImportDialog({
     setTranscript('');
     setFinalTranscript('');
     setExtractedItems([]);
-    setExtractedRecipeName(undefined);
-    setExtractedPrepMethod(undefined);
+    setExtractedRecipeData(undefined);
     setIsSaving(false);
     clearSilenceTimeout();
     hasSpokenRef.current = false;
@@ -291,6 +290,13 @@ Retorne SOMENTE um objeto JSON válido com a estrutura:
 {
   "recipeName": "nome da receita extraído",
   "preparationMethod": "passo a passo detalhado",
+  "preparationTime": número em minutos,
+  "yieldQuantity": número de porções,
+  "labor_cost": número decimal (mão de obra),
+  "energy_cost": número decimal (energia/gás),
+  "other_costs": número decimal (outros),
+  "markup": número decimal (markup desejado, ex: 3.0),
+  "praca": "setor/praça (ex: Cozinha Quente, Confeitaria, Bar)",
   "ingredients": [{"name": string, "quantity": number, "unit": string, "category": string}]
 }`
           : `Você é um assistente que extrai produtos para venda de texto falado em português brasileiro.
@@ -319,23 +325,31 @@ IMPORTANTE:
       }
 
       const items: ExtractedItem[] = data.ingredients || [];
-      const recipeName = data.recipeName || undefined;
-      const preparationMethod = data.preparationMethod || undefined;
+      const recipeData: RecipeData = {
+        recipeName: data.recipeName || undefined,
+        preparationMethod: data.preparationMethod || undefined,
+        preparationTime: data.preparationTime || undefined,
+        yieldQuantity: data.yieldQuantity || undefined,
+        labor_cost: data.labor_cost || undefined,
+        energy_cost: data.energy_cost || undefined,
+        other_costs: data.other_costs || undefined,
+        markup: data.markup || undefined,
+        praca: data.praca || undefined,
+      };
 
-      if (items.length === 0) {
-        toast.error('Não foi possível extrair ingredientes. Tente novamente.');
+      if (items.length === 0 && !recipeData.recipeName) {
+        toast.error('Não foi possível extrair dados. Tente novamente.');
         setStep('listening');
         setFinalTranscript('');
         return;
       }
 
       setExtractedItems(items);
-      setExtractedRecipeName(recipeName);
-      setExtractedPrepMethod(preparationMethod);
+      setExtractedRecipeData(recipeData);
       setStep('done');
 
       // Auto-import without confirmation
-      await handleImport(items, recipeName, preparationMethod);
+      await handleImport(items, recipeData);
     } catch (error) {
       console.error('Error processing voice input:', error);
       toast.error('Erro ao processar. Tente novamente.');
@@ -343,10 +357,10 @@ IMPORTANTE:
     }
   };
 
-  const handleImport = async (items: ExtractedItem[], recipeName?: string, preparationMethod?: string) => {
+  const handleImport = async (items: ExtractedItem[], recipeData?: RecipeData) => {
     setIsSaving(true);
     try {
-      await onImport(items, recipeName, preparationMethod);
+      await onImport(items, recipeData);
       toast.success(`${items.length} ingrediente(s) cadastrado(s)!`);
       handleClose();
     } catch (error) {

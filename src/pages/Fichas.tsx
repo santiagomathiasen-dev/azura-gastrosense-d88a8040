@@ -75,6 +75,12 @@ export default function Fichas() {
     shelfLife: '',
     leadTime: '',
     video_url: '',
+    laborCost: '0',
+    energyCost: '0',
+    otherCosts: '0',
+    markup: '0',
+    targetPrice: '',
+    praca: '',
   });
 
   // Stages for form
@@ -98,13 +104,19 @@ export default function Fichas() {
       shelfLife: '',
       leadTime: '',
       video_url: '',
+      laborCost: '0',
+      energyCost: '0',
+      otherCosts: '0',
+      markup: '0',
+      targetPrice: '',
+      praca: '',
     });
     setStages([]);
     setEditingSheet(null);
   };
 
   // Voice Import
-  const handleVoiceImport = async (items: ExtractedItem[], recipeName?: string, preparationMethod?: string) => {
+  const handleVoiceImport = async (items: ExtractedItem[], recipeData?: RecipeData) => {
     if (isOwnerLoading || stockOwnerLoading) {
       toast.error('Aguarde o carregamento dos dados do usuário...');
       return;
@@ -150,12 +162,18 @@ export default function Fichas() {
       }
 
       const newSheet = await createSheet.mutateAsync({
-        name: recipeName || 'Receita por Voz',
+        name: recipeData?.recipeName || 'Receita por Voz',
         description: '',
-        preparation_method: preparationMethod || null,
-        yield_quantity: 1,
+        preparation_method: recipeData?.preparationMethod || null,
+        preparation_time: recipeData?.preparationTime || null,
+        yield_quantity: recipeData?.yieldQuantity || 1,
         yield_unit: 'un',
-      });
+        labor_cost: recipeData?.labor_cost || 0,
+        energy_cost: recipeData?.energy_cost || 0,
+        other_costs: recipeData?.other_costs || 0,
+        markup: recipeData?.markup || 0,
+        praca: recipeData?.praca || null,
+      } as any);
 
       for (const ing of items) {
         const stockItemId = ingredientStockIds.get(ing.name);
@@ -229,7 +247,12 @@ export default function Fichas() {
         preparation_time: recipeInfo.preparationTime ? Number(recipeInfo.preparationTime) : null,
         yield_quantity: recipeInfo.yieldQuantity ? Number(recipeInfo.yieldQuantity) : 1,
         yield_unit: 'un',
-      });
+        labor_cost: recipeInfo.labor_cost || 0,
+        energy_cost: recipeInfo.energy_cost || 0,
+        other_costs: recipeInfo.other_costs || 0,
+        markup: recipeInfo.markup || 0,
+        praca: recipeInfo.praca || null,
+      } as any);
 
       for (const ing of items) {
         const stockItemId = ingredientStockIds.get(ing.name);
@@ -338,6 +361,12 @@ export default function Fichas() {
       shelfLife: sheet.shelf_life_hours?.toString() || '',
       leadTime: sheet.lead_time_hours?.toString() || '',
       video_url: sheet.video_url || '',
+      laborCost: (sheet.labor_cost || 0).toString(),
+      energyCost: (sheet.energy_cost || 0).toString(),
+      otherCosts: (sheet.other_costs || 0).toString(),
+      markup: (sheet.markup || 0).toString(),
+      targetPrice: sheet.target_price?.toString() || '',
+      praca: sheet.praca || '',
     });
 
     // Convert existing stages and ingredients to form format
@@ -438,6 +467,12 @@ export default function Fichas() {
           production_type: formData.productionType,
           shelf_life_hours: formData.shelfLife ? parseInt(formData.shelfLife) : null,
           lead_time_hours: formData.leadTime ? parseInt(formData.leadTime) : null,
+          labor_cost: formData.laborCost ? parseFloat(formData.laborCost) : 0,
+          energy_cost: formData.energyCost ? parseFloat(formData.energyCost) : 0,
+          other_costs: formData.otherCosts ? parseFloat(formData.otherCosts) : 0,
+          markup: formData.markup ? parseFloat(formData.markup) : 0,
+          target_price: formData.targetPrice ? parseFloat(formData.targetPrice) : null,
+          praca: formData.praca || null,
         } as any);
         sheetId = editingSheet.id;
 
@@ -465,6 +500,12 @@ export default function Fichas() {
           production_type: formData.productionType,
           shelf_life_hours: formData.shelfLife ? parseInt(formData.shelfLife) : null,
           lead_time_hours: formData.leadTime ? parseInt(formData.leadTime) : null,
+          labor_cost: formData.laborCost ? parseFloat(formData.laborCost) : 0,
+          energy_cost: formData.energyCost ? parseFloat(formData.energyCost) : 0,
+          other_costs: formData.otherCosts ? parseFloat(formData.otherCosts) : 0,
+          markup: formData.markup ? parseFloat(formData.markup) : 0,
+          target_price: formData.targetPrice ? parseFloat(formData.targetPrice) : null,
+          praca: formData.praca || null,
         } as any);
         sheetId = newSheet.id;
       }
@@ -568,6 +609,9 @@ export default function Fichas() {
                   >
                     <div className="flex items-center gap-2">
                       <MobileListTitle>{sheet.name}</MobileListTitle>
+                      {sheet.markup && sheet.markup < 2.5 && sheet.markup > 0 && (
+                        <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" title="Margem Baixa" />
+                      )}
                       <span className="ml-auto text-sm font-bold text-primary">
                         R$ {custoTotal.toFixed(2)}
                       </span>
@@ -578,6 +622,12 @@ export default function Fichas() {
                         <Calculator className="h-3 w-3" />
                         R$ {custoPorcao.toFixed(2)}/{sheet.yield_unit}
                       </span>
+                      {sheet.praca && (
+                        <span className="flex items-center gap-1">
+                          <ChefHat className="h-3 w-3" />
+                          {sheet.praca}
+                        </span>
+                      )}
                       <span className="flex items-center gap-1">
                         <Users className="h-3 w-3" />
                         {sheet.yield_quantity} {sheet.yield_unit}
@@ -588,7 +638,6 @@ export default function Fichas() {
                           {sheet.preparation_time} min
                         </span>
                       )}
-                      <span>{sheet.ingredients?.length || 0} ingredientes</span>
                     </MobileListDetails>
                   </MobileListItem>
                 );
@@ -717,10 +766,13 @@ export default function Fichas() {
                     <CardContent className="p-4">
                       <div className="flex items-center gap-2 mb-1">
                         <DollarSign className="h-4 w-4 text-primary" />
-                        <span className="text-sm text-muted-foreground">Custo Total</span>
+                        <span className="text-sm text-muted-foreground">Custo Total de Produção</span>
                       </div>
                       <p className="text-xl font-bold text-primary">
                         R$ {calcularCustoTotal(selectedSheet).toFixed(2)}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        Inclui R$ {(selectedSheet.labor_cost || 0 + selectedSheet.energy_cost || 0 + selectedSheet.other_costs || 0).toFixed(2)} de custos adicionais
                       </p>
                     </CardContent>
                   </Card>
@@ -728,13 +780,33 @@ export default function Fichas() {
                     <CardContent className="p-4">
                       <div className="flex items-center gap-2 mb-1">
                         <Calculator className="h-4 w-4 text-accent-foreground" />
-                        <span className="text-sm text-muted-foreground">Custo/{selectedSheet.yield_unit}</span>
+                        <span className="text-sm text-muted-foreground">Preço Sugerido (MKP {selectedSheet.markup})</span>
                       </div>
                       <p className="text-xl font-bold text-accent-foreground">
-                        R$ {calcularCustoPorcao(selectedSheet).toFixed(2)}
+                        R$ {((calcularCustoPorcao(selectedSheet)) * (selectedSheet.markup || 1)).toFixed(2)}
                       </p>
+                      {selectedSheet.target_price && (
+                        <p className="text-[10px] text-accent-foreground mt-1 font-medium">
+                          Alvo: R$ {selectedSheet.target_price.toFixed(2)}
+                        </p>
+                      )}
                     </CardContent>
                   </Card>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 px-1">
+                  <div className="text-center p-2 rounded-lg bg-muted/30">
+                    <p className="text-[10px] text-muted-foreground uppercase">Mão de Obra</p>
+                    <p className="text-sm font-semibold">R$ {(selectedSheet.labor_cost || 0).toFixed(2)}</p>
+                  </div>
+                  <div className="text-center p-2 rounded-lg bg-muted/30">
+                    <p className="text-[10px] text-muted-foreground uppercase">Energia</p>
+                    <p className="text-sm font-semibold">R$ {(selectedSheet.energy_cost || 0).toFixed(2)}</p>
+                  </div>
+                  <div className="text-center p-2 rounded-lg bg-muted/30">
+                    <p className="text-[10px] text-muted-foreground uppercase">Setor</p>
+                    <p className="text-sm font-semibold truncate">{selectedSheet.praca || '-'}</p>
+                  </div>
                 </div>
 
                 {selectedSheet.video_url && (
@@ -802,175 +874,324 @@ export default function Fichas() {
             </DialogDescription>
           </DialogHeader>
           <ScrollArea className="max-h-[65vh] pr-4">
-            <div className="space-y-4 py-4">
-              {/* Image Upload */}
-              <div className="flex items-start gap-4">
-                <ImageUpload
-                  currentImageUrl={formData.image_url || null}
-                  onImageUploaded={(url) => setFormData({ ...formData, image_url: url })}
-                  onImageRemoved={() => setFormData({ ...formData, image_url: '' })}
-                  bucket="technical-sheet-images"
-                  size="lg"
-                />
-                <div className="flex-1 space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="nome">Nome da Receita *</Label>
-                    <Input
-                      id="nome"
-                      value={formData.nome}
-                      onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                      placeholder="Ex: Bolo de Chocolate"
-                    />
-                  </div>
+            <Tabs defaultValue="operacional" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-4">
+                <TabsTrigger value="operacional">Operacional</TabsTrigger>
+                <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
+              </TabsList>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="video_url">URL do Vídeo (YouTube/Instagram)</Label>
-                    <div className="flex gap-2">
+              <TabsContent value="operacional" className="space-y-4">
+                {/* Image Upload */}
+                <div className="flex items-start gap-4">
+                  <ImageUpload
+                    currentImageUrl={formData.image_url || null}
+                    onImageUploaded={(url) => setFormData({ ...formData, image_url: url })}
+                    onImageRemoved={() => setFormData({ ...formData, image_url: '' })}
+                    bucket="technical-sheet-images"
+                    size="lg"
+                  />
+                  <div className="flex-1 space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="nome">Nome da Receita *</Label>
                       <Input
-                        id="video_url"
-                        value={formData.video_url}
-                        onChange={(e) => setFormData({ ...formData, video_url: e.target.value })}
-                        placeholder="https://..."
-                        className="flex-1"
+                        id="nome"
+                        value={formData.nome}
+                        onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                        placeholder="Ex: Bolo de Chocolate"
                       />
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={handleExtractFromVideo}
-                        disabled={isSaving || !formData.video_url}
-                      >
-                        {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Extrair do Vídeo'}
-                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="video_url">URL do Vídeo (YouTube/Instagram)</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="video_url"
+                          value={formData.video_url}
+                          onChange={(e) => setFormData({ ...formData, video_url: e.target.value })}
+                          placeholder="https://..."
+                          className="flex-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={handleExtractFromVideo}
+                          disabled={isSaving || !formData.video_url}
+                        >
+                          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Extrair do Vídeo'}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="descricao">Descrição</Label>
-                <Input
-                  id="descricao"
-                  value={formData.descricao}
-                  onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
-                  placeholder="Breve descrição da receita"
-                />
-              </div>
-
-              {/* Tipo de Produção */}
-              <div className="space-y-2">
-                <Label>Tipo de Produção</Label>
-                <Select
-                  value={formData.productionType}
-                  onValueChange={(value: 'insumo' | 'final') => setFormData({ ...formData, productionType: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="final">Produto Final</SelectItem>
-                    <SelectItem value="insumo">Insumo Produzido</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  {formData.productionType === 'insumo'
-                    ? 'Insumo: Gera estoque intermediário (ex: Poolish, Molhos base)'
-                    : 'Final: Vai para o estoque de produções finalizadas'}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="tempo">Tempo (min)</Label>
-                  <Input
-                    id="tempo"
-                    type="number"
-                    value={formData.tempoPreparo}
-                    onChange={(e) => setFormData({ ...formData, tempoPreparo: e.target.value })}
-                    placeholder="60"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="praca">Setor / Praça (Extração AI)</Label>
+                    <Input
+                      id="praca"
+                      value={formData.praca}
+                      onChange={(e) => setFormData({ ...formData, praca: e.target.value })}
+                      placeholder="Ex: Cozinha Quente"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="descricao">Resumo Curto</Label>
+                    <Input
+                      id="descricao"
+                      value={formData.descricao}
+                      onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
+                      placeholder="Ex: Doce, Salgado, etc."
+                    />
+                  </div>
                 </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="rendimento">Rendimento</Label>
-                  <Input
-                    id="rendimento"
-                    type="number"
-                    value={formData.rendimento}
-                    onChange={(e) => setFormData({ ...formData, rendimento: e.target.value })}
-                    placeholder="12"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="unidadeRendimento">Unidade</Label>
+                  <Label>Tipo de Produção</Label>
                   <Select
-                    value={formData.unidadeRendimento}
-                    onValueChange={(value) => setFormData({ ...formData, unidadeRendimento: value })}
+                    value={formData.productionType}
+                    onValueChange={(value: 'insumo' | 'final') => setFormData({ ...formData, productionType: value })}
                   >
-                    <SelectTrigger id="unidadeRendimento">
+                    <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="un">unidades</SelectItem>
-                      <SelectItem value="kg">kg</SelectItem>
-                      <SelectItem value="g">g</SelectItem>
-                      <SelectItem value="L">L</SelectItem>
-                      <SelectItem value="ml">ml</SelectItem>
-                      <SelectItem value="porções">porções</SelectItem>
+                      <SelectItem value="final">Produto Final</SelectItem>
+                      <SelectItem value="insumo">Insumo Produzido</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="minimumStock">Estoque Mínimo ({formData.unidadeRendimento})</Label>
-                <Input
-                  id="minimumStock"
-                  type="number"
-                  value={formData.minimumStock}
-                  onChange={(e) => setFormData({ ...formData, minimumStock: e.target.value })}
-                  placeholder="0"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Alerta no painel quando o estoque desta produção for menor ou igual a este valor.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="shelfLife">Validade (horas)</Label>
-                  <Input
-                    id="shelfLife"
-                    type="number"
-                    value={formData.shelfLife}
-                    onChange={(e) => setFormData({ ...formData, shelfLife: e.target.value })}
-                    placeholder="Ex: 48"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Tempo de validade após produzido.
-                  </p>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="tempo">Tempo (min)</Label>
+                    <Input
+                      id="tempo"
+                      type="number"
+                      value={formData.tempoPreparo}
+                      onChange={(e) => setFormData({ ...formData, tempoPreparo: e.target.value })}
+                      placeholder="60"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="rendimento">Rendimento</Label>
+                    <Input
+                      id="rendimento"
+                      type="number"
+                      value={formData.rendimento}
+                      onChange={(e) => setFormData({ ...formData, rendimento: e.target.value })}
+                      placeholder="12"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="unidadeRendimento">Unidade</Label>
+                    <Select
+                      value={formData.unidadeRendimento}
+                      onValueChange={(value) => setFormData({ ...formData, unidadeRendimento: value })}
+                    >
+                      <SelectTrigger id="unidadeRendimento">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="un">unidades</SelectItem>
+                        <SelectItem value="kg">kg</SelectItem>
+                        <SelectItem value="g">g</SelectItem>
+                        <SelectItem value="L">L</SelectItem>
+                        <SelectItem value="ml">ml</SelectItem>
+                        <SelectItem value="porções">porções</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="leadTime">Lead Time (horas)</Label>
-                  <Input
-                    id="leadTime"
-                    type="number"
-                    value={formData.leadTime}
-                    onChange={(e) => setFormData({ ...formData, leadTime: e.target.value })}
-                    placeholder="Ex: 4"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Tempo de antecedência para produção.
-                  </p>
-                </div>
-              </div>
 
-              {/* Stage Form - Multi-part recipe */}
-              <StageForm
-                stages={stages}
-                onStagesChange={setStages}
-                stockItems={stockItems.map(item => ({ id: item.id, name: item.name, unit: item.unit }))}
-              />
-            </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="minimumStock">Estoque Mínimo</Label>
+                    <Input
+                      id="minimumStock"
+                      type="number"
+                      value={formData.minimumStock}
+                      onChange={(e) => setFormData({ ...formData, minimumStock: e.target.value })}
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="shelfLife">Validade (h)</Label>
+                    <Input
+                      id="shelfLife"
+                      type="number"
+                      value={formData.shelfLife}
+                      onChange={(e) => setFormData({ ...formData, shelfLife: e.target.value })}
+                      placeholder="48"
+                    />
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="financeiro" className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="markup">Markup Desejado (ex: 3.5)</Label>
+                    <Input
+                      id="markup"
+                      type="number"
+                      step="0.1"
+                      value={formData.markup}
+                      onChange={(e) => setFormData({ ...formData, markup: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="targetPrice">Preço Alvo Sugerido (R$)</Label>
+                    <Input
+                      id="targetPrice"
+                      type="number"
+                      step="0.01"
+                      value={formData.targetPrice}
+                      onChange={(e) => setFormData({ ...formData, targetPrice: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="laborCost" className="text-[10px]">Mão de Obra</Label>
+                    <Input
+                      id="laborCost"
+                      type="number"
+                      step="0.01"
+                      className="h-8"
+                      value={formData.laborCost}
+                      onChange={(e) => setFormData({ ...formData, laborCost: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="energyCost" className="text-[10px]">Energia/Gás</Label>
+                    <Input
+                      id="energyCost"
+                      type="number"
+                      step="0.01"
+                      className="h-8"
+                      value={formData.energyCost}
+                      onChange={(e) => setFormData({ ...formData, energyCost: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="otherCosts" className="text-[10px]">Outros Adicionais</Label>
+                    <Input
+                      id="otherCosts"
+                      type="number"
+                      step="0.01"
+                      className="h-8"
+                      value={formData.otherCosts}
+                      onChange={(e) => setFormData({ ...formData, otherCosts: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                {/* Real-time Indicators */}
+                {(() => {
+                  const ingredientsCost = stages.reduce((sum, stage) => {
+                    return sum + stage.ingredients.reduce((s, ing) => {
+                      const stockItem = stockItems.find(i => i.id === ing.stockItemId);
+                      const unitPrice = stockItem?.unit_price || 0;
+                      return s + (parseFloat(ing.quantidade) * unitPrice);
+                    }, 0);
+                  }, 0);
+
+                  const labor = parseFloat(formData.laborCost) || 0;
+                  const energy = parseFloat(formData.energyCost) || 0;
+                  const others = parseFloat(formData.otherCosts) || 0;
+                  const totalProductionCost = ingredientsCost + labor + energy + others;
+                  const yieldQty = parseFloat(formData.rendimento) || 1;
+                  const unitCost = totalProductionCost / yieldQty;
+                  const markupValue = parseFloat(formData.markup) || 1;
+                  const suggestedPrice = unitCost * markupValue;
+
+                  return (
+                    <Card className="bg-muted/50 border-primary/20">
+                      <CardContent className="p-4 space-y-3">
+                        <h4 className="font-semibold text-sm flex items-center gap-2">
+                          <Calculator className="h-4 w-4" />
+                          Indicadores de Custo (Tempo Real)
+                        </h4>
+                        <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
+                          <div className="flex justify-between border-b border-muted py-1">
+                            <span className="text-muted-foreground">Ingredientes:</span>
+                            <span className="font-medium">R$ {ingredientsCost.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between border-b border-muted py-1">
+                            <span className="text-muted-foreground">Custo Unit.:</span>
+                            <span className="font-medium">R$ {unitCost.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between border-b border-muted py-1 items-center">
+                            <span className="text-muted-foreground">Custo Total:</span>
+                            <span className="font-bold text-primary">R$ {totalProductionCost.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between border-b border-muted py-1 items-center">
+                            <span className="text-muted-foreground">Preço Sugerido:</span>
+                            <span className="font-bold text-accent-foreground">R$ {suggestedPrice.toFixed(2)}</span>
+                          </div>
+                        </div>
+
+                        {markupValue < 2.5 && markupValue > 0 && (
+                          <div className="flex items-start gap-2 p-2 bg-yellow-50 text-yellow-800 rounded text-xs border border-yellow-200">
+                            <Plus className="h-3 w-3 mt-0.5 rotate-45" />
+                            <span>Atenção: Markup abaixo de 2.5 pode comprometer a margem de lucro operacional.</span>
+                          </div>
+                        )}
+                        {(labor + energy + others) > ingredientsCost && ingredientsCost > 0 && (
+                          <div className="flex items-start gap-2 p-2 bg-orange-50 text-orange-800 rounded text-xs border border-orange-200">
+                            <DollarSign className="h-3 w-3 mt-0.5" />
+                            <span>Alerta: Custos fixos (mão de obra/energia) estão superiores ao custo de ingredientes.</span>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
+              </TabsContent>
+
+              <div className="pt-4 border-t mt-6">
+                <h3 className="font-semibold mb-3 flex items-center gap-2">
+                  <ChefHat className="h-5 w-5" />
+                  Ingredientes e Etapas de Preparo
+                </h3>
+                {stages.map((stage, index) => (
+                  <StageForm
+                    key={stage.id}
+                    stage={stage}
+                    index={index}
+                    stockItems={stockItems}
+                    onUpdate={(updatedStage) => {
+                      const newStages = [...stages];
+                      newStages[index] = updatedStage;
+                      setStages(newStages);
+                    }}
+                    onRemove={() => {
+                      if (stages.length > 1) {
+                        setStages(stages.filter((_, i) => i !== index));
+                      }
+                    }}
+                  />
+                ))}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setStages([...stages, {
+                    id: crypto.randomUUID(),
+                    name: `Parte ${stages.length + 1}`,
+                    preparationMethod: '',
+                    ingredients: [],
+                    order_index: stages.length,
+                  }])}
+                  className="w-full mt-2"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Adicionar Etapa
+                </Button>
+              </div>
+            </Tabs>
           </ScrollArea>
           <DialogFooter>
             <Button variant="outline" onClick={() => setFormDialogOpen(false)} disabled={isSaving || isOwnerLoading}>

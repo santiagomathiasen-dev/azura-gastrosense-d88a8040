@@ -19,6 +19,11 @@ export interface RecipeData {
   preparationMethod?: string;
   yieldQuantity?: number;
   preparationTime?: number;
+  labor_cost?: number;
+  energy_cost?: number;
+  other_costs?: number;
+  markup?: number;
+  praca?: string;
 }
 
 export interface ExtractionResult {
@@ -104,6 +109,11 @@ export function useIngredientImport() {
         preparationMethod: data.preparationMethod,
         yieldQuantity: data.yieldQuantity,
         preparationTime: data.preparationTime,
+        labor_cost: data.labor_cost,
+        energy_cost: data.energy_cost,
+        other_costs: data.other_costs,
+        markup: data.markup,
+        praca: data.praca,
       } : undefined;
 
       if (extractedRecipeData) {

@@ -333,6 +333,91 @@ export function RecipeFileImportDialog({
                 </div>
               </div>
 
+              {/* Financial and Sectorization */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="markup">Markup (ex: 3.5)</Label>
+                  <Input
+                    id="markup"
+                    type="number"
+                    step="0.1"
+                    value={recipeData.markup || ''}
+                    onChange={(e) =>
+                      setRecipeData({
+                        ...recipeData,
+                        markup: parseFloat(e.target.value) || undefined,
+                      })
+                    }
+                    placeholder="3.0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="praca">Setor / Praça</Label>
+                  <Input
+                    id="praca"
+                    value={recipeData.praca || ''}
+                    onChange={(e) =>
+                      setRecipeData({
+                        ...recipeData,
+                        praca: e.target.value,
+                      })
+                    }
+                    placeholder="Cozinha Quente"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-1">
+                  <Label htmlFor="labor-cost" className="text-[10px]">Mão de Obra</Label>
+                  <Input
+                    id="labor-cost"
+                    type="number"
+                    step="0.01"
+                    className="h-8"
+                    value={recipeData.labor_cost || ''}
+                    onChange={(e) =>
+                      setRecipeData({
+                        ...recipeData,
+                        labor_cost: parseFloat(e.target.value) || undefined,
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="energy-cost" className="text-[10px]">Energia/Gás</Label>
+                  <Input
+                    id="energy-cost"
+                    type="number"
+                    step="0.01"
+                    className="h-8"
+                    value={recipeData.energy_cost || ''}
+                    onChange={(e) =>
+                      setRecipeData({
+                        ...recipeData,
+                        energy_cost: parseFloat(e.target.value) || undefined,
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="other-costs" className="text-[10px]">Outros</Label>
+                  <Input
+                    id="other-costs"
+                    type="number"
+                    step="0.01"
+                    className="h-8"
+                    value={recipeData.other_costs || ''}
+                    onChange={(e) =>
+                      setRecipeData({
+                        ...recipeData,
+                        other_costs: parseFloat(e.target.value) || undefined,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
               {/* Preparation Method */}
               <div className="space-y-2">
                 <Label htmlFor="prep-method">Modo de Preparo</Label>
@@ -385,32 +470,33 @@ export function RecipeFileImportDialog({
           </ScrollArea>
         )}
 
-        {step === 'review' && (
-          <DialogFooter>
+        <DialogFooter className="mt-4">
+          {step === 'review' && (
             <Button
               variant="outline"
               onClick={() => {
-                resetState();
+                setStep('upload');
               }}
               disabled={isProcessing}
             >
               Voltar
             </Button>
-            <Button
-              onClick={handleConfirmImport}
-              disabled={isProcessing}
-            >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Importando...
-                </>
-              ) : (
-                'Importar Receita'
-              )}
-            </Button>
-          </DialogFooter>
-        )}
+          )}
+          <Button
+            onClick={step === 'review' ? handleConfirmImport : undefined}
+            disabled={step !== 'review' || isProcessing}
+            className={step !== 'review' ? 'hidden' : ''}
+          >
+            {isProcessing ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Importando...
+              </>
+            ) : (
+              'Importar Receita'
+            )}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
