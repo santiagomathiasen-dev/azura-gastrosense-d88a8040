@@ -440,12 +440,12 @@ export default function Fichas() {
       return;
     }
 
-    // Validate at least one stage has ingredients
-    const totalIngredients = stages.reduce((sum, stage) => sum + stage.ingredients.length, 0);
-    if (totalIngredients === 0) {
-      toast.error('Adicione pelo menos um ingrediente');
-      return;
-    }
+    // Validate at least one stage has ingredients (Removed to allow manual creation without ingredients first)
+    // const totalIngredients = stages.reduce((sum, stage) => sum + stage.ingredients.length, 0);
+    // if (totalIngredients === 0) {
+    //   toast.error('Adicione pelo menos um ingrediente');
+    //   return;
+    // }
 
     setIsSaving(true);
     try {
