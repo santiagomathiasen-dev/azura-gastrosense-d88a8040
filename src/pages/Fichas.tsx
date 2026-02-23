@@ -507,7 +507,7 @@ export default function Fichas() {
           target_price: formData.targetPrice ? parseFloat(formData.targetPrice) : null,
           praca: formData.praca || null,
         } as any);
-        sheetId = newSheet.id;
+        sheetId = (newSheet as any).id;
       }
 
       // Create stages and ingredients
@@ -528,7 +528,7 @@ export default function Fichas() {
             stock_item_id: ing.stockItemId,
             quantity: parseFloat(ing.quantidade),
             unit: ing.unidade,
-            stage_id: newStage.id,
+            stage_id: (newStage as any).id,
           });
         }
       }
