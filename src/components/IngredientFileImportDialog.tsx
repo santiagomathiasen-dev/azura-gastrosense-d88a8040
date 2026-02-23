@@ -117,38 +117,40 @@ export function IngredientFileImportDialog({
     setStep('processing');
 
     try {
-      let fileType: 'image' | 'pdf' | 'text';
-      let content: string;
-
-      if (file.type.startsWith('image/')) {
-        fileType = 'image';
-        content = await fileToBase64(file);
-      } else if (file.type === 'application/pdf') {
-        fileType = 'pdf';
-        content = await fileToBase64(file);
-      } else if (file.type === 'text/plain') {
-        fileType = 'text';
-        content = await file.text();
-      } else {
-        throw new Error('Tipo de arquivo não suportado');
-      }
-
-      console.log(`Processing ${fileType} file for ingredient extraction`);
-
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('A IA demorou muito para responder. Tente com uma imagem de resolução menor.')), 50000);
+        setTimeout(() => reject(new Error('Processamento excessivamente longo. Tente um arquivo menor ou recarregue a página.')), 50000);
       });
 
-      const fetchPromise = supabase.functions.invoke('extract-ingredients', {
-        body: {
-          fileType,
-          content,
-          mimeType: file.type,
-          extractRecipe: false
-        },
-      });
+      const processTask = async () => {
+        let fileType: 'image' | 'pdf' | 'text';
+        let content: string;
 
-      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]) as any;
+        if (file.type.startsWith('image/')) {
+          fileType = 'image';
+          content = await fileToBase64(file);
+        } else if (file.type === 'application/pdf') {
+          fileType = 'pdf';
+          content = await fileToBase64(file);
+        } else if (file.type === 'text/plain') {
+          fileType = 'text';
+          content = await file.text();
+        } else {
+          throw new Error('Tipo de arquivo não suportado');
+        }
+
+        console.log(`Processing ${fileType} file for ingredient extraction`);
+
+        return supabase.functions.invoke('extract-ingredients', {
+          body: {
+            fileType,
+            content,
+            mimeType: file.type,
+            extractRecipe: false
+          },
+        });
+      };
+
+      const { data, error } = await Promise.race([processTask(), timeoutPromise]) as any;
 
       if (error) {
         console.error('Edge function error:', error);
@@ -450,13 +452,17 @@ export function IngredientFileImportDialog({
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const skipResize = file.size < 1024 * 1024; // Less than 1MB
+    const isHeic = file.type.toLowerCase().includes('heic') || file.name.toLowerCase().endsWith('.heic');
 
-    // For images (that are large), resize them before base64 encoding to reduce payload size
-    if (!skipResize && file.type.startsWith('image/')) {
+    // For images (that are large, and NOT HEIC), resize them before base64 encoding to reduce payload size
+    if (!skipResize && !isHeic && file.type.startsWith('image/')) {
       const img = new window.Image();
       const objectUrl = URL.createObjectURL(file);
+      let isResolved = false;
 
       const resolveFallback = () => {
+        if (isResolved) return;
+        isResolved = true;
         URL.revokeObjectURL(objectUrl);
         const reader = new FileReader();
         reader.onload = () => {
@@ -467,7 +473,12 @@ function fileToBase64(file: File): Promise<string> {
         reader.readAsDataURL(file);
       };
 
+      const fallbackTimer = setTimeout(resolveFallback, 3000);
+
       img.onload = () => {
+        if (isResolved) return;
+        clearTimeout(fallbackTimer);
+        isResolved = true;
         URL.revokeObjectURL(objectUrl);
         const canvas = document.createElement('canvas');
         let width = img.width;
@@ -494,10 +505,15 @@ function fileToBase64(file: File): Promise<string> {
         }
       };
 
-      img.onerror = resolveFallback;
+      img.onerror = () => {
+        if (isResolved) return;
+        clearTimeout(fallbackTimer);
+        resolveFallback();
+      };
+
       img.src = objectUrl;
     } else {
-      // For PDFs or Text
+      // For PDFs, Text, small images, or HEIC
       const reader = new FileReader();
       reader.onload = () => {
         const result = reader.result as string;
