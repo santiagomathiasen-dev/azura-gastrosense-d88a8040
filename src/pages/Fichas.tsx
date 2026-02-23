@@ -1156,41 +1156,13 @@ export default function Fichas() {
                   <ChefHat className="h-5 w-5" />
                   Ingredientes e Etapas de Preparo
                 </h3>
-                {stages.map((stage, index) => (
-                  <StageForm
-                    key={stage.id}
-                    stage={stage}
-                    index={index}
-                    stockItems={stockItems}
-                    onUpdate={(updatedStage) => {
-                      const newStages = [...stages];
-                      newStages[index] = updatedStage;
-                      setStages(newStages);
-                    }}
-                    onRemove={() => {
-                      if (stages.length > 1) {
-                        setStages(stages.filter((_, i) => i !== index));
-                      }
-                    }}
-                  />
-                ))}
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setStages([...stages, {
-                    id: crypto.randomUUID(),
-                    name: `Parte ${stages.length + 1}`,
-                    preparationMethod: '',
-                    ingredients: [],
-                    order_index: stages.length,
-                  }])}
-                  className="w-full mt-2"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Adicionar Etapa
-                </Button>
+                <StageForm
+                  stages={stages}
+                  onStagesChange={setStages}
+                  stockItems={stockItems as any}
+                />
               </div>
+
             </Tabs>
           </ScrollArea>
           <DialogFooter>
