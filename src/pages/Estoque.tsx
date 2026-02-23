@@ -166,11 +166,26 @@ export default function Estoque() {
     };
   });
 
+  // Standardize name formatting
+  const formatItemName = (name: string) => {
+    return name
+      .trim()
+      .split(/\s+/)
+      .map((word) => {
+        const lower = word.toLowerCase();
+        if (['de', 'da', 'do', 'das', 'dos', 'e', 'com', 'sem'].includes(lower)) {
+          return lower;
+        }
+        return lower.charAt(0).toUpperCase() + lower.slice(1);
+      })
+      .join(' ');
+  };
+
   // Voice import handler
   const handleVoiceImport = async (voiceItems: ExtractedItem[]) => {
     try {
       const itemsToCreate = voiceItems.map(item => ({
-        name: item.name,
+        name: formatItemName(item.name),
         current_quantity: item.quantity,
         unit: item.unit as StockUnit,
         category: item.category as StockCategory,
@@ -188,7 +203,7 @@ export default function Estoque() {
   const handleFileImport = async (ingredientsList: ExtractedIngredient[]) => {
     try {
       const itemsToCreate = ingredientsList.map(item => ({
-        name: item.name,
+        name: formatItemName(item.name),
         current_quantity: item.quantity,
         unit: item.unit as StockUnit,
         category: item.category as StockCategory,
@@ -206,18 +221,21 @@ export default function Estoque() {
   };
 
   const handleCreateItem = (data: any) => {
+    const formattedName = formatItemName(data.name);
+
+    // Check for exact duplicate match ignoring case
     const existingItem = items.find(
-      (item) => item.name.trim().toLowerCase() === data.name.trim().toLowerCase()
+      (item) => item.name.trim().toLowerCase() === formattedName.toLowerCase()
     );
 
     if (existingItem) {
       setDuplicateItem(existingItem);
-      setPendingData(data);
+      setPendingData({ ...data, name: formattedName });
       setDuplicateDialogOpen(true);
       return;
     }
 
-    createItem.mutate(data, {
+    createItem.mutate({ ...data, name: formattedName }, {
       onSuccess: () => setFormOpen(false),
     });
   };
@@ -939,14 +957,18 @@ export default function Estoque() {
             <AlertDialogTitle>Item já existe</AlertDialogTitle>
             <AlertDialogDescription>
               Já existe um item chamado "{duplicateItem?.name}" no estoque.
-              Deseja substituir as informações do item existente pelas novas?
-              Esta ação manterá o histórico e vínculos do item original.
+              Deseja substituir as informações do item existente pelas novas ou manter o item anterior?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => {
+              setDuplicateDialogOpen(false);
+              setFormOpen(false);
+              setDuplicateItem(null);
+              setPendingData(null);
+            }}>Manter o Anterior</AlertDialogCancel>
             <AlertDialogAction onClick={handleReplaceDuplicate}>
-              Substituir Item
+              Substituir
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -57,6 +57,7 @@ import {
     useForecastProductionOrders,
     PRACA_LABELS,
     FORECAST_STATUS_LABELS,
+    ForecastProductionOrder,
 } from '@/hooks/useForecastProductionOrders';
 import { useSaleProducts } from '@/hooks/useSaleProducts';
 import { ProductionSheetDialog } from '@/components/production/ProductionSheetDialog';
@@ -427,7 +428,7 @@ function ProductionOrdersTab() {
                 />
             ) : (
                 <div className="space-y-4">
-                    {Object.entries(ordersByPraca).map(([praca, pracaOrders]) => (
+                    {(Object.entries(ordersByPraca) as [string, ForecastProductionOrder[]][]).map(([praca, pracaOrders]) => (
                         <Card key={praca}>
                             <CardHeader className="pb-2">
                                 <CardTitle className="text-base flex items-center gap-2">

@@ -59,24 +59,25 @@ export function useCollaborators() {
         .single();
 
       let query = supabase
-        .from('profiles')
-        .select('*')
-        .eq('role', 'colaborador');
+        .from('collaborators')
+        .select('*');
 
       // If not admin, filter by gestor_id
       if (profile?.role !== 'admin') {
         query = query.eq('gestor_id', user.id);
       }
 
-      const { data, error } = await query.order('full_name');
+      const { data, error } = await query.order('name');
 
-      if (error) throw error;
+      if (error) {
+        console.error("useCollaborators QUERY ERROR:", error);
+        throw error;
+      }
 
       // Map back to interface expected by UI
       return (data as any[]).map(p => ({
         ...p,
-        name: p.full_name,
-        is_active: p.status === 'ativo'
+        is_active: p.is_active
       })) as Collaborator[];
     },
     enabled: !!user?.id,
@@ -108,7 +109,7 @@ export function useCollaborators() {
   const updateCollaborator = useMutation({
     mutationFn: async ({ id, name, pin, permissions }: { id: string; name: string; pin?: string; permissions: CollaboratorPermissions }) => {
       const updateData: Record<string, unknown> = {
-        full_name: name,
+        name: name,
         ...permissions,
       };
 
@@ -117,7 +118,7 @@ export function useCollaborators() {
       }
 
       const { error } = await supabase
-        .from('profiles')
+        .from('collaborators')
         .update(updateData as any)
         .eq('id', id);
 
@@ -153,8 +154,8 @@ export function useCollaborators() {
   const toggleActive = useMutation({
     mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
       const { error } = await supabase
-        .from('profiles')
-        .update({ status: isActive ? 'ativo' : 'inativo' } as any)
+        .from('collaborators')
+        .update({ is_active: isActive } as any)
         .eq('id', id);
 
       if (error) throw error;
@@ -167,7 +168,7 @@ export function useCollaborators() {
   const resetPin = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
-        .from('profiles')
+        .from('collaborators')
         .update({ pin_hash: null } as any)
         .eq('id', id);
 
@@ -198,7 +199,7 @@ export function useCollaboratorAuth() {
     const hashedPin = await hashPin(pin);
 
     const { data, error } = await supabase
-      .from('profiles')
+      .from('collaborators')
       .select('pin_hash')
       .eq('id', collaboratorId)
       .single();
@@ -211,7 +212,7 @@ export function useCollaboratorAuth() {
     const hashedPin = await hashPin(pin);
 
     const { error } = await supabase
-      .from('profiles')
+      .from('collaborators')
       .update({ pin_hash: hashedPin } as any)
       .eq('id', collaboratorId);
 

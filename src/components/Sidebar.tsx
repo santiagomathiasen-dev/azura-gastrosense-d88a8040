@@ -1,32 +1,30 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  Package,
-  FileText,
-  Factory,
-  ShoppingCart,
   LogOut,
   ChevronLeft,
   ChevronRight,
+  UtensilsCrossed,
+  LayoutDashboard,
+  Users,
+  Package,
+  Boxes,
+  FileText,
+  Factory,
+  CalendarClock,
+  ShoppingCart,
   PackageCheck,
   ShoppingBag,
-  Boxes,
-  UtensilsCrossed,
-  Users,
-  BarChart3,
   TrendingDown,
-  CalendarClock,
+  BarChart3,
   Calculator
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { useCollaboratorContext } from '@/contexts/CollaboratorContext';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useProfile } from '@/hooks/useProfile';
-import { cn } from '@/lib/utils';
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Shield } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Painel', permission: 'can_access_dashboard' },
@@ -45,38 +43,51 @@ const navItems = [
   { to: '/financeiro', icon: Calculator, label: 'Financeiro', permission: 'can_access_dashboard' },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  collapsed: boolean;
+  setCollapsed: (collapsed: boolean) => void;
+}
+
+export function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
   const { logout, user } = useAuth();
-  const { collaborator, isCollaboratorMode, clearCollaboratorSession, hasAccess } = useCollaboratorContext();
+  const { collaborator, isCollaboratorMode, clearCollaboratorSession } = useCollaboratorContext();
   const { isAdmin, isGestor } = useUserRole();
   const { profile } = useProfile();
-  const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
 
   const handleLogout = async () => {
     if (isCollaboratorMode) {
       clearCollaboratorSession();
     }
-    // Always do full Supabase logout
     await logout();
-    navigate('/auth');
+    window.location.href = '/auth';
   };
 
   // Build visible nav items
   const visibleNavItems = navItems.filter(item => {
-    // Admin bypass (Santiago or Admin role)
-    if (isAdmin || profile?.email === 'santiago.aloom@gmail.com') return true;
+    // Admin bypass (Santiago or admin/owner role)
+    if (isAdmin || user?.email === 'santiago.aloom@gmail.com' || (profile?.role as string) === 'owner') return true;
 
-    // Colaboradores or Gestores: strictly respect permission flags
-    if (item.permission) {
-      return (profile as any)?.[item.permission] === true;
+    // While loading profile, show items to prevent flashing an empty sidebar
+    if (!profile) return true;
+
+    // Gestores can see all standard operating items
+    if (profile.role === 'gestor') return true;
+
+    // Colaboradores only see what they explicitly have permission for
+    if (profile.role === 'colaborador') {
+      if (item.permission) {
+        return (profile as any)?.[item.permission] === true;
+      }
+      return false; // Hide if they lack explicit permission
     }
 
     // "Cadastros" (managementOnly) for Gestores or Admins
     if (item.managementOnly) {
-      return isAdmin || isGestor;
+      return isAdmin || isGestor || (profile?.role as string) === 'owner';
     }
 
+    // Fallback default
     return true;
   });
   return (

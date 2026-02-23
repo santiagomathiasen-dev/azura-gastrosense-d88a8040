@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Factory, Search, Calendar as CalendarIcon, Play, CheckCircle2, Clock, Eye, ChevronLeft, ChevronRight, XCircle, ListChecks, Check, ChevronDown, Loader2, PauseCircle, TrendingUp } from 'lucide-react';
+import { Factory, Search, Calendar as CalendarIcon, Play, CheckCircle2, Clock, Eye, ChevronLeft, ChevronRight, XCircle, ListChecks, Check, ChevronDown, Loader2, PauseCircle, TrendingUp, DollarSign } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { Input } from '@/components/ui/input';
@@ -170,6 +170,12 @@ export default function Producao() {
   }, [productions, periodBoundaries, search, pracaFilter]);
 
   const producoesPorStatus = {
+    late: productions.filter(p => {
+      if (p.status === 'completed' || p.status === 'cancelled') return false;
+      const [year, month, day] = p.scheduled_date.split('-').map(Number);
+      const prodDate = new Date(year, month - 1, day);
+      return prodDate < startOfDay(getNow());
+    }),
     requested: filteredProducoes.filter(p => p.status === 'requested'),
     planned: filteredProducoes.filter(p => p.status === 'planned'),
     in_progress: filteredProducoes.filter(p => p.status === 'in_progress' || p.status === 'paused'),
@@ -474,6 +480,23 @@ export default function Producao() {
           />
         ) : (
           <div className="space-y-3">
+            {/* Atrasadas */}
+            {producoesPorStatus.late.length > 0 && (
+              <Card className="border-destructive/30 bg-destructive/5 mb-4">
+                <CardHeader className="p-3 pb-0">
+                  <CardTitle className="text-sm font-semibold text-destructive flex items-center gap-2">
+                    <Clock className="h-4 w-4 animate-pulse" />
+                    Produções Atrasadas ({producoesPorStatus.late.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-3">
+                  <MobileList>
+                    {producoesPorStatus.late.map(renderProducaoItem)}
+                  </MobileList>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Solicitações */}
             {producoesPorStatus.requested.length > 0 && (
               <div>
@@ -1080,13 +1103,45 @@ function ProductionPreviewSheet({
             </div>
           )}
 
+          {/* Production Costs Adjusted */}
+          <div className="grid grid-cols-2 gap-4">
+            <Card className="border-primary/20 bg-primary/10">
+              <CardContent className="p-3 text-center">
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  <DollarSign className="h-4 w-4 text-primary" />
+                  <span className="text-[10px] uppercase font-bold text-primary">Custo Total da Produção</span>
+                </div>
+                <p className="text-lg font-bold text-primary">
+                  R$ {(multiplier * (sheet.ingredients?.reduce((sum: number, ing: any) => sum + (ing.total_cost || 0), 0) || 0)).toFixed(2)}
+                </p>
+                <p className="text-[9px] text-muted-foreground">
+                  Para {producao.planned_quantity} {sheet.yield_unit}
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="border-accent/20 bg-accent/10">
+              <CardContent className="p-3 text-center">
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  <TrendingUp className="h-4 w-4 text-accent-foreground" />
+                  <span className="text-[10px] uppercase font-bold text-accent-foreground">Custo Unitário</span>
+                </div>
+                <p className="text-lg font-bold text-accent-foreground">
+                  R$ {(sheet.ingredients?.reduce((sum: number, ing: any) => sum + (ing.total_cost || 0), 0) / Number(sheet.yield_quantity || 1) || 0).toFixed(2)}
+                </p>
+                <p className="text-[9px] text-muted-foreground uppercase">
+                  Por {sheet.yield_unit}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
           {/* Preparation Method */}
           {sheet.preparation_method && (
-            <div>
-              <h4 className="font-medium mb-2 text-sm">Modo de Preparo</h4>
-              <p className="text-base leading-relaxed p-4 rounded-lg bg-muted/50 whitespace-pre-wrap">
+            <div className="space-y-2">
+              <h4 className="font-medium text-sm">Modo de Preparo</h4>
+              <div className="p-4 rounded-lg bg-muted/50 text-xs whitespace-pre-wrap leading-relaxed">
                 {sheet.preparation_method}
-              </p>
+              </div>
             </div>
           )}
 

@@ -250,6 +250,7 @@ export function useStockVoiceControl({ stockItems, onQuantityUpdate, onExpiryUpd
 
       if (event.results[event.results.length - 1].isFinal && finalTranscript.trim()) {
         const cleanFinal = finalTranscript.toLowerCase().trim();
+        const currentActiveItemId = activeItemId;
 
         // Stop listening to process with AI
         stopListening();
@@ -268,15 +269,26 @@ Retorne APENAS um array JSON: [{"name": string, "quantity": number, "expiration_
             body: { text: cleanFinal, systemPrompt }
           });
 
-          if (error || !data.ingredients || data.ingredients.length === 0) {
-            throw new Error('Não consegui entender o comando.');
+          if (error) {
+            console.error('Voice process invoke error:', error);
+            throw new Error('Falha de conexão ou erro no servidor de proc. de voz.');
+          }
+
+          if (data && data.error) {
+            console.error('Voice process logic error:', data.error);
+            throw new Error(`Erro na IA: ${data.error}`);
+          }
+
+          if (!data || !data.ingredients || data.ingredients.length === 0) {
+            console.error('Voice process returned no ingredients. Data:', data);
+            throw new Error('Não consegui entender o comando ou extrair ingredientes.');
           }
 
           const extracted = data.ingredients[0];
 
           // Match extracted item with stockItems
-          const item = activeItemId
-            ? stockItems.find(i => i.id === activeItemId)
+          const item = currentActiveItemId
+            ? stockItems.find(i => i.id === currentActiveItemId)
             : findItemByVoice(extracted.name);
 
           if (item) {

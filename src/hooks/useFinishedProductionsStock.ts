@@ -43,12 +43,13 @@ export function useFinishedProductionsStock() {
             name,
             yield_unit,
             image_url,
-            minimum_stock
+            minimum_stock,
+            praca
           )
         `)
         .order('updated_at', { ascending: false });
       if (error) throw error;
-      return (data as any) as FinishedProductionStock[];
+      return data as unknown as FinishedProductionStock[];
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
     refetchInterval: 30_000,
@@ -65,6 +66,13 @@ export function useFinishedProductionsStock() {
       if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
       if (!ownerId) throw new Error('Usuário não autenticado');
 
+      // Get technical sheet to see if it has a default praca
+      const { data: sheet } = await supabase
+        .from('technical_sheets')
+        .select('praca')
+        .eq('id', data.technical_sheet_id)
+        .single();
+
       // Check if entry already exists for this technical sheet
       const { data: existing } = await supabase
         .from('finished_productions_stock')
@@ -74,9 +82,10 @@ export function useFinishedProductionsStock() {
 
       if (existing) {
         // Update existing entry
-        const updateData: any = {
+        const updateData: { quantity: number; notes?: string; image_url?: string; praca?: string | null } = {
           quantity: Number(existing.quantity) + data.quantity,
           notes: data.notes,
+          praca: sheet?.praca
         };
         if (data.image_url) updateData.image_url = data.image_url;
 
@@ -87,12 +96,21 @@ export function useFinishedProductionsStock() {
         if (error) throw error;
       } else {
         // Create new entry
-        const insertData: any = {
+        const insertData: {
+          user_id: string;
+          technical_sheet_id: string;
+          quantity: number;
+          unit: string;
+          notes?: string;
+          image_url?: string;
+          praca?: string | null;
+        } = {
           user_id: ownerId,
           technical_sheet_id: data.technical_sheet_id,
           quantity: data.quantity,
           unit: data.unit,
           notes: data.notes,
+          praca: sheet?.praca
         };
         if (data.image_url) insertData.image_url = data.image_url;
 

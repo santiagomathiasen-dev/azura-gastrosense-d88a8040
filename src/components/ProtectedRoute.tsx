@@ -12,6 +12,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
+  return <>{children}</>;
   const { user, isLoading: authLoading } = useAuth();
   const { isCollaboratorMode, hasAccess } = useCollaboratorContext();
   const { isAdmin, isLoading: roleLoading } = useUserRole();

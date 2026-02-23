@@ -28,6 +28,8 @@ const Financeiro = lazy(() => import("@/pages/Financeiro"));
 const Perdas = lazy(() => import("@/pages/Perdas"));
 const PrevisaoVendas = lazy(() => import("@/pages/PrevisaoVendas"));
 const PaymentRequired = lazy(() => import("@/pages/PaymentRequired"));
+const Colaboradores = lazy(() => import("@/pages/Colaboradores"));
+const Gestores = lazy(() => import("@/pages/Gestores"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 const LoadingFallback = () => (
@@ -77,6 +79,8 @@ const App = () => (
                   <Route path="/previsao-vendas" element={<PrevisaoVendas />} />
                   <Route path="/relatorios" element={<Relatorios />} />
                   <Route path="/financeiro" element={<Financeiro />} />
+                  <Route path="/colaboradores" element={<Colaboradores />} />
+                  <Route path="/gestores" element={<Gestores />} />
                   <Route path="/payment-required" element={<PaymentRequired />} />
                 </Route>
 

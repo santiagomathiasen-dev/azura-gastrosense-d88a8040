@@ -257,13 +257,13 @@ export function IngredientFileImportDialog({
                   className="hidden"
                   id="ingredient-camera-input"
                 />
-                <label
-                  htmlFor="ingredient-camera-input"
+                <div
+                  onClick={() => cameraInputRef.current?.click()}
                   className="flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted transition-colors"
                 >
                   <Camera className="h-8 w-8 text-muted-foreground" />
                   <span className="text-sm text-muted-foreground">Câmera</span>
-                </label>
+                </div>
               </div>
 
               {/* File upload option */}
@@ -276,13 +276,13 @@ export function IngredientFileImportDialog({
                   className="hidden"
                   id="ingredient-file-input"
                 />
-                <label
-                  htmlFor="ingredient-file-input"
+                <div
+                  onClick={() => fileInputRef.current?.click()}
                   className="flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted transition-colors"
                 >
                   <Upload className="h-8 w-8 text-muted-foreground" />
                   <span className="text-sm text-muted-foreground">Arquivo</span>
-                </label>
+                </div>
               </div>
             </div>
 

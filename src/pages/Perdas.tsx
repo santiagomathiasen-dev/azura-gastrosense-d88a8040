@@ -11,7 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Trash2, TrendingDown, Search, Package, PackageCheck } from 'lucide-react';
+import { Plus, Trash2, TrendingDown, Search, Package, PackageCheck, AlertCircle } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useLosses, LossInput } from '@/hooks/useLosses';
 import { useStockItems } from '@/hooks/useStockItems';
 import { useFinishedProductionsStock } from '@/hooks/useFinishedProductionsStock';
@@ -35,6 +36,7 @@ export default function Perdas() {
   const [selectedItemId, setSelectedItemId] = useState('');
   const [quantity, setQuantity] = useState('');
   const [notes, setNotes] = useState('');
+  const [deductStock, setDeductStock] = useState(true);
 
   const filteredLosses = losses.filter(l =>
     l.source_name.toLowerCase().includes(search.toLowerCase())
@@ -75,7 +77,7 @@ export default function Perdas() {
       notes: notes || undefined,
     };
 
-    createLoss.mutate(input, {
+    createLoss.mutate({ ...input, deductStock }, {
       onSuccess: () => {
         setIsDialogOpen(false);
         resetForm();
@@ -88,6 +90,7 @@ export default function Perdas() {
     setSelectedItemId('');
     setQuantity('');
     setNotes('');
+    setDeductStock(true);
   };
 
   return (
@@ -250,6 +253,17 @@ export default function Perdas() {
                 onChange={(e) => setQuantity(e.target.value)}
                 placeholder="Ex: 2.5"
               />
+            </div>
+
+            <div className="flex items-center space-x-2 py-2">
+              <Checkbox
+                id="deductStock"
+                checked={deductStock}
+                onCheckedChange={(checked) => setDeductStock(checked as boolean)}
+              />
+              <Label htmlFor="deductStock" className="text-sm font-medium cursor-pointer">
+                Abater automaticamente do estoque
+              </Label>
             </div>
 
             <div className="space-y-2">

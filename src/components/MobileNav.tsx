@@ -12,7 +12,8 @@ import {
   Users,
   BarChart3,
   TrendingDown,
-  Calculator
+  Calculator,
+  UtensilsCrossed
 } from 'lucide-react';
 import { Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -23,9 +24,10 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Painel', permission: 'can_access_dashboard' },
-  { to: '/colaboradores', icon: Users, label: 'Colab.', permission: null, gestorOnly: true },
+  { to: '/cadastros', icon: Users, label: 'Cadastros', permission: null, managementOnly: true },
   { to: '/estoque', icon: Package, label: 'Central', permission: 'can_access_estoque' },
   { to: '/estoque-producao', icon: Boxes, label: 'Est. Prod.', permission: 'can_access_estoque_producao' },
+  { to: '/estoque-insumos-produzidos', icon: UtensilsCrossed, label: 'Insumos', permission: 'can_access_estoque_producao' },
   { to: '/fichas', icon: FileText, label: 'Fichas', permission: 'can_access_fichas' },
   { to: '/producao', icon: Factory, label: 'Produção', permission: 'can_access_producao' },
   { to: '/compras', icon: ShoppingCart, label: 'Compras', permission: 'can_access_compras' },
@@ -39,7 +41,7 @@ const navItems = [
 export function MobileNav() {
   const { logout } = useAuth();
   const { isCollaboratorMode, clearCollaboratorSession, hasAccess } = useCollaboratorContext();
-  const { isAdmin } = useUserRole();
+  const { isAdmin, isGestor } = useUserRole();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -48,18 +50,20 @@ export function MobileNav() {
     }
     // Always do full Supabase logout
     await logout();
-    navigate('/auth');
+    window.location.href = '/auth';
   };
 
   const visibleNavItems = [
     ...navItems.filter(item => {
-      if (item.gestorOnly && isCollaboratorMode) return false;
+      if (item.managementOnly) {
+        if (isCollaboratorMode) return false;
+        return isAdmin || isGestor;
+      }
       if (isCollaboratorMode && item.permission) {
         return hasAccess(item.to);
       }
       return true;
     }),
-    ...(isAdmin ? [{ to: '/gestores', icon: Shield, label: 'Gestores', permission: null }] : []),
   ];
 
   return (

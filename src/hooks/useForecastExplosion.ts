@@ -78,7 +78,7 @@ export function useForecastExplosion() {
                         // Get technical sheet details
                         const { data: sheet } = await supabase
                             .from('technical_sheets')
-                            .select('id, name, yield_quantity, yield_unit, lead_time_hours, shelf_life_hours')
+                            .select('id, name, yield_quantity, yield_unit, lead_time_hours, shelf_life_hours, praca')
                             .eq('id', comp.component_id)
                             .single();
 
@@ -98,7 +98,7 @@ export function useForecastExplosion() {
                                 servesProducts: [`${productName} (${forecast.forecasted_quantity})`],
                                 leadTimeHours: Number(sheet.lead_time_hours) || 0,
                                 shelfLifeHours: Number(sheet.shelf_life_hours) || 9999,
-                                praca: null, // Will use default praça since it's on productions, not technical_sheets
+                                praca: sheet.praca,
                                 name: sheet.name,
                             });
                         }

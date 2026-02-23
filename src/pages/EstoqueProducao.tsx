@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Search, ArrowLeft, Package, Boxes, ClipboardList, Send, Mic, MicOff, RefreshCw } from 'lucide-react';
+import { Search, ArrowLeft, Package, Boxes, ClipboardList, Send, Mic, MicOff, RefreshCw, FileText } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,7 @@ import { useEarliestExpiryMap, parseSafeDate } from '@/hooks/useExpiryDates';
 import { useProductionStock } from '@/hooks/useProductionStock';
 import { useStockRequests } from '@/hooks/useStockRequests';
 import { useStockVoiceControl } from '@/hooks/useStockVoiceControl';
+import { IngredientFileImportDialog, type ExtractedIngredient } from '@/components/IngredientFileImportDialog';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { EmptyState } from '@/components/EmptyState';
@@ -60,25 +61,26 @@ export default function EstoqueProducao() {
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [updateItemId, setUpdateItemId] = useState('');
   const [updateQuantityValue, setUpdateQuantityValue] = useState('');
+  const [fileImportDialogOpen, setFileImportDialogOpen] = useState(false);
 
   const isLoading = centralLoading || productionLoading || requestsLoading;
 
-  // Map production stock to format expected by voice control
-  const stockItemsForVoice = productionStock.map(ps => ({
-    id: ps.stock_item_id,
-    name: ps.stock_item?.name || '',
-    unit: ps.stock_item?.unit || 'unidade',
-    category: ps.stock_item?.category || 'outros',
+  // Map all central items to format expected by voice control so it can add new items to production empty state
+  const stockItemsForVoice = centralItems.map(item => ({
+    id: item.id,
+    name: item.name,
+    unit: item.unit || 'unidade',
+    category: item.category || 'outros',
   }));
 
   // Handle voice quantity update
   const handleVoiceQuantityUpdate = useCallback((itemId: string, newQuantity: number) => {
-    const item = productionStock.find(ps => ps.stock_item_id === itemId);
+    const item = centralItems.find(i => i.id === itemId);
     if (item) {
       updateQuantity.mutate({ stockItemId: itemId, quantity: newQuantity });
-      toast.success(`${item.stock_item?.name}: ${newQuantity} ${item.stock_item?.unit ? UNIT_LABELS[item.stock_item.unit as keyof typeof UNIT_LABELS] : ''}`);
+      toast.success(`${item.name}: ${newQuantity} ${item.unit ? UNIT_LABELS[item.unit as keyof typeof UNIT_LABELS] : ''}`);
     }
-  }, [productionStock, updateQuantity]);
+  }, [centralItems, updateQuantity]);
 
   const voiceControl = useStockVoiceControl({
     stockItems: stockItemsForVoice as any,
@@ -144,6 +146,33 @@ export default function EstoqueProducao() {
     setRequestDialogOpen(false);
   };
 
+  const handleFileImport = async (ingredientsList: ExtractedIngredient[]) => {
+    try {
+      let successCount = 0;
+      for (const item of ingredientsList) {
+        // Find matching item in central items first to get its ID
+        const matchedItem = centralItems.find(
+          (central) =>
+            central.name.toLowerCase().includes(item.name.toLowerCase()) ||
+            item.name.toLowerCase().includes(central.name.toLowerCase())
+        );
+
+        if (matchedItem) {
+          await updateQuantity.mutateAsync({
+            stockItemId: matchedItem.id,
+            quantity: item.quantity,
+          });
+          successCount++;
+        }
+      }
+      setFileImportDialogOpen(false);
+      toast.success(`${successCount} item(s) da produção atualizado(s) com sucesso!`);
+    } catch (error) {
+      console.error('Error importing to production stock:', error);
+      toast.error('Ocorreu um erro ao atualizar o estoque de produção.');
+    }
+  };
+
   const handleReturn = async () => {
     if (!selectedItemId || !quantity) return;
 
@@ -187,27 +216,35 @@ export default function EstoqueProducao() {
       />
 
       {/* Main Action Buttons - Side by Side */}
-      <div className="grid grid-cols-2 gap-3 mb-3">
+      <div className="grid grid-cols-3 gap-2 mb-3">
         <Button
           variant="default"
-          className="h-12 text-sm font-semibold rounded-lg"
+          className="h-12 text-xs font-semibold rounded-lg"
           onClick={() => openRequestDialog()}
         >
-          <Send className="h-5 w-5 mr-2" />
-          Solicitação
+          <Send className="h-4 w-4 mr-1 sm:mr-2" />
+          Solicitar
         </Button>
         <Button
           variant={voiceControl.isListening ? 'destructive' : 'outline'}
-          className="h-12 text-sm font-semibold rounded-lg"
+          className="h-12 text-xs font-semibold rounded-lg px-2"
           onClick={() => voiceControl.isSupported && voiceControl.toggleListening()}
           disabled={!voiceControl.isSupported}
         >
           {voiceControl.isListening ? (
-            <MicOff className="h-5 w-5 mr-2" />
+            <MicOff className="h-4 w-4 mr-1 sm:mr-2" />
           ) : (
-            <Mic className="h-5 w-5 mr-2" />
+            <Mic className="h-4 w-4 mr-1 sm:mr-2" />
           )}
-          Contagem de Estoque
+          Voz
+        </Button>
+        <Button
+          variant="outline"
+          className="h-12 text-xs font-semibold rounded-lg px-2 border-orange-500/30 text-orange-600 hover:bg-orange-50"
+          onClick={() => setFileImportDialogOpen(true)}
+        >
+          <FileText className="h-4 w-4 mr-1 sm:mr-2" />
+          IA (Foto/PDF)
         </Button>
       </div>
 
@@ -466,6 +503,12 @@ export default function EstoqueProducao() {
           )}
         </TabsContent>
       </Tabs>
+
+      <IngredientFileImportDialog
+        open={fileImportDialogOpen}
+        onOpenChange={setFileImportDialogOpen}
+        onImport={handleFileImport}
+      />
 
       {/* Request Dialog */}
       <Dialog open={requestDialogOpen} onOpenChange={setRequestDialogOpen}>

@@ -104,10 +104,24 @@ export function StockItemForm({
     }
   }, [open, initialData, reset]);
 
+  const formatItemName = (name: string) => {
+    return name
+      .trim()
+      .split(/\s+/)
+      .map((word) => {
+        const lower = word.toLowerCase();
+        if (['de', 'da', 'do', 'das', 'dos', 'e', 'com', 'sem'].includes(lower)) {
+          return lower;
+        }
+        return lower.charAt(0).toUpperCase() + lower.slice(1);
+      })
+      .join(' ');
+  };
+
   const handleFormSubmit = (data: FormData) => {
     // Apply defaults and clean up empty strings
     const cleanedData = {
-      name: data.name,
+      name: formatItemName(data.name),
       category: data.category,
       unit: data.unit,
       current_quantity: data.current_quantity ?? 0,

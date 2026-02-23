@@ -90,7 +90,7 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
           id,
           quantity_sold,
           sale_date,
-          sale_product:sale_products(name, sale_price)
+          sale_product:sale_products!inner(name, sale_price)
         `)
         .gte('sale_date', `${startDate}T00:00:00`)
         .lte('sale_date', `${endDate}T23:59:59`)
@@ -98,14 +98,17 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
 
       if (error) throw error;
 
-      return data.map(sale => {
+      return (data as any[]).map(sale => {
         const dateObj = sale.sale_date ? new Date(sale.sale_date) : getNow();
+        const productName = sale.sale_product?.name || 'Produto desconhecido';
+        const unitPrice = sale.sale_product?.sale_price || 0;
+
         return {
           date: isNaN(dateObj.getTime()) ? '-' : format(dateObj, 'dd/MM/yyyy HH:mm'),
-          productName: (sale.sale_product as any)?.name || 'Produto desconhecido',
+          productName,
           quantity: sale.quantity_sold,
-          unitPrice: (sale.sale_product as any)?.sale_price || 0,
-          total: sale.quantity_sold * ((sale.sale_product as any)?.sale_price || 0),
+          unitPrice,
+          total: sale.quantity_sold * unitPrice,
         };
       }) as SalesReportItem[];
     },
@@ -136,7 +139,7 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
           quantity,
           created_at,
           notes,
-          stock_item:stock_items(name, unit_price)
+          stock_item:stock_items!inner(name, unit_price)
         `)
         .eq('type', 'exit')
         .ilike('notes', '%perda%')
@@ -159,15 +162,16 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
         };
       });
 
-      const legacyLosses = (legacyData || []).map(movement => {
+      const legacyLosses = (legacyData as any[] || []).map(movement => {
         const dateObj = movement.created_at ? new Date(movement.created_at) : getNow();
+        const stockItem = movement.stock_item;
         return {
           date: isNaN(dateObj.getTime()) ? '-' : format(dateObj, 'dd/MM/yyyy HH:mm'),
-          productName: (movement.stock_item as any)?.name || 'Item desconhecido',
+          productName: stockItem?.name || 'Item desconhecido',
           quantity: Number(movement.quantity),
           unit: 'unidade',
           sourceType: 'stock_item',
-          estimatedValue: Number(movement.quantity) * ((movement.stock_item as any)?.unit_price || 0),
+          estimatedValue: Number(movement.quantity) * (stockItem?.unit_price || 0),
         };
       });
 
@@ -197,7 +201,7 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
           id,
           ordered_quantity,
           actual_delivery_date,
-          stock_item:stock_items(name, unit, unit_price),
+          stock_item:stock_items!inner(name, unit, unit_price),
           supplier:suppliers(name)
         `)
         .eq('status', 'delivered')
@@ -208,14 +212,17 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
 
       if (error) throw error;
 
-      return data.map(item => ({
-        date: item.actual_delivery_date ? format(parseSafeDate(item.actual_delivery_date), 'dd/MM/yyyy') : '-',
-        itemName: (item.stock_item as any)?.name || 'Item desconhecido',
-        quantity: item.ordered_quantity || 0,
-        unit: (item.stock_item as any)?.unit || 'un',
-        supplierName: (item.supplier as any)?.name || null,
-        totalCost: (item.ordered_quantity || 0) * ((item.stock_item as any)?.unit_price || 0),
-      })) as PurchasedIngredientsItem[];
+      return (data as any[]).map(item => {
+        const stockItem = item.stock_item;
+        return {
+          date: item.actual_delivery_date ? format(parseSafeDate(item.actual_delivery_date), 'dd/MM/yyyy') : '-',
+          itemName: stockItem?.name || 'Item desconhecido',
+          quantity: item.ordered_quantity || 0,
+          unit: stockItem?.unit || 'un',
+          supplierName: item.supplier?.name || null,
+          totalCost: (item.ordered_quantity || 0) * (stockItem?.unit_price || 0),
+        };
+      }) as PurchasedIngredientsItem[];
     },
     enabled: !!user?.id || !!ownerId,
   });
@@ -234,7 +241,7 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
           created_at,
           source,
           notes,
-          stock_item:stock_items(name, unit)
+          stock_item:stock_items!inner(name, unit)
         `)
         .eq('type', 'exit')
         .gte('created_at', `${startDate}T00:00:00`)
@@ -243,14 +250,17 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
 
       if (error) throw error;
 
-      return data.map(movement => ({
-        date: format(new Date(movement.created_at), 'dd/MM/yyyy HH:mm'),
-        itemName: (movement.stock_item as any)?.name || 'Item desconhecido',
-        quantity: movement.quantity,
-        unit: (movement.stock_item as any)?.unit || 'un',
-        productionName: movement.notes || null,
-        source: movement.source === 'production' ? 'Produção' : movement.source === 'manual' ? 'Manual' : movement.source,
-      })) as UsedIngredientsItem[];
+      return (data as any[]).map(movement => {
+        const stockItem = movement.stock_item;
+        return {
+          date: format(new Date(movement.created_at), 'dd/MM/yyyy HH:mm'),
+          itemName: stockItem?.name || 'Item desconhecido',
+          quantity: movement.quantity,
+          unit: stockItem?.unit || 'un',
+          productionName: movement.notes || null,
+          source: movement.source === 'production' ? 'Produção' : movement.source === 'manual' ? 'Manual' : movement.source,
+        };
+      }) as UsedIngredientsItem[];
     },
     enabled: !!user?.id || !!ownerId,
   });
@@ -270,7 +280,7 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
           status,
           created_at,
           order_date,
-          stock_item:stock_items(name, unit, unit_price),
+          stock_item:stock_items!inner(name, unit, unit_price),
           supplier:suppliers(name)
         `)
         .gte('created_at', `${startDate}T00:00:00`)
@@ -286,17 +296,20 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
         cancelled: 'Cancelado',
       };
 
-      return data.map(item => ({
-        date: item.order_date
-          ? format(parseSafeDate(item.order_date), 'dd/MM/yyyy')
-          : format(new Date(item.created_at), 'dd/MM/yyyy'),
-        itemName: (item.stock_item as any)?.name || 'Item desconhecido',
-        quantity: item.ordered_quantity || item.suggested_quantity,
-        unit: (item.stock_item as any)?.unit || 'un',
-        supplierName: (item.supplier as any)?.name || null,
-        status: statusLabels[item.status] || item.status,
-        estimatedCost: (item.ordered_quantity || item.suggested_quantity) * ((item.stock_item as any)?.unit_price || 0),
-      })) as PurchaseReportItem[];
+      return (data as any[]).map(item => {
+        const stockItem = item.stock_item;
+        return {
+          date: item.order_date
+            ? format(parseSafeDate(item.order_date), 'dd/MM/yyyy')
+            : format(new Date(item.created_at), 'dd/MM/yyyy'),
+          itemName: stockItem?.name || 'Item desconhecido',
+          quantity: item.ordered_quantity || item.suggested_quantity,
+          unit: stockItem?.unit || 'un',
+          supplierName: item.supplier?.name || null,
+          status: statusLabels[item.status] || item.status,
+          estimatedCost: (item.ordered_quantity || item.suggested_quantity) * (stockItem?.unit_price || 0),
+        };
+      }) as PurchaseReportItem[];
     },
     enabled: !!user?.id || !!ownerId,
   });

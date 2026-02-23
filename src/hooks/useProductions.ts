@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
+import { getNow } from '@/lib/utils';
 import type { Database } from '@/integrations/supabase/types';
 
 type Production = Database['public']['Tables']['productions']['Row'];
@@ -31,12 +32,22 @@ export const PERIOD_LABELS: Record<ProductionPeriod, string> = {
 };
 
 export interface ProductionWithSheet extends Production {
+  id: string;
+  name: string;
+  status: ProductionStatus;
+  planned_quantity: number;
+  technical_sheet_id: string;
+  scheduled_date: string;
+  user_id: string;
   technical_sheet: {
     id: string;
     name: string;
     yield_quantity: number;
     yield_unit: string;
     preparation_method: string | null;
+    production_type?: 'insumo' | 'final';
+    shelf_life_hours?: number | null;
+    praca?: string | null;
     ingredients: {
       stock_item_id: string;
       quantity: number;
@@ -246,46 +257,73 @@ export function useProductions() {
   const addToFinishedStock = async (production: ProductionWithSheet, actualQuantity: number) => {
     if (!ownerId || !production.technical_sheet) return;
 
-    const technicalSheetId = production.technical_sheet.id;
-    const unit = production.technical_sheet.yield_unit;
+    const sheet = production.technical_sheet;
+    const technicalSheetId = sheet.id;
+    const unit = sheet.yield_unit;
     const praca = production.praca || null;
+    const productionType = (sheet as any).production_type || 'final';
 
-    // Check if entry already exists for this technical sheet + praca combo
-    let query = supabase
-      .from('finished_productions_stock')
-      .select('id, quantity')
-      .eq('technical_sheet_id', technicalSheetId);
+    if (productionType === 'insumo') {
+      // Add to produced_inputs_stock
+      const expirationDate = (sheet as any).shelf_life_hours
+        ? new Date(getNow().getTime() + (sheet as any).shelf_life_hours * 60 * 60 * 1000).toISOString()
+        : null;
 
-    if (praca) {
-      query = query.eq('praca', praca);
-    } else {
-      query = query.is('praca', null);
-    }
-
-    const { data: existing } = await query.single();
-
-    if (existing) {
-      // Update existing entry
-      await supabase
-        .from('finished_productions_stock')
-        .update({
-          quantity: Number(existing.quantity) + actualQuantity,
-        })
-        .eq('id', existing.id);
-    } else {
-      // Create new entry
-      const insertData: any = {
-        user_id: ownerId,
-        technical_sheet_id: technicalSheetId,
-        quantity: actualQuantity,
-        unit: unit,
-        notes: `Produção: ${production.name}`,
-      };
-      if (praca) insertData.praca = praca;
+      const dateStr = getNow().toISOString().slice(0, 10).replace(/-/g, '');
+      const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const batchCode = `${sheet.name.substring(0, 3).toUpperCase()}-${dateStr}-${random}`;
 
       await supabase
+        .from('produced_inputs_stock')
+        .insert({
+          user_id: ownerId,
+          technical_sheet_id: technicalSheetId,
+          batch_code: batchCode,
+          quantity: actualQuantity,
+          unit: unit,
+          production_date: getNow().toISOString(),
+          expiration_date: expirationDate,
+          notes: `Produção: ${production.name}`,
+        });
+    } else {
+      // Add to finished_productions_stock
+      // Check if entry already exists for this technical sheet + praca combo
+      let query = supabase
         .from('finished_productions_stock')
-        .insert(insertData);
+        .select('id, quantity')
+        .eq('technical_sheet_id', technicalSheetId);
+
+      if (praca) {
+        query = query.eq('praca', praca);
+      } else {
+        query = query.is('praca', null);
+      }
+
+      const { data: existing, error: fetchError } = await query.maybeSingle();
+
+      if (existing) {
+        // Update existing entry
+        await supabase
+          .from('finished_productions_stock')
+          .update({
+            quantity: Number(existing.quantity) + actualQuantity,
+          })
+          .eq('id', existing.id);
+      } else {
+        // Create new entry
+        const insertData: any = {
+          user_id: ownerId,
+          technical_sheet_id: technicalSheetId,
+          quantity: actualQuantity,
+          unit: unit,
+          notes: `Produção: ${production.name}`,
+        };
+        if (praca) insertData.praca = praca;
+
+        await supabase
+          .from('finished_productions_stock')
+          .insert(insertData);
+      }
     }
   };
 

@@ -29,7 +29,7 @@ const PRACAS: { value: string; label: string }[] = [
 export default function EstoqueFinalizados() {
   const { finishedStock, isLoading, addFinishedProduction, updateFinishedProduction, deleteFinishedProduction, registerLoss } = useFinishedProductionsStock();
   const { sheets: technicalSheets } = useTechnicalSheets();
-  
+
   const [search, setSearch] = useState('');
   const [pracaFilter, setPracaFilter] = useState<PracaType>('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -37,7 +37,7 @@ export default function EstoqueFinalizados() {
   const [lossDialogOpen, setLossDialogOpen] = useState(false);
   const [lossItem, setLossItem] = useState<FinishedProductionStock | null>(null);
   const [lossQuantity, setLossQuantity] = useState('1');
-  
+
   // Unit options for finished products
   const UNIT_OPTIONS = ['unidade', 'kg', 'g', 'L', 'ml', 'fatia', 'porção', 'caixa', 'dz'];
 
@@ -53,8 +53,8 @@ export default function EstoqueFinalizados() {
   const filteredStock = finishedStock.filter(item => {
     const matchesSearch = item.technical_sheet?.name.toLowerCase().includes(search.toLowerCase());
     const matchesPraca = pracaFilter === 'all'
-      || (pracaFilter === 'sem_praca' && !(item as any).praca)
-      || (item as any).praca === pracaFilter;
+      || (pracaFilter === 'sem_praca' && !item.praca)
+      || item.praca === pracaFilter;
     return matchesSearch && matchesPraca;
   });
 
@@ -78,7 +78,7 @@ export default function EstoqueFinalizados() {
 
   const handleUpdate = () => {
     if (!editingItem) return;
-    
+
     updateFinishedProduction.mutate({
       id: editingItem.id,
       quantity: Number(formData.quantity),
@@ -100,7 +100,7 @@ export default function EstoqueFinalizados() {
       quantity: String(item.quantity),
       unit: item.unit || '',
       notes: item.notes || '',
-      image_url: (item as any).image_url || '',
+      image_url: item.image_url || '',
     });
   };
 
@@ -173,8 +173,8 @@ export default function EstoqueFinalizados() {
                     value={formData.technical_sheet_id}
                     onValueChange={(v) => {
                       const sheet = technicalSheets.find(s => s.id === v);
-                      setFormData({ 
-                        ...formData, 
+                      setFormData({
+                        ...formData,
                         technical_sheet_id: v,
                         unit: sheet?.yield_unit || ''
                       });
@@ -242,7 +242,7 @@ export default function EstoqueFinalizados() {
               <Button variant="outline" size="sm" onClick={() => setIsAddDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button 
+              <Button
                 size="sm"
                 onClick={handleAdd}
                 disabled={!formData.technical_sheet_id || !formData.quantity || addFinishedProduction.isPending}
@@ -322,7 +322,7 @@ export default function EstoqueFinalizados() {
             <Button variant="outline" size="sm" onClick={() => setEditingItem(null)}>
               Cancelar
             </Button>
-            <Button 
+            <Button
               size="sm"
               onClick={handleUpdate}
               disabled={!formData.quantity || updateFinishedProduction.isPending}
@@ -367,7 +367,7 @@ export default function EstoqueFinalizados() {
             <Button variant="outline" size="sm" onClick={() => setLossDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button 
+            <Button
               size="sm"
               variant="destructive"
               onClick={() => {
@@ -410,16 +410,16 @@ export default function EstoqueFinalizados() {
                   {/* Image on left */}
                   <div className="w-24 h-24 shrink-0 bg-muted flex items-center justify-center">
                     {imageUrl ? (
-                      <img 
-                        src={imageUrl} 
-                        alt={item.technical_sheet?.name || 'Produto'} 
+                      <img
+                        src={imageUrl}
+                        alt={item.technical_sheet?.name || 'Produto'}
                         className="w-full h-full object-cover"
                       />
                     ) : (
                       <Package className="h-8 w-8 text-muted-foreground" />
                     )}
                   </div>
-                  
+
                   {/* Content on right */}
                   <div className="flex-1 p-3 flex flex-col justify-between min-w-0">
                     <div>
@@ -430,14 +430,14 @@ export default function EstoqueFinalizados() {
                         <Badge variant={Number(item.quantity) > 0 ? 'default' : 'destructive'} className="text-xs">
                           {formatQuantity(Number(item.quantity))} {item.unit}
                         </Badge>
-                        {(item as any).praca && (
+                        {item.praca && (
                           <Badge variant="outline" className="text-xs">
-                            {PRACAS.find(p => p.value === (item as any).praca)?.label || (item as any).praca}
+                            {PRACAS.find(p => p.value === item.praca)?.label || item.praca}
                           </Badge>
                         )}
                       </div>
                     </div>
-                    
+
                     {/* Actions */}
                     <div className="flex justify-end gap-1 mt-2">
                       <Button

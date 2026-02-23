@@ -306,9 +306,10 @@ export default function Financeiro() {
             <Dialog open={!!editingProduct} onOpenChange={(open) => !open && setEditingProduct(null)}>
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
-                        <DialogTitle>Custos Individuais - {editingProduct?.name}</DialogTitle>
+                        <DialogTitle>Custos Individuais (Simulação) - {editingProduct?.name}</DialogTitle>
                         <DialogDescription>
-                            Defina os custos operacionais exclusivos deste produto. Estes valores serão somados ao custo dos insumos.
+                            Ajuste os custos operacionais para simular a margem.
+                            <span className="block mt-1 font-bold text-orange-600">Nota: O salvamento destes campos está temporariamente desabilitado (apenas para exibição local).</span>
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
@@ -365,9 +366,12 @@ export default function Financeiro() {
                         <p><strong>Nota:</strong> O custo dos insumos (R$ {editingProduct?.ingredientCost.toFixed(2)}) é calculado automaticamente com base na ficha técnica.</p>
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setEditingProduct(null)}>Cancelar</Button>
-                        <Button onClick={handleSaveCosts} disabled={updateSaleProduct.isPending}>
-                            {updateSaleProduct.isPending ? "Salvando..." : "Salvar Custos"}
+                        <Button variant="outline" onClick={() => setEditingProduct(null)}>Fechar</Button>
+                        <Button onClick={() => {
+                            toast.info("Valores aplicados para simulação nesta sessão.");
+                            setEditingProduct(null);
+                        }}>
+                            Aplicar Simulação
                         </Button>
                     </DialogFooter>
                 </DialogContent>

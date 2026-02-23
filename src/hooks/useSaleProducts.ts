@@ -28,9 +28,6 @@ export interface SaleProduct {
   is_active: boolean;
   ready_quantity: number;
   minimum_stock: number;
-  labor_cost?: number;
-  energy_cost?: number;
-  other_costs?: number;
   created_at: string;
   updated_at: string;
   components?: SaleProductComponent[];
@@ -65,7 +62,8 @@ export function useSaleProducts() {
 
       return (data || []).map(p => ({
         ...p,
-        minimum_stock: Number((p as any).minimum_stock || 0),
+        minimum_stock: Number(p.minimum_stock || 0),
+        sale_price: p.sale_price ? Number(p.sale_price) : null,
       })) as SaleProduct[];
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
@@ -78,6 +76,9 @@ export function useSaleProducts() {
       sale_price?: number;
       image_url?: string;
       minimum_stock?: number;
+      labor_cost?: number;
+      energy_cost?: number;
+      other_costs?: number;
       components: ComponentInput[];
     }) => {
       if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
@@ -92,9 +93,6 @@ export function useSaleProducts() {
           sale_price: data.sale_price,
           image_url: data.image_url,
           minimum_stock: data.minimum_stock || 0,
-          labor_cost: (data as any).labor_cost || 0,
-          energy_cost: (data as any).energy_cost || 0,
-          other_costs: (data as any).other_costs || 0,
         })
         .select()
         .single();
@@ -144,11 +142,21 @@ export function useSaleProducts() {
       const { id, components, ...updates } = data;
 
       if (Object.keys(updates).length > 0) {
-        const { error } = await supabase
-          .from('sale_products')
-          .update(updates)
-          .eq('id', id);
-        if (error) throw error;
+        // Filter out non-existent fields from updates to prevent DB errors
+        const {
+          labor_cost,
+          energy_cost,
+          other_costs,
+          ...validUpdates
+        } = updates as any;
+
+        if (Object.keys(validUpdates).length > 0) {
+          const { error } = await supabase
+            .from('sale_products')
+            .update(validUpdates)
+            .eq('id', id);
+          if (error) throw error;
+        }
       }
 
       if (components !== undefined) {
@@ -210,16 +218,16 @@ export function useSaleProducts() {
 
       // Process each component and deduct from appropriate stock (multiplied by quantity)
       for (const component of product.components || []) {
-        const neededQty = Number(component.quantity) * quantity;
+        const neededTotalQty = Number(component.quantity) * quantity;
 
         if (component.component_type === 'finished_production') {
           const { data: stock } = await supabase
             .from('finished_productions_stock')
             .select('id, quantity')
             .eq('technical_sheet_id', component.component_id)
-            .single();
+            .maybeSingle();
 
-          if (!stock || Number(stock.quantity) < neededQty) {
+          if (!stock || Number(stock.quantity) < neededTotalQty) {
             const { data: sheet } = await supabase
               .from('technical_sheets')
               .select('name')
@@ -230,25 +238,33 @@ export function useSaleProducts() {
               id: component.component_id,
               name: sheet?.name || 'Produção desconhecida',
               type: 'finished_production',
-              amount: Math.max(0, neededQty - (Number(stock?.quantity) || 0))
+              amount: Math.max(0, neededTotalQty - (Number(stock?.quantity) || 0))
             });
             continue;
           }
 
-          const newQty = Number(stock.quantity) - neededQty;
+          const newQty = Number(stock.quantity) - neededTotalQty;
           if (newQty <= 0) {
-            await supabase.from('finished_productions_stock').delete().eq('id', stock.id);
+            const { error: deleteError } = await supabase
+              .from('finished_productions_stock')
+              .delete()
+              .eq('id', stock.id);
+            if (deleteError) throw deleteError;
           } else {
-            await supabase.from('finished_productions_stock').update({ quantity: newQty }).eq('id', stock.id);
+            const { error: updateError } = await supabase
+              .from('finished_productions_stock')
+              .update({ quantity: newQty })
+              .eq('id', stock.id);
+            if (updateError) throw updateError;
           }
         } else if (component.component_type === 'stock_item') {
           const { data: prodStock } = await supabase
             .from('production_stock')
             .select('id, quantity, stock_item:stock_items(name)')
             .eq('stock_item_id', component.component_id)
-            .single();
+            .maybeSingle();
 
-          if (!prodStock || Number(prodStock.quantity) < neededQty) {
+          if (!prodStock || Number(prodStock.quantity) < neededTotalQty) {
             const { data: stockItem } = await supabase
               .from('stock_items')
               .select('name')
@@ -259,16 +275,24 @@ export function useSaleProducts() {
               id: component.component_id,
               name: stockItem?.name || 'Item desconhecido',
               type: 'stock_item',
-              amount: Math.max(0, neededQty - (Number(prodStock?.quantity) || 0))
+              amount: Math.max(0, neededTotalQty - (Number(prodStock?.quantity) || 0))
             });
             continue;
           }
 
-          const newProdQty = Number(prodStock.quantity) - neededQty;
+          const newProdQty = Number(prodStock.quantity) - neededTotalQty;
           if (newProdQty <= 0) {
-            await supabase.from('production_stock').delete().eq('id', prodStock.id);
+            const { error: deleteError } = await supabase
+              .from('production_stock')
+              .delete()
+              .eq('id', prodStock.id);
+            if (deleteError) throw deleteError;
           } else {
-            await supabase.from('production_stock').update({ quantity: newProdQty }).eq('id', prodStock.id);
+            const { error: updateError } = await supabase
+              .from('production_stock')
+              .update({ quantity: newProdQty })
+              .eq('id', prodStock.id);
+            if (updateError) throw updateError;
           }
         } else if (component.component_type === 'sale_product') {
           const { data: otherProduct } = await supabase
@@ -277,20 +301,21 @@ export function useSaleProducts() {
             .eq('id', component.component_id)
             .single();
 
-          if (!otherProduct || Number(otherProduct.ready_quantity) < neededQty) {
+          if (!otherProduct || Number(otherProduct.ready_quantity) < neededTotalQty) {
             insufficientItems.push({
               id: component.component_id,
               name: otherProduct?.name || 'Produto desconhecido',
               type: 'sale_product',
-              amount: neededQty - (Number(otherProduct?.ready_quantity) || 0)
+              amount: neededTotalQty - (Number(otherProduct?.ready_quantity) || 0)
             });
             continue;
           }
 
-          await supabase
+          const { error: updateError } = await supabase
             .from('sale_products')
-            .update({ ready_quantity: Number(otherProduct.ready_quantity) - neededQty })
+            .update({ ready_quantity: Number(otherProduct.ready_quantity) - neededTotalQty })
             .eq('id', otherProduct.id);
+          if (updateError) throw updateError;
         }
       }
 
@@ -322,11 +347,11 @@ export function useSaleProducts() {
       }
 
       // Increment ready_quantity by the full amount
-      const { error: updateError } = await supabase
+      const { error: finalUpdateError } = await supabase
         .from('sale_products')
         .update({ ready_quantity: (product.ready_quantity || 0) + quantity })
         .eq('id', sale_product_id);
-      if (updateError) throw updateError;
+      if (finalUpdateError) throw finalUpdateError;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sale_products'] });

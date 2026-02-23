@@ -320,12 +320,12 @@ export function useForecastProductionOrders(productionDate?: string) {
     });
 
     // Group orders by praca for the kitchen screen
-    const ordersByPraca = orders.reduce((acc, order) => {
+    const ordersByPraca = orders.reduce((acc: Record<string, ForecastProductionOrder[]>, order) => {
         const praca = order.praca || 'praca_quente';
         if (!acc[praca]) acc[praca] = [];
         acc[praca].push(order);
         return acc;
-    }, {} as Record<string, ForecastProductionOrder[]>);
+    }, {});
 
     // Summary counts
     const summary = {

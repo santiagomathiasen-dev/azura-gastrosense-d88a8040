@@ -47,9 +47,11 @@ export function useLosses() {
   });
 
   const createLoss = useMutation({
-    mutationFn: async (input: LossInput) => {
+    mutationFn: async (input: LossInput & { deductStock?: boolean }) => {
       if (!ownerId) throw new Error('Usuário não autenticado');
-      const { error } = await supabase.from('losses').insert({
+
+      // 1. Register the loss in the unified losses table
+      const { data: lossData, error: lossError } = await supabase.from('losses').insert({
         user_id: ownerId,
         source_type: input.source_type,
         source_id: input.source_id,
@@ -58,11 +60,66 @@ export function useLosses() {
         unit: input.unit,
         estimated_value: input.estimated_value || 0,
         notes: input.notes || null,
-      });
-      if (error) throw error;
+      }).select().single();
+
+      if (lossError) throw lossError;
+
+      // 2. If flag is set, deduct from stock and record movement
+      if (input.deductStock) {
+        if (input.source_type === 'stock_item') {
+          // A. Fetch current stock item to get current qty
+          const { data: item } = await supabase
+            .from('stock_items')
+            .select('current_quantity')
+            .eq('id', input.source_id)
+            .single();
+
+          if (item) {
+            const newQty = Math.max(0, Number(item.current_quantity) - input.quantity);
+
+            // B. Update stock_item quantity
+            await supabase
+              .from('stock_items')
+              .update({ current_quantity: newQty })
+              .eq('id', input.source_id);
+
+            // C. Register stock movement for audit
+            await supabase
+              .from('stock_movements')
+              .insert({
+                user_id: ownerId,
+                stock_item_id: input.source_id,
+                quantity: input.quantity,
+                type: 'exit',
+                source: 'manual',
+                notes: `Perda registrada: ${input.notes || 'Sem observação'}`,
+              });
+          }
+        } else if (input.source_type === 'finished_production') {
+          // Fetch current stock
+          const { data: stock } = await supabase
+            .from('finished_productions_stock')
+            .select('quantity')
+            .eq('id', input.source_id)
+            .single();
+
+          if (stock) {
+            const newQty = Math.max(0, Number(stock.quantity) - input.quantity);
+            await supabase
+              .from('finished_productions_stock')
+              .update({ quantity: newQty })
+              .eq('id', input.source_id);
+          }
+        }
+      }
+
+      return lossData;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['losses'] });
+      queryClient.invalidateQueries({ queryKey: ['stock_items'] });
+      queryClient.invalidateQueries({ queryKey: ['finished_productions_stock'] });
+      queryClient.invalidateQueries({ queryKey: ['stock_movements'] });
       toast.success('Perda registrada com sucesso!');
     },
     onError: (err: Error) => {
