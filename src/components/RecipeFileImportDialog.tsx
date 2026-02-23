@@ -510,8 +510,10 @@ export function RecipeFileImportDialog({
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
-    // For images, resize them before base64 encoding to reduce payload size
-    if (file.type.startsWith('image/')) {
+    const skipResize = file.size < 1024 * 1024; // Less than 1MB
+
+    // For images (that are large), resize them before base64 encoding to reduce payload size
+    if (!skipResize && file.type.startsWith('image/')) {
       const img = new window.Image();
       const objectUrl = URL.createObjectURL(file);
 
