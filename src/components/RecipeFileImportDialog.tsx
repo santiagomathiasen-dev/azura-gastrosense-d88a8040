@@ -63,9 +63,9 @@ export function RecipeFileImportDialog({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Arquivo muito grande. Máximo 5MB.');
+    // Check file size (max 15MB) to allow large camera photos
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error('Arquivo muito grande. Máximo 15MB.');
       return;
     }
 
@@ -121,7 +121,11 @@ export function RecipeFileImportDialog({
 
       console.log(`Processing ${fileType} file for recipe extraction`);
 
-      const { data, error } = await supabase.functions.invoke('extract-ingredients', {
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('A IA demorou muito para responder. Tente com uma imagem de resolução menor.')), 50000);
+      });
+
+      const fetchPromise = supabase.functions.invoke('extract-ingredients', {
         body: {
           fileType,
           content,
@@ -129,6 +133,8 @@ export function RecipeFileImportDialog({
           extractRecipe: true // Tell the function to also extract recipe data
         },
       });
+
+      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]) as any;
 
       if (error) {
         console.error('Edge function error:', error);
@@ -504,13 +510,60 @@ export function RecipeFileImportDialog({
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      const base64 = result.includes(',') ? result.split(',')[1] : result;
-      resolve(base64);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
+    // For images, resize them before base64 encoding to reduce payload size
+    if (file.type.startsWith('image/')) {
+      const img = new window.Image();
+      const objectUrl = URL.createObjectURL(file);
+
+      const resolveFallback = () => {
+        URL.revokeObjectURL(objectUrl);
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result.includes(',') ? result.split(',')[1] : result);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      };
+
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const MAX_SIZE = 1200; // max width/height
+
+        if (width > height && width > MAX_SIZE) {
+          height *= MAX_SIZE / width;
+          width = MAX_SIZE;
+        } else if (height > MAX_SIZE) {
+          width *= MAX_SIZE / height;
+          height = MAX_SIZE;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL(file.type === 'image/png' ? 'image/png' : 'image/jpeg', 0.7);
+          resolve(dataUrl.split(',')[1]);
+        } else {
+          resolveFallback(); // if canvas context fails
+        }
+      };
+
+      img.onerror = resolveFallback;
+      img.src = objectUrl;
+    } else {
+      // For PDFs or Text
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        resolve(result.includes(',') ? result.split(',')[1] : result);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    }
   });
 }

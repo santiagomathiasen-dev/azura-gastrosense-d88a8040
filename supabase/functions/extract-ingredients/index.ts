@@ -1,11 +1,14 @@
+// @ts-ignore
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+
+declare const Deno: any;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-serve(async (req) => {
+serve(async (req: any) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -16,7 +19,7 @@ serve(async (req) => {
       console.error("GEMINI_API_KEY not found");
       return new Response(
         JSON.stringify({ error: "Erro de configuração: Chave da IA (GEMINI_API_KEY) não encontrada no servidor." }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -29,7 +32,7 @@ serve(async (req) => {
       console.error("Content is missing in request body");
       return new Response(
         JSON.stringify({ error: "Conteúdo ausente" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -117,8 +120,8 @@ REGRAS CRÍTICAS:
     };
 
     console.log("Calling Gemini API...");
-    // Use gemini-1.5-flash for speed, or gemini-1.5-pro for better PDF parsing if flash fails
-    const model = fileType === "pdf" ? "gemini-1.5-flash" : "gemini-1.5-flash"; // Flash is generally enough for PDFs if prompt is good
+    // Use gemini-flash-latest
+    const model = fileType === "pdf" ? "gemini-flash-latest" : "gemini-flash-latest";
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
@@ -130,15 +133,41 @@ REGRAS CRÍTICAS:
     );
 
     if (!response.ok) {
-      const errorText = await response.text();
+      let errorText = '';
+      try {
+        errorText = await response.text();
+      } catch (e) {
+        errorText = 'Could not read error response';
+      }
       console.error(`Gemini request failed with status ${response.status}:`, errorText);
+
+      let modelsList = '';
+      if (response.status === 404 || response.status === 403 || response.status === 400 || response.status === 429) {
+        try {
+          const modelsRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY}`);
+          if (modelsRes.ok) {
+            const modelsData = await modelsRes.json();
+            modelsList = JSON.stringify(modelsData);
+          }
+        } catch (e) { }
+      }
+
       return new Response(
-        JSON.stringify({ error: "Erro na api do gemini", details: errorText }),
+        JSON.stringify({ error: "Erro na api do gemini", details: errorText, availableModels: modelsList }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const aiResponse = await response.json();
+    let aiResponse;
+    try {
+      aiResponse = await response.json();
+    } catch (e) {
+      console.error("Gemini response is not valid JSON.");
+      return new Response(
+        JSON.stringify({ error: "Resposta inválida da API do Gemini." }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     console.log("Gemini response received");
 
     const assistantMessage = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text || "";
