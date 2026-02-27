@@ -7,8 +7,8 @@ import { VitePWA } from "vite-plugin-pwa";
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
-    host: "::",
-    port: 8080,
+    host: "0.0.0.0", // listen on all interfaces
+    port: 5173, // default Vite port to avoid conflicts
     hmr: {
       overlay: false,
     },

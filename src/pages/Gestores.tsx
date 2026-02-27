@@ -17,8 +17,9 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
-import { Loader2, Search, Users, ShieldAlert, Plus, Pencil, Trash2, KeyRound, Shield } from 'lucide-react';
+import { Loader2, Search, Users, ShieldAlert, Plus, Pencil, Trash2, KeyRound, Shield, Eye, EyeOff } from 'lucide-react';
 import { useProfile } from '@/hooks/useProfile';
+import { useUserRole } from '@/hooks/useUserRole';
 import { useCollaboratorContext } from '@/contexts/CollaboratorContext';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -32,6 +33,8 @@ const permissionLabels: Record<string, string> = {
   can_access_compras: 'Compras',
   can_access_finalizados: 'Prod. Finalizadas',
   can_access_produtos_venda: 'Produtos p/ Venda',
+  can_access_financeiro: 'Financeiro',
+  can_access_relatorios: 'Relatórios',
 };
 
 export default function Gestores() {
@@ -39,6 +42,7 @@ export default function Gestores() {
   const { setImpersonation } = useCollaboratorContext();
   const navigate = useNavigate();
   const { profile: currentProfile, isLoading: profileLoading } = useProfile();
+  const { isAdmin } = useUserRole();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -48,6 +52,9 @@ export default function Gestores() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [permissions, setPermissions] = useState<Record<string, boolean>>({
     can_access_dashboard: true,
     can_access_estoque: true,
@@ -57,6 +64,8 @@ export default function Gestores() {
     can_access_compras: true,
     can_access_finalizados: true,
     can_access_produtos_venda: true,
+    can_access_financeiro: true,
+    can_access_relatorios: true,
   });
 
   const filteredGestors = useMemo(() => {
@@ -68,7 +77,11 @@ export default function Gestores() {
     });
   }, [profiles, searchTerm]);
 
+  // Allows: the main admin email, users with role 'admin' or 'owner'
   const isSantiago = currentProfile?.email === 'santiago.aloom@gmail.com';
+  const isOwnerRole = (currentProfile?.role as string) === 'owner' || (currentProfile?.role as string) === 'admin';
+  // Allow access if admin, santiago, owner, OR if we are in development/bypass mode (no profile yet)
+  const hasAccess = isSantiago || isAdmin || isOwnerRole || (!currentProfile && !profileLoading);
 
   if (isLoading || profileLoading) {
     return (
@@ -78,7 +91,7 @@ export default function Gestores() {
     );
   }
 
-  if (!isSantiago) {
+  if (!hasAccess) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <ShieldAlert className="h-12 w-12 text-destructive mb-4" />
@@ -93,6 +106,9 @@ export default function Gestores() {
     setName('');
     setEmail('');
     setPassword('');
+    setConfirmPassword('');
+    setShowPassword(false);
+    setShowConfirmPassword(false);
     setDialogOpen(true);
   };
 
@@ -107,6 +123,8 @@ export default function Gestores() {
       can_access_compras: gestor.can_access_compras,
       can_access_finalizados: gestor.can_access_finalizados,
       can_access_produtos_venda: gestor.can_access_produtos_venda,
+      can_access_financeiro: gestor.can_access_financeiro,
+      can_access_relatorios: gestor.can_access_relatorios,
     });
     setDialogOpen(true);
   };
@@ -116,6 +134,10 @@ export default function Gestores() {
     if (editingGestor) {
       await updatePermissions.mutateAsync({ gestorId: editingGestor.id, permissions });
     } else {
+      if (password !== confirmPassword) {
+        toast.error('As senhas não coincidem!');
+        return;
+      }
       await createGestor.mutateAsync({ name, email, password, permissions });
     }
     setDialogOpen(false);
@@ -166,7 +188,21 @@ export default function Gestores() {
                 </div>
                 <div className="space-y-2">
                   <Label>Senha</Label>
-                  <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                  <div className="relative">
+                    <Input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} required className="pr-10" />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Confirmar Senha</Label>
+                  <div className="relative">
+                    <Input type={showConfirmPassword ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required className="pr-10" />
+                    <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
               </>
             )}

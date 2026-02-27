@@ -350,8 +350,9 @@ export function useProductions() {
       }
 
       // If changing to 'completed', add to finished productions stock
+      // Also handles paused productions being completed directly
       if (
-        currentProduction?.status === 'in_progress' &&
+        (currentProduction?.status === 'in_progress' || currentProduction?.status === 'paused') &&
         updates.status === 'completed' &&
         currentProduction.technical_sheet
       ) {

@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
-import { Loader2, Search, Users, Plus, Pencil, Trash2, Shield } from 'lucide-react';
+import { Loader2, Search, Users, Plus, Pencil, Trash2, Shield, Eye, EyeOff } from 'lucide-react';
 import { useCollaboratorContext } from '@/contexts/CollaboratorContext';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -22,6 +22,8 @@ const permissionLabels: Record<string, string> = {
     can_access_compras: 'Compras',
     can_access_finalizados: 'Prod. Finalizadas',
     can_access_produtos_venda: 'Produtos p/ Venda',
+    can_access_financeiro: 'Financeiro',
+    can_access_relatorios: 'Relatórios',
 };
 
 export function GestaoGestores() {
@@ -36,6 +38,10 @@ export function GestaoGestores() {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [role, setRole] = useState<'admin' | 'gestor' | 'colaborador'>('gestor');
     const [permissions, setPermissions] = useState<Record<string, boolean>>({
         can_access_dashboard: true,
         can_access_estoque: true,
@@ -45,6 +51,8 @@ export function GestaoGestores() {
         can_access_compras: true,
         can_access_finalizados: true,
         can_access_produtos_venda: true,
+        can_access_financeiro: true,
+        can_access_relatorios: true,
     });
 
     const filteredGestors = useMemo(() => {
@@ -69,11 +77,13 @@ export function GestaoGestores() {
         setName('');
         setEmail('');
         setPassword('');
+        setRole('gestor');
         setDialogOpen(true);
     };
 
     const handleOpenEdit = (gestor: Gestor) => {
         setEditingGestor(gestor);
+        setRole(gestor.role as any || 'gestor');
         setPermissions({
             can_access_dashboard: gestor.can_access_dashboard,
             can_access_estoque: gestor.can_access_estoque,
@@ -83,6 +93,8 @@ export function GestaoGestores() {
             can_access_compras: gestor.can_access_compras,
             can_access_finalizados: gestor.can_access_finalizados,
             can_access_produtos_venda: gestor.can_access_produtos_venda,
+            can_access_financeiro: gestor.can_access_financeiro,
+            can_access_relatorios: gestor.can_access_relatorios,
         });
         setDialogOpen(true);
     };
@@ -90,9 +102,16 @@ export function GestaoGestores() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (editingGestor) {
-            await updatePermissions.mutateAsync({ gestorId: editingGestor.id, permissions });
+            await updatePermissions.mutateAsync({
+                gestorId: editingGestor.id,
+                permissions: { ...permissions, role }
+            });
         } else {
-            await createGestor.mutateAsync({ name, email, password, permissions });
+            if (password !== confirmPassword) {
+                toast.error('As senhas não coincidem!');
+                return;
+            }
+            await createGestor.mutateAsync({ name, email, password, permissions: { ...permissions, role } });
         }
         setDialogOpen(false);
     };
@@ -135,10 +154,37 @@ export function GestaoGestores() {
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Senha</Label>
-                                    <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                                    <div className="relative">
+                                        <Input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} required className="pr-10" />
+                                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Confirmar Senha</Label>
+                                    <div className="relative">
+                                        <Input type={showConfirmPassword ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required className="pr-10" />
+                                        <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                                            {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                        </button>
+                                    </div>
                                 </div>
                             </>
                         )}
+
+                        <div className="space-y-2">
+                            <Label>Papel do Usuário</Label>
+                            <select
+                                className="w-full h-10 px-3 py-2 bg-background border rounded-md text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                value={role}
+                                onChange={(e) => setRole(e.target.value as any)}
+                            >
+                                <option value="admin">Administrador</option>
+                                <option value="gestor">Gestor</option>
+                                <option value="colaborador">Colaborador</option>
+                            </select>
+                        </div>
 
                         <div className="space-y-3">
                             <Label className="flex items-center gap-2">

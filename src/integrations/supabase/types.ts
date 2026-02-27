@@ -482,6 +482,8 @@ export type Database = {
           can_access_compras: boolean
           can_access_finalizados: boolean
           can_access_produtos_venda: boolean
+          can_access_financeiro: boolean
+          can_access_relatorios: boolean
         }
         Insert: {
           created_at?: string
@@ -502,6 +504,8 @@ export type Database = {
           can_access_compras?: boolean
           can_access_finalizados?: boolean
           can_access_produtos_venda?: boolean
+          can_access_financeiro?: boolean
+          can_access_relatorios?: boolean
         }
         Update: {
           created_at?: string
@@ -522,6 +526,8 @@ export type Database = {
           can_access_compras?: boolean
           can_access_finalizados?: boolean
           can_access_produtos_venda?: boolean
+          can_access_financeiro?: boolean
+          can_access_relatorios?: boolean
         }
         Relationships: [
           {

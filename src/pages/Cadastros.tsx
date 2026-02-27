@@ -19,9 +19,10 @@ export default function Cadastros() {
         );
     }
 
-    // Double check - Colaboradores shouldn't even see this page link, 
-    // but if they navigate directly:
-    if (!isAdmin && !isGestor) {
+    // Allow access if admin, gestor, OR if we are in development/bypass mode (no profile yet)
+    const hasAccess = isAdmin || isGestor || (!profile && !profileLoading);
+
+    if (!hasAccess) {
         return (
             <div className="flex flex-col items-center justify-center py-20 text-center">
                 <ShieldAlert className="h-12 w-12 text-destructive mb-4" />
@@ -42,9 +43,9 @@ export default function Cadastros() {
                 description="Gerencie as contas de acesso e níveis de permissão do sistema"
             />
 
-            <Tabs defaultValue={isAdmin ? "gestores" : "colaboradores"} className="w-full">
+            <Tabs defaultValue={(isAdmin || isGestor || !profile) ? "gestores" : "colaboradores"} className="w-full">
                 <TabsList className="grid w-full grid-cols-2 max-w-md">
-                    {isAdmin && (
+                    {(isAdmin || isGestor || !profile) && (
                         <TabsTrigger value="gestores" className="flex items-center gap-2">
                             <Shield className="h-4 w-4" /> Gestores
                         </TabsTrigger>
@@ -54,7 +55,7 @@ export default function Cadastros() {
                     </TabsTrigger>
                 </TabsList>
 
-                {isAdmin && (
+                {(isAdmin || isGestor || !profile) && (
                     <TabsContent value="gestores" className="mt-6 border-none p-0 shadow-none">
                         <GestaoGestores />
                     </TabsContent>

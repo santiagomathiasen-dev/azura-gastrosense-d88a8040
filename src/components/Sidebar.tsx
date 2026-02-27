@@ -1,4 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom';
+import { Sun, Moon } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
 import {
   LogOut,
   ChevronLeft,
@@ -16,7 +18,10 @@ import {
   ShoppingBag,
   TrendingDown,
   BarChart3,
-  Calculator
+  Calculator,
+  UserCog,
+  Store,
+  Zap
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -36,11 +41,14 @@ const navItems = [
   { to: '/producao', icon: Factory, label: 'Produções', permission: 'can_access_producao' },
   { to: '/previsao-vendas', icon: CalendarClock, label: 'Previsão Vendas', permission: 'can_access_producao' },
   { to: '/compras', icon: ShoppingCart, label: 'Compras', permission: 'can_access_compras' },
+  { to: '/praca-quente', icon: Zap, label: 'Praça Quente (PDV)', permission: 'can_access_produtos_venda' },
   { to: '/estoque-finalizados', icon: PackageCheck, label: 'Prod. Finalizadas', permission: 'can_access_finalizados' },
   { to: '/produtos-venda', icon: ShoppingBag, label: 'Produtos p/ Venda', permission: 'can_access_produtos_venda' },
   { to: '/perdas', icon: TrendingDown, label: 'Perdas', permission: 'can_access_estoque' },
-  { to: '/relatorios', icon: BarChart3, label: 'Relatórios', permission: 'can_access_dashboard' },
-  { to: '/financeiro', icon: Calculator, label: 'Financeiro', permission: 'can_access_dashboard' },
+  { to: '/relatorios', icon: BarChart3, label: 'Relatórios', permission: 'can_access_relatorios' },
+  { to: '/financeiro', icon: Calculator, label: 'Financeiro', permission: 'can_access_financeiro' },
+  { to: '/colaboradores', icon: UserCog, label: 'Colaboradores', permission: null, managementOnly: true },
+  { to: '/gestores', icon: Store, label: 'Gestores', permission: null, managementOnly: true, adminOnly: true },
 ];
 
 interface SidebarProps {
@@ -54,37 +62,40 @@ export function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
   const { isAdmin, isGestor } = useUserRole();
   const { profile } = useProfile();
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
 
   const handleLogout = async () => {
     if (isCollaboratorMode) {
       clearCollaboratorSession();
     }
     await logout();
-    window.location.href = '/auth';
+    // Use full page reload after a short delay to avoid React unmount issues
+    setTimeout(() => {
+      window.location.href = '/auth';
+    }, 100);
   };
 
   // Build visible nav items
   const visibleNavItems = navItems.filter(item => {
-    // Admin bypass (Santiago or admin/owner role)
-    if (isAdmin || user?.email === 'santiago.aloom@gmail.com' || (profile?.role as string) === 'owner') return true;
+    // Full admin / owner always sees everything
+    if (isAdmin || isGestor || user?.email === 'santiago.aloom@gmail.com' || (profile?.role as string) === 'owner') return true;
 
     // While loading profile, show items to prevent flashing an empty sidebar
     if (!profile) return true;
 
-    // Gestores can see all standard operating items
-    if (profile.role === 'gestor') return true;
+    // Items marked as adminOnly are hidden for everyone except admins (handled above)
+    // In development/bypass mode (no profile), we show it to allow testing
+    if ((item as any).adminOnly) return isAdmin || user?.email === 'santiago.aloom@gmail.com' || !profile;
+
+    // Gestores see all standard and management items (except adminOnly)
+    if (profile?.role === 'gestor') return true;
 
     // Colaboradores only see what they explicitly have permission for
-    if (profile.role === 'colaborador') {
+    if (profile?.role === 'colaborador') {
       if (item.permission) {
         return (profile as any)?.[item.permission] === true;
       }
-      return false; // Hide if they lack explicit permission
-    }
-
-    // "Cadastros" (managementOnly) for Gestores or Admins
-    if (item.managementOnly) {
-      return isAdmin || isGestor || (profile?.role as string) === 'owner';
+      return false; // Hide managementOnly items from colaboradores
     }
 
     // Fallback default
@@ -154,6 +165,7 @@ export function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
           </div>
         )}
         <button
+          type="button"
           onClick={handleLogout}
           className="nav-item w-full text-destructive hover:bg-destructive/10 text-sm"
         >
@@ -161,6 +173,16 @@ export function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
           {!collapsed && <span>Sair</span>}
         </button>
       </div>
+
+      {/* Theme Toggle */}
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={toggleTheme}
+        className="absolute -right-3 top-2 h-5 w-5 rounded-full border bg-card shadow-md hover:bg-accent"
+      >
+        {theme === 'dark' ? <Sun className="h-3 w-3" /> : <Moon className="h-3 w-3" />}
+      </Button>
 
       {/* Collapse Toggle */}
       <Button

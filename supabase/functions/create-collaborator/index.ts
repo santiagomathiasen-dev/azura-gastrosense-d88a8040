@@ -21,6 +21,8 @@ type RequestBody = {
     can_access_compras: boolean;
     can_access_finalizados: boolean;
     can_access_produtos_venda: boolean;
+    can_access_financeiro?: boolean;
+    can_access_relatorios?: boolean;
   };
 };
 
@@ -93,6 +95,8 @@ serve(async (req) => {
 
     const { name, email, password, pin, permissions } = body;
 
+    console.log(`Creating collaborator: ${name} (${email}) for gestor ${gestorId}`);
+
     if (!name || name.trim().length < 2) {
       return new Response(JSON.stringify({ error: "Nome inválido" }), {
         status: 400,
@@ -129,19 +133,22 @@ serve(async (req) => {
       });
     }
 
-    // 2) Update the profile to set gestor_id, role, pins and permissions
+    console.log("Auth user created:", newUser.user.id);
+
+    // 2) Update/Upsert the profile
     const hashedPin = pin ? await hashPin(pin) : null;
     const { data: collaborator, error: profileError } = await admin
       .from("profiles")
-      .update({
-        gestor_id: gestorId,
+      .upsert({
+        id: newUser.user.id,
+        email: email,
+        gestor_id: (permissions as any)?.role === 'gestor' || (permissions as any)?.role === 'admin' ? null : gestorId,
         full_name: name,
-        role: 'colaborador',
+        role: (permissions as any)?.role || 'colaborador',
         pin_hash: hashedPin,
         ...permissions,
         status: 'ativo'
       })
-      .eq("id", newUser.user.id)
       .select()
       .single();
 

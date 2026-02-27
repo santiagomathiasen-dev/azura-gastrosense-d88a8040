@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { CollaboratorProvider } from "@/contexts/CollaboratorContext";
+import { ThemeProvider } from "@/contexts/ThemeContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { MainLayout } from "@/layouts/MainLayout";
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
@@ -22,6 +23,7 @@ const EstoqueProducao = lazy(() => import("@/pages/EstoqueProducao"));
 const EstoqueFinalizados = lazy(() => import("@/pages/EstoqueFinalizados"));
 const EstoqueInsumosProduzidos = lazy(() => import("@/pages/EstoqueInsumosProduzidos"));
 const ProdutosVenda = lazy(() => import("@/pages/ProdutosVenda"));
+const PracaQuente = lazy(() => import("@/pages/PracaQuente"));
 const Cadastros = lazy(() => import("@/pages/Cadastros"));
 const Relatorios = lazy(() => import("@/pages/Relatorios"));
 const Financeiro = lazy(() => import("@/pages/Financeiro"));
@@ -44,54 +46,57 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <CollaboratorProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <PWAInstallPrompt />
-          <BrowserRouter>
-            <Suspense fallback={<LoadingFallback />}>
-              <Routes>
-                {/* Public Routes */}
-                <Route path="/auth" element={<Auth />} />
+    <ThemeProvider>
+      <AuthProvider>
+        <CollaboratorProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <PWAInstallPrompt />
+            <BrowserRouter>
+              <Suspense fallback={<LoadingFallback />}>
+                <Routes>
+                  {/* Public Routes */}
+                  <Route path="/auth" element={<Auth />} />
 
-                {/* Protected Routes */}
-                <Route
-                  element={
-                    <ProtectedRoute>
-                      <MainLayout />
-                    </ProtectedRoute>
-                  }
-                >
-                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/cadastros" element={<Cadastros />} />
-                  <Route path="/estoque" element={<Estoque />} />
-                  <Route path="/estoque-producao" element={<EstoqueProducao />} />
-                  <Route path="/fichas" element={<Fichas />} />
-                  <Route path="/producao" element={<Producao />} />
-                  <Route path="/compras" element={<Compras />} />
-                  <Route path="/estoque-finalizados" element={<EstoqueFinalizados />} />
-                  <Route path="/estoque-insumos-produzidos" element={<EstoqueInsumosProduzidos />} />
-                  <Route path="/produtos-venda" element={<ProdutosVenda />} />
-                  <Route path="/perdas" element={<Perdas />} />
-                  <Route path="/previsao-vendas" element={<PrevisaoVendas />} />
-                  <Route path="/relatorios" element={<Relatorios />} />
-                  <Route path="/financeiro" element={<Financeiro />} />
-                  <Route path="/colaboradores" element={<Colaboradores />} />
-                  <Route path="/gestores" element={<Gestores />} />
-                  <Route path="/payment-required" element={<PaymentRequired />} />
-                </Route>
+                  {/* Protected Routes */}
+                  <Route
+                    element={
+                      <ProtectedRoute>
+                        <MainLayout />
+                      </ProtectedRoute>
+                    }
+                  >
+                    <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                    <Route path="/dashboard" element={<Dashboard />} />
+                    <Route path="/cadastros" element={<Cadastros />} />
+                    <Route path="/estoque" element={<Estoque />} />
+                    <Route path="/estoque-producao" element={<EstoqueProducao />} />
+                    <Route path="/fichas" element={<Fichas />} />
+                    <Route path="/producao" element={<Producao />} />
+                    <Route path="/compras" element={<Compras />} />
+                    <Route path="/estoque-finalizados" element={<EstoqueFinalizados />} />
+                    <Route path="/estoque-insumos-produzidos" element={<EstoqueInsumosProduzidos />} />
+                    <Route path="/produtos-venda" element={<ProdutosVenda />} />
+                    <Route path="/praca-quente" element={<PracaQuente />} />
+                    <Route path="/perdas" element={<Perdas />} />
+                    <Route path="/previsao-vendas" element={<PrevisaoVendas />} />
+                    <Route path="/relatorios" element={<Relatorios />} />
+                    <Route path="/financeiro" element={<Financeiro />} />
+                    <Route path="/colaboradores" element={<Colaboradores />} />
+                    <Route path="/gestores" element={<Gestores />} />
+                    <Route path="/payment-required" element={<PaymentRequired />} />
+                  </Route>
 
-                {/* 404 */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
-          </BrowserRouter>
-        </TooltipProvider>
-      </CollaboratorProvider>
-    </AuthProvider>
+                  {/* 404 */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
+            </BrowserRouter>
+          </TooltipProvider>
+        </CollaboratorProvider>
+      </AuthProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 
 );

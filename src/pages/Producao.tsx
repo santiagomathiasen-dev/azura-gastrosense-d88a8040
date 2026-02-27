@@ -245,8 +245,8 @@ export default function Producao() {
     if (!selectedProducao) return;
 
     const qty = parseFloat(actualQuantity);
-    if (isNaN(qty) || qty < 0) {
-      toast.error('Informe uma quantidade válida');
+    if (isNaN(qty) || qty <= 0) {
+      toast.error('Informe uma quantidade válida (maior que zero)');
       return;
     }
 

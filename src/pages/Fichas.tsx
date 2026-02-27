@@ -772,7 +772,7 @@ export default function Fichas() {
                         R$ {calcularCustoTotal(selectedSheet).toFixed(2)}
                       </p>
                       <p className="text-[10px] text-muted-foreground mt-1">
-                        Inclui R$ {(selectedSheet.labor_cost || 0 + selectedSheet.energy_cost || 0 + selectedSheet.other_costs || 0).toFixed(2)} de custos adicionais
+                        Inclui R$ {((selectedSheet.labor_cost || 0) + (selectedSheet.energy_cost || 0) + (selectedSheet.other_costs || 0)).toFixed(2)} de custos adicionais
                       </p>
                     </CardContent>
                   </Card>

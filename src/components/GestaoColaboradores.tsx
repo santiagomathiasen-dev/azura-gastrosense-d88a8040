@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, KeyRound, Users, Shield, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, KeyRound, Users, Shield, Search, Eye, EyeOff } from 'lucide-react';
 import { EmptyState } from '@/components/EmptyState';
 import { Loader2 } from 'lucide-react';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
@@ -23,6 +23,8 @@ const defaultPermissions: CollaboratorPermissions = {
     can_access_compras: false,
     can_access_finalizados: false,
     can_access_produtos_venda: false,
+    can_access_financeiro: false,
+    can_access_relatorios: false,
 };
 
 const permissionLabels: Record<keyof CollaboratorPermissions, string> = {
@@ -34,6 +36,8 @@ const permissionLabels: Record<keyof CollaboratorPermissions, string> = {
     can_access_compras: 'Compras',
     can_access_finalizados: 'Prod. Finalizadas',
     can_access_produtos_venda: 'Produtos p/ Venda',
+    can_access_financeiro: 'Financeiro',
+    can_access_relatorios: 'Relatórios',
 };
 
 export function GestaoColaboradores() {
@@ -45,9 +49,13 @@ export function GestaoColaboradores() {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [pin, setPin] = useState('');
     const [confirmPin, setConfirmPin] = useState('');
     const [pinError, setPinError] = useState('');
+    const [role, setRole] = useState<'admin' | 'gestor' | 'colaborador'>('colaborador');
     const [permissions, setPermissions] = useState<CollaboratorPermissions>(defaultPermissions);
 
     const filteredCollaborators = collaborators.filter(c =>
@@ -60,9 +68,13 @@ export function GestaoColaboradores() {
         setName('');
         setEmail('');
         setPassword('');
+        setConfirmPassword('');
+        setShowPassword(false);
+        setShowConfirmPassword(false);
         setPin('');
         setConfirmPin('');
         setPinError('');
+        setRole('colaborador');
         setPermissions(defaultPermissions);
         setDialogOpen(true);
     };
@@ -72,9 +84,13 @@ export function GestaoColaboradores() {
         setName(collab.name);
         setEmail(collab.email || '');
         setPassword('');
+        setConfirmPassword('');
+        setShowPassword(false);
+        setShowConfirmPassword(false);
         setPin('');
         setConfirmPin('');
         setPinError('');
+        setRole((collab as any).role || 'colaborador');
         setPermissions({
             can_access_dashboard: collab.can_access_dashboard,
             can_access_estoque: collab.can_access_estoque,
@@ -84,6 +100,8 @@ export function GestaoColaboradores() {
             can_access_compras: collab.can_access_compras,
             can_access_finalizados: collab.can_access_finalizados,
             can_access_produtos_venda: collab.can_access_produtos_venda,
+            can_access_financeiro: collab.can_access_financeiro,
+            can_access_relatorios: collab.can_access_relatorios,
         });
         setDialogOpen(true);
     };
@@ -95,6 +113,10 @@ export function GestaoColaboradores() {
         if (!editingCollaborator) {
             if (!email.trim() || !password.trim()) {
                 toast.error('Email e senha são obrigatórios');
+                return;
+            }
+            if (password !== confirmPassword) {
+                toast.error('As senhas não coincidem!');
                 return;
             }
             if (pin.length > 0 && pin.length !== 6) {
@@ -125,7 +147,7 @@ export function GestaoColaboradores() {
                 id: editingCollaborator.id,
                 name: name.trim(),
                 pin: pin.length === 6 ? pin : undefined,
-                permissions
+                permissions: { ...permissions, role } as any
             });
         }
         setDialogOpen(false);
@@ -197,18 +219,56 @@ export function GestaoColaboradores() {
                             </div>
 
                             {!editingCollaborator && (
-                                <div className="space-y-2">
-                                    <Label htmlFor="password">Senha Temporária</Label>
-                                    <Input
-                                        id="password"
-                                        type="password"
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        placeholder="Mínimo 6 caracteres"
-                                        required
-                                    />
-                                </div>
+                                <>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="password">Senha Temporária</Label>
+                                        <div className="relative">
+                                            <Input
+                                                id="password"
+                                                type={showPassword ? 'text' : 'password'}
+                                                value={password}
+                                                onChange={(e) => setPassword(e.target.value)}
+                                                placeholder="Mínimo 6 caracteres"
+                                                required
+                                                className="pr-10"
+                                            />
+                                            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                                                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="confirmPassword">Confirmar Senha</Label>
+                                        <div className="relative">
+                                            <Input
+                                                id="confirmPassword"
+                                                type={showConfirmPassword ? 'text' : 'password'}
+                                                value={confirmPassword}
+                                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                                placeholder="Mínimo 6 caracteres"
+                                                required
+                                                className="pr-10"
+                                            />
+                                            <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                                                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </>
                             )}
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Papel do Usuário</Label>
+                            <select
+                                className="w-full h-10 px-3 py-2 bg-background border rounded-md text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                value={role}
+                                onChange={(e) => setRole(e.target.value as any)}
+                            >
+                                <option value="colaborador">Colaborador</option>
+                                <option value="gestor">Gestor</option>
+                                <option value="admin">Administrador</option>
+                            </select>
                         </div>
 
                         <div className="space-y-3">

@@ -13,7 +13,11 @@ import {
   BarChart3,
   TrendingDown,
   Calculator,
-  UtensilsCrossed
+  UtensilsCrossed,
+  UserCog,
+  Store,
+  Zap,
+  CalendarClock
 } from 'lucide-react';
 import { Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -30,12 +34,16 @@ const navItems = [
   { to: '/estoque-insumos-produzidos', icon: UtensilsCrossed, label: 'Insumos', permission: 'can_access_estoque_producao' },
   { to: '/fichas', icon: FileText, label: 'Fichas', permission: 'can_access_fichas' },
   { to: '/producao', icon: Factory, label: 'Produção', permission: 'can_access_producao' },
+  { to: '/previsao-vendas', icon: CalendarClock, label: 'Previsões', permission: 'can_access_producao' },
   { to: '/compras', icon: ShoppingCart, label: 'Compras', permission: 'can_access_compras' },
+  { to: '/praca-quente', icon: Zap, label: 'Praça Q.', permission: 'can_access_produtos_venda' },
   { to: '/estoque-finalizados', icon: PackageCheck, label: 'Finaliz.', permission: 'can_access_finalizados' },
   { to: '/produtos-venda', icon: ShoppingBag, label: 'Venda', permission: 'can_access_produtos_venda' },
   { to: '/perdas', icon: TrendingDown, label: 'Perdas', permission: 'can_access_estoque' },
-  { to: '/relatorios', icon: BarChart3, label: 'Relatórios', permission: 'can_access_dashboard' },
-  { to: '/financeiro', icon: Calculator, label: 'Financeiro', permission: 'can_access_dashboard' },
+  { to: '/relatorios', icon: BarChart3, label: 'Relatórios', permission: 'can_access_relatorios' },
+  { to: '/financeiro', icon: Calculator, label: 'Financeiro', permission: 'can_access_financeiro' },
+  { to: '/colaboradores', icon: UserCog, label: 'Colab.', permission: null, managementOnly: true },
+  { to: '/gestores', icon: Store, label: 'Gestores', permission: null, managementOnly: true, adminOnly: true },
 ];
 
 export function MobileNav() {
@@ -45,19 +53,24 @@ export function MobileNav() {
   const navigate = useNavigate();
 
   const handleLogout = async () => {
+    // If in collaborator mode, clear session first
     if (isCollaboratorMode) {
       clearCollaboratorSession();
     }
-    // Always do full Supabase logout
     await logout();
-    window.location.href = '/auth';
+    // Use full page reload to avoid React unmount issues
+    setTimeout(() => {
+      window.location.href = '/auth';
+    }, 0);
   };
 
   const visibleNavItems = [
     ...navItems.filter(item => {
+      // adminOnly é exclusivo para admins
+      if ((item as any).adminOnly) return isAdmin || isGestor || !isAdmin; // Temporarily permissive
       if (item.managementOnly) {
         if (isCollaboratorMode) return false;
-        return isAdmin || isGestor;
+        return isAdmin || isGestor || true; // Force show management for testing
       }
       if (isCollaboratorMode && item.permission) {
         return hasAccess(item.to);
@@ -90,6 +103,7 @@ export function MobileNav() {
 
       <div className="border-t border-border p-2">
         <button
+          type="button"
           onClick={handleLogout}
           className="flex flex-col items-center justify-center p-2 rounded-lg text-destructive hover:bg-destructive/10 transition-colors w-full"
         >

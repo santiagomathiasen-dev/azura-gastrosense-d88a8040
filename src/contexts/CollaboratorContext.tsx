@@ -57,8 +57,9 @@ export function CollaboratorProvider({ children }: { children: ReactNode }) {
         if (!error && profile && profile.role === 'colaborador') {
           const collabData = {
             ...profile,
-            name: profile.full_name,
-            is_active: profile.status === 'ativo'
+            auth_user_id: profile.id,
+            name: profile.full_name || profile.email || '',
+            is_active: (profile as any).status === 'ativo'
           } as Collaborator;
 
           setCollaborator(collabData);
@@ -115,6 +116,8 @@ export function CollaboratorProvider({ children }: { children: ReactNode }) {
       '/compras': 'can_access_compras',
       '/estoque-finalizados': 'can_access_finalizados',
       '/produtos-venda': 'can_access_produtos_venda',
+      '/financeiro': 'can_access_financeiro',
+      '/relatorios': 'can_access_relatorios',
     };
 
     const permission = routePermissions[route];

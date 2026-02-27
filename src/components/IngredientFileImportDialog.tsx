@@ -87,9 +87,9 @@ export function IngredientFileImportDialog({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check file size (max 15MB) to allow large camera photos
-    if (file.size > 15 * 1024 * 1024) {
-      toast.error('Arquivo muito grande. Máximo 15MB.');
+    // Check file size (max 5MB) limits
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Arquivo muito grande. Máximo 5MB.');
       return;
     }
 

@@ -14,6 +14,9 @@ import {
     Calendar as CalendarIcon,
     ArrowRight,
     History,
+    Printer,
+    Sparkles,
+    Upload
 } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
@@ -64,6 +67,8 @@ import { ProductionSheetDialog } from '@/components/production/ProductionSheetDi
 import { useSalesProductionHistory, ProductionHistoryItem } from '@/hooks/useSalesProductionHistory';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
+import { AIImportDialog } from '@/components/AIImportDialog';
+import { ExtractedIngredient } from '@/hooks/useIngredientImport';
 
 // ---- Forecast Input Tab ----
 
@@ -71,6 +76,7 @@ function ForecastInputTab() {
     const [targetDate, setTargetDate] = useState<Date>(addDays(getNow(), 1));
     const [showDialog, setShowDialog] = useState(false);
     const [showSuggestDialog, setShowSuggestDialog] = useState(false);
+    const [showAIDialog, setShowAIDialog] = useState(false);
     const [baseDate, setBaseDate] = useState<Date>(subDays(getNow(), 1));
     const [periodType, setPeriodType] = useState<'day' | 'week' | 'month' | 'year'>('week');
     const [selectedProductId, setSelectedProductId] = useState('');
@@ -94,6 +100,40 @@ function ForecastInputTab() {
         setShowDialog(false);
         setSelectedProductId('');
         setQuantity('');
+    };
+
+    const handleConfirmAIImport = async (ingredients: ExtractedIngredient[]) => {
+        // Find matching sale products by name (rudimentary mapping based exclusively on AI ingredients returned)
+        const newForecastsToCreate: any[] = [];
+        let notFoundNames: string[] = [];
+
+        for (const ing of ingredients) {
+            const match = saleProducts.find((p: any) => p.name.toLowerCase() === ing.name.toLowerCase());
+            if (match) {
+                newForecastsToCreate.push({
+                    sale_product_id: match.id,
+                    target_date: dateStr,
+                    forecasted_quantity: ing.quantity
+                });
+            } else {
+                notFoundNames.push(ing.name);
+            }
+        }
+
+        if (newForecastsToCreate.length > 0) {
+            // we create each individually since our mutation expects an object
+            const promises = newForecastsToCreate.map(f =>
+                createForecast.mutateAsync(f)
+            );
+            await Promise.all(promises);
+            toast.success(`Foram lidos e cadastrados ${newForecastsToCreate.length} produtos de venda!`);
+        } else {
+            toast.info('A IA leu os dados, mas não encontrou correspondência exata de nomes de "Produtos de Venda". Revise o que foi importado.');
+        }
+
+        if (notFoundNames.length > 0) {
+            toast.warning(`Os produtos abaixo não tinham Produto de Venda atrelado ou os nomes não batiam com a tela Produtos para Venda: ${notFoundNames.join(', ')}`);
+        }
     };
 
     const handleExplode = () => {
@@ -157,6 +197,9 @@ function ForecastInputTab() {
                 </Button>
                 <Button onClick={() => setShowSuggestDialog(true)} variant="secondary" className="gap-2">
                     <History className="h-4 w-4" /> Sugerir do Histórico
+                </Button>
+                <Button onClick={() => setShowAIDialog(true)} variant="secondary" className="gap-2 bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-400">
+                    <Sparkles className="h-4 w-4" /> Importar Relatório (IA)
                 </Button>
                 <Button
                     onClick={handleExplode}
@@ -320,6 +363,15 @@ function ForecastInputTab() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            <AIImportDialog
+                open={showAIDialog}
+                onOpenChange={setShowAIDialog}
+                onConfirmImport={handleConfirmAIImport}
+                title="Importar Relatório de Vendas (IA)"
+                description="Envie um PDF ou imagem de um relatório de vendas (Loyverse, iFood, etc). A IA extrairá as quantidades vendidas para adicionar na previsão de produção."
+                extractRecipe={false}
+            />
         </div>
     );
 }
@@ -396,6 +448,17 @@ function ProductionOrdersTab() {
                         />
                     </PopoverContent>
                 </Popover>
+
+                {orders.length > 0 && (
+                    <Button
+                        size="sm"
+                        variant="secondary"
+                        className="gap-2 ml-auto"
+                        onClick={() => window.print()}
+                    >
+                        <Printer className="h-4 w-4" /> Imprimir Lista
+                    </Button>
+                )}
             </div>
 
             {/* Summary badges */}

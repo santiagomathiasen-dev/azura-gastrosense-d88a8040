@@ -473,6 +473,160 @@ export function useSaleProducts() {
     },
   });
 
+  // Hot Station Sale - deduct components and immediately record sale (no ready_quantity used)
+  const hotStationSale = useMutation({
+    mutationFn: async ({ sale_product_id, quantity = 1 }: { sale_product_id: string; quantity?: number }) => {
+      if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
+      if (!ownerId) throw new Error('Usuário não autenticado');
+
+      const product = saleProducts.find(p => p.id === sale_product_id);
+      if (!product) throw new Error('Produto não encontrado');
+
+      const insufficientItems: { id: string; name: string; type: SaleComponentType; amount: number }[] = [];
+
+      // Process each component and deduct from appropriate stock (multiplied by quantity)
+      for (const component of product.components || []) {
+        const neededTotalQty = Number(component.quantity) * quantity;
+
+        if (component.component_type === 'finished_production') {
+          const { data: stock } = await supabase
+            .from('finished_productions_stock')
+            .select('id, quantity')
+            .eq('technical_sheet_id', component.component_id)
+            .maybeSingle();
+
+          if (!stock || Number(stock.quantity) < neededTotalQty) {
+            const { data: sheet } = await supabase
+              .from('technical_sheets')
+              .select('name')
+              .eq('id', component.component_id)
+              .single();
+
+            insufficientItems.push({
+              id: component.component_id,
+              name: sheet?.name || 'Produção desconhecida',
+              type: 'finished_production',
+              amount: Math.max(0, neededTotalQty - (Number(stock?.quantity) || 0))
+            });
+            continue;
+          }
+
+          const newQty = Number(stock.quantity) - neededTotalQty;
+          if (newQty <= 0) {
+            const { error: deleteError } = await supabase
+              .from('finished_productions_stock')
+              .delete()
+              .eq('id', stock.id);
+            if (deleteError) throw deleteError;
+          } else {
+            const { error: updateError } = await supabase
+              .from('finished_productions_stock')
+              .update({ quantity: newQty })
+              .eq('id', stock.id);
+            if (updateError) throw updateError;
+          }
+        } else if (component.component_type === 'stock_item') {
+          const { data: prodStock } = await supabase
+            .from('production_stock')
+            .select('id, quantity, stock_item:stock_items(name)')
+            .eq('stock_item_id', component.component_id)
+            .maybeSingle();
+
+          if (!prodStock || Number(prodStock.quantity) < neededTotalQty) {
+            const { data: stockItem } = await supabase
+              .from('stock_items')
+              .select('name')
+              .eq('id', component.component_id)
+              .single();
+
+            insufficientItems.push({
+              id: component.component_id,
+              name: stockItem?.name || 'Item desconhecido',
+              type: 'stock_item',
+              amount: Math.max(0, neededTotalQty - (Number(prodStock?.quantity) || 0))
+            });
+            continue;
+          }
+
+          const newProdQty = Number(prodStock.quantity) - neededTotalQty;
+          if (newProdQty <= 0) {
+            const { error: deleteError } = await supabase
+              .from('production_stock')
+              .delete()
+              .eq('id', prodStock.id);
+            if (deleteError) throw deleteError;
+          } else {
+            const { error: updateError } = await supabase
+              .from('production_stock')
+              .update({ quantity: newProdQty })
+              .eq('id', prodStock.id);
+            if (updateError) throw updateError;
+          }
+        } else if (component.component_type === 'sale_product') {
+          const { data: otherProduct } = await supabase
+            .from('sale_products')
+            .select('id, ready_quantity, name')
+            .eq('id', component.component_id)
+            .single();
+
+          if (!otherProduct || Number(otherProduct.ready_quantity) < neededTotalQty) {
+            insufficientItems.push({
+              id: component.component_id,
+              name: otherProduct?.name || 'Produto desconhecido',
+              type: 'sale_product',
+              amount: neededTotalQty - (Number(otherProduct?.ready_quantity) || 0)
+            });
+            continue;
+          }
+
+          const { error: updateError } = await supabase
+            .from('sale_products')
+            .update({ ready_quantity: Number(otherProduct.ready_quantity) - neededTotalQty })
+            .eq('id', otherProduct.id);
+          if (updateError) throw updateError;
+        }
+      }
+
+      if (insufficientItems.length > 0) {
+        // Record alerts
+        const alertsToInsert = insufficientItems.map(item => ({
+          user_id: ownerId,
+          sale_product_id: sale_product_id,
+          missing_component_id: item.id,
+          missing_component_type: item.type,
+          missing_quantity: item.amount,
+          resolved: false,
+        }));
+        await supabase.from('preparation_alerts').insert(alertsToInsert);
+        queryClient.invalidateQueries({ queryKey: ['preparation_alerts'] });
+
+        const error = new Error(`Estoque insuficiente`);
+        (error as any).insufficientItems = insufficientItems;
+        throw error;
+      }
+
+      // Record Sale Directly
+      const { error: saleError } = await supabase
+        .from('sales')
+        .insert({
+          user_id: ownerId,
+          sale_product_id: sale_product_id,
+          quantity_sold: quantity,
+        });
+      if (saleError) throw saleError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sale_products'] });
+      queryClient.invalidateQueries({ queryKey: ['finished_productions_stock'] });
+      queryClient.invalidateQueries({ queryKey: ['production_stock'] });
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
+      toast.success('Produzido e vendido com sucesso (Praça Quente)!');
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+
   return {
     saleProducts,
     isLoading,
@@ -485,5 +639,6 @@ export function useSaleProducts() {
     quickSale,
     returnProduct,
     registerLoss,
+    hotStationSale,
   };
 }

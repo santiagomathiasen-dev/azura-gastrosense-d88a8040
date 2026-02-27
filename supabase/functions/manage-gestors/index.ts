@@ -121,6 +121,7 @@ serve(async (req) => {
         }
 
         // Create auth user
+        console.log("Creating auth user for:", email);
         const { data: newUser, error: createError } = await admin.auth.admin.createUser({
           email: email.trim(),
           password,
@@ -132,31 +133,47 @@ serve(async (req) => {
           console.error("Error creating user:", createError);
           const msg = createError?.message?.includes("already been registered")
             ? "Este email já está cadastrado"
-            : "Erro ao criar conta";
+            : `Erro ao criar conta: ${createError?.message || 'Erro desconhecido'}`;
           return new Response(JSON.stringify({ error: msg }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
 
-        // Update profile to gestor role with permissions
+        console.log("User created successfully:", newUser.user.id);
+
+        // Update or Insert profile (upsert is safer here in case trigger is slow or absent)
+        const { role, ...otherPerms } = permissions || {};
+        console.log("Updating profile with permissions:", { role, ...otherPerms });
+
         const { error: profileError } = await admin
           .from("profiles")
-          .update({
-            role: "gestor",
+          .upsert({
+            id: newUser.user.id,
+            email: email.trim(),
+            role: role || "gestor",
             status_pagamento: true,
             full_name: name.trim(),
-            ...permissions
-          })
-          .eq("id", newUser.user.id);
+            status: 'ativo',
+            ...otherPerms
+          });
 
         if (profileError) {
-          console.error("Error updating profile:", profileError);
+          console.error("Error updating/upserting profile:", profileError);
+          // We don't necessarily want to fail the whole request if only profile update fails,
+          // but for a manager it's critical.
+          return new Response(JSON.stringify({
+            error: "Usuário criado, mas erro ao configurar perfil: " + profileError.message
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         }
 
         return new Response(JSON.stringify({
           success: true,
-          message: "Gestor criado com sucesso."
+          message: "Gestor criado com sucesso.",
+          userId: newUser.user.id
         }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });

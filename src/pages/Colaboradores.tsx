@@ -24,6 +24,8 @@ const defaultPermissions: CollaboratorPermissions = {
   can_access_compras: false,
   can_access_finalizados: false,
   can_access_produtos_venda: false,
+  can_access_financeiro: false,
+  can_access_relatorios: false,
 };
 
 const permissionLabels: Record<keyof CollaboratorPermissions, string> = {
@@ -35,6 +37,8 @@ const permissionLabels: Record<keyof CollaboratorPermissions, string> = {
   can_access_compras: 'Compras',
   can_access_finalizados: 'Prod. Finalizadas',
   can_access_produtos_venda: 'Produtos p/ Venda',
+  can_access_financeiro: 'Financeiro',
+  can_access_relatorios: 'Relatórios',
 };
 
 export default function Colaboradores() {
@@ -44,6 +48,9 @@ export default function Colaboradores() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pinError, setPinError] = useState('');
@@ -54,6 +61,9 @@ export default function Colaboradores() {
     setName('');
     setEmail('');
     setPassword('');
+    setConfirmPassword('');
+    setShowPassword(false);
+    setShowConfirmPassword(false);
     setPin('');
     setConfirmPin('');
     setPinError('');
@@ -66,6 +76,9 @@ export default function Colaboradores() {
     setName(collab.name);
     setEmail(collab.email || '');
     setPassword('');
+    setConfirmPassword('');
+    setShowPassword(false);
+    setShowConfirmPassword(false);
     setPin('');
     setConfirmPin('');
     setPinError('');
@@ -78,6 +91,8 @@ export default function Colaboradores() {
       can_access_compras: collab.can_access_compras,
       can_access_finalizados: collab.can_access_finalizados,
       can_access_produtos_venda: collab.can_access_produtos_venda,
+      can_access_financeiro: collab.can_access_financeiro,
+      can_access_relatorios: collab.can_access_relatorios,
     });
     setDialogOpen(true);
   };
@@ -90,6 +105,10 @@ export default function Colaboradores() {
     if (!editingCollaborator) {
       if (!email.trim() || !password.trim()) {
         toast.error('Email e senha são obrigatórios');
+        return;
+      }
+      if (password !== confirmPassword) {
+        toast.error('As senhas não coincidem!');
         return;
       }
       if (pin.length > 0 && pin.length !== 6) {
@@ -188,17 +207,42 @@ export default function Colaboradores() {
               </div>
 
               {!editingCollaborator && (
-                <div className="space-y-2">
-                  <Label htmlFor="password">Senha Temporária</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Mínimo 6 caracteres"
-                    required
-                  />
-                </div>
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Senha Temporária</Label>
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Mínimo 6 caracteres"
+                        required
+                        className="pr-10"
+                      />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword">Confirmar Senha</Label>
+                    <div className="relative">
+                      <Input
+                        id="confirmPassword"
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Mínimo 6 caracteres"
+                        required
+                        className="pr-10"
+                      />
+                      <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
 

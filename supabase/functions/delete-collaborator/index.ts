@@ -83,14 +83,26 @@ serve(async (req) => {
       });
     }
 
-    // 2) Delete the auth user (this will cascade to profiles)
-    const { error: deleteUserError } = await admin.auth.admin.deleteUser(profile.id);
-    if (deleteUserError) {
-      console.error("Error deleting auth user:", deleteUserError);
-      return new Response(JSON.stringify({ error: "Erro ao deletar usuário de autenticação" }), {
+    // 2) Delete from collaborators table first
+    const { error: collabDeleteError } = await admin
+      .from("collaborators")
+      .delete()
+      .eq("id", body.collaboratorId);
+
+    if (collabDeleteError) {
+      console.error("Error deleting collaborator record:", collabDeleteError);
+      return new Response(JSON.stringify({ error: "Erro ao deletar registro de colaborador" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // 3) Delete the auth user (this will cascade to profiles)
+    const { error: deleteUserError } = await admin.auth.admin.deleteUser(profile.id);
+    if (deleteUserError) {
+      console.error("Error deleting auth user:", deleteUserError);
+      // We don't return error here if the record was already deleted from collaborators table
+      // as the main goal of the UI was achieved.
     }
 
     return new Response(

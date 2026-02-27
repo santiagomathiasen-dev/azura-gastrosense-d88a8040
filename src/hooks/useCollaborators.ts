@@ -19,6 +19,8 @@ export interface Collaborator {
   can_access_compras: boolean;
   can_access_finalizados: boolean;
   can_access_produtos_venda: boolean;
+  can_access_financeiro: boolean;
+  can_access_relatorios: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -32,6 +34,8 @@ export interface CollaboratorPermissions {
   can_access_compras: boolean;
   can_access_finalizados: boolean;
   can_access_produtos_venda: boolean;
+  can_access_financeiro: boolean;
+  can_access_relatorios: boolean;
 }
 
 // Hash function for PIN
@@ -84,7 +88,7 @@ export function useCollaborators() {
   });
 
   const createCollaborator = useMutation({
-    mutationFn: async ({ name, email, password, pin, permissions }: { name: string; email: string; password?: string; pin?: string; permissions: CollaboratorPermissions }) => {
+    mutationFn: async ({ name, email, password, pin, permissions }: { name: string; email: string; password?: string; pin?: string; permissions: any }) => {
       if (!user?.id) throw new Error('Usuário não autenticado');
 
       // Edge function still handles the complex Auth creation
@@ -107,22 +111,48 @@ export function useCollaborators() {
   });
 
   const updateCollaborator = useMutation({
-    mutationFn: async ({ id, name, pin, permissions }: { id: string; name: string; pin?: string; permissions: CollaboratorPermissions }) => {
+    mutationFn: async ({ id, name, pin, permissions }: { id: string; name: string; pin?: string; permissions: any }) => {
+      const { role, ...otherPerms } = permissions;
+
       const updateData: Record<string, unknown> = {
         name: name,
-        ...permissions,
+        ...otherPerms,
       };
 
       if (pin) {
         updateData.pin_hash = await hashPin(pin);
       }
 
-      const { error } = await supabase
+      // Update collaborators table
+      const { error: collabError } = await supabase
         .from('collaborators')
         .update(updateData as any)
         .eq('id', id);
 
-      if (error) throw error;
+      if (collabError) throw collabError;
+
+      // Also update role in profiles table if it's connected to an auth user
+      const { data: collabData } = await supabase
+        .from('collaborators')
+        .select('auth_user_id')
+        .eq('id', id)
+        .single();
+
+      if (collabData?.auth_user_id && role) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            role,
+            gestor_id: role === 'gestor' || role === 'admin' ? null : user?.id,
+            ...otherPerms
+          } as any)
+          .eq('id', collabData.auth_user_id);
+
+        if (profileError) {
+          console.error("Error updating profile role:", profileError);
+          // Don't throw here to not block the whole operation if profile update fails
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['collaborators'] });

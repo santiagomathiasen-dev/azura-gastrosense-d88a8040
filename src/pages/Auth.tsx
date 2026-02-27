@@ -187,18 +187,36 @@ export default function Auth() {
                 onClick={() => {
                   setIsLogin(!isLogin);
                   setError('');
-                  setConfirmPassword('');
                 }}
-                className="text-xs text-primary hover:underline"
+                className="text-xs text-muted-foreground hover:text-primary transition-colors hover:underline"
               >
-                {isLogin
-                  ? 'Não tem conta? Criar agora'
-                  : 'Já tem conta? Entrar'}
+                {isLogin ? 'Não tem uma conta? Crie uma.' : 'Já tem conta? Fazer login'}
               </button>
             </div>
+
+            {import.meta.env.DEV && (
+              <div className="mt-4 pt-4 border-t border-dashed border-border/50">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-[10px] h-7 gap-2 opacity-50 hover:opacity-100"
+                  onClick={() => {
+                    setName('Test user');
+                    setEmail(`test_${Math.floor(Math.random() * 1000)}@azura.com`);
+                    setPassword('password123');
+                    setConfirmPassword('password123');
+                    setIsLogin(false);
+                    setError('');
+                  }}
+                >
+                  <KeyRound className="h-3 w-3" />
+                  Preencher Dados de Teste (Dev Only)
+                </Button>
+              </div>
+            )}
           </CardContent>
-        </Card>
-      </div>
-    </div>
+        </Card >
+      </div >
+    </div >
   );
 }

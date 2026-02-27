@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { adminSupabase } from '../integrations/supabase/adminClient'; // admin client for protected functions
 import { toast } from 'sonner';
 import { Database } from '@/integrations/supabase/types';
 
@@ -23,6 +24,8 @@ export interface Gestor extends Profile {
     can_access_compras: boolean;
     can_access_finalizados: boolean;
     can_access_produtos_venda: boolean;
+    can_access_financeiro: boolean;
+    can_access_relatorios: boolean;
     status_pagamento: boolean;
 }
 
@@ -38,16 +41,18 @@ export function useGestaoUsuarios() {
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
-            return (data || []).map(p => ({
+            return (data || []).map((p: any) => ({
                 ...p,
-                status: p.status || 'ativo'
+                status: p.status || 'ativo',
+                can_access_financeiro: p.can_access_financeiro ?? true,
+                can_access_relatorios: p.can_access_relatorios ?? true,
             })) as Gestor[];
         },
     });
 
     const createGestor = useMutation({
         mutationFn: async (data: any) => {
-            const { data: result, error } = await supabase.functions.invoke('manage-gestors', {
+            const { data: result, error } = await adminSupabase.functions.invoke('manage-gestors', {
                 body: { action: 'create', ...data },
             });
             if (error) throw error;
@@ -65,7 +70,7 @@ export function useGestaoUsuarios() {
 
     const updatePermissions = useMutation({
         mutationFn: async ({ gestorId, permissions }: { gestorId: string; permissions: any }) => {
-            const { data: result, error } = await supabase.functions.invoke('manage-gestors', {
+            const { data: result, error } = await adminSupabase.functions.invoke('manage-gestors', {
                 body: { action: 'update_permissions', gestorId, permissions },
             });
             if (error) throw error;
@@ -80,7 +85,7 @@ export function useGestaoUsuarios() {
 
     const updateStatus = useMutation({
         mutationFn: async ({ id, status }: { id: string; status: 'ativo' | 'inativo' }) => {
-            const { data: result, error } = await supabase.functions.invoke('manage-gestors', {
+            const { data: result, error } = await adminSupabase.functions.invoke('manage-gestors', {
                 body: { action: 'toggle_status', gestorId: id, active: status === 'ativo' },
             });
             if (error) throw error;
@@ -94,7 +99,7 @@ export function useGestaoUsuarios() {
 
     const deleteGestor = useMutation({
         mutationFn: async (id: string) => {
-            const { data: result, error } = await supabase.functions.invoke('manage-gestors', {
+            const { data: result, error } = await adminSupabase.functions.invoke('manage-gestors', {
                 body: { action: 'delete', gestorId: id },
             });
             if (error) throw error;
