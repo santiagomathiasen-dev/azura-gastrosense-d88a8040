@@ -33,6 +33,7 @@ const PaymentRequired = lazy(() => import("@/pages/PaymentRequired"));
 const Colaboradores = lazy(() => import("@/pages/Colaboradores"));
 const Gestores = lazy(() => import("@/pages/Gestores"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
+const Landing = lazy(() => import("@/pages/Landing"));
 
 const LoadingFallback = () => (
   <div className="h-screen w-screen flex flex-col items-center justify-center gap-4 bg-background">
@@ -58,6 +59,7 @@ const App = () => (
                 <Routes>
                   {/* Public Routes */}
                   <Route path="/auth" element={<Auth />} />
+                  <Route path="/" element={<Landing />} />
 
                   {/* Protected Routes */}
                   <Route
@@ -67,7 +69,6 @@ const App = () => (
                       </ProtectedRoute>
                     }
                   >
-                    <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/cadastros" element={<Cadastros />} />
                     <Route path="/estoque" element={<Estoque />} />

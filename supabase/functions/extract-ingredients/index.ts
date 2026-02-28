@@ -121,7 +121,7 @@ REGRAS CRÍTICAS:
 
     console.log("Calling Gemini API...");
     // Use gemini-flash-latest
-    const model = fileType === "pdf" ? "gemini-flash-latest" : "gemini-flash-latest";
+    const model = fileType === "pdf" ? "gemini-1.5-flash" : "gemini-1.5-flash";
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
