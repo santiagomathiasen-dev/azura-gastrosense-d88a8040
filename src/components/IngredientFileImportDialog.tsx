@@ -118,7 +118,7 @@ export function IngredientFileImportDialog({
 
     try {
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Processamento excessivamente longo. Tente um arquivo menor ou recarregue a página.')), 50000);
+        setTimeout(() => reject(new Error('Processamento demorou mais que 2.5 minutos. Tente um arquivo menor ou recarregue a página.')), 150000);
       });
 
       const processTask = async () => {
