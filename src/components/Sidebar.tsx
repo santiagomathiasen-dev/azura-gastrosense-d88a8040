@@ -117,9 +117,12 @@ export function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
             <UtensilsCrossed className="h-5 w-5 text-sidebar-primary-foreground" />
           </div>
           {!collapsed && (
-            <div className="animate-fade-in min-w-0">
-              <h1 className="font-bold text-base leading-tight">Azura</h1>
-              <p className="text-[10px] text-sidebar-muted truncate">Gestão Gastronômica</p>
+            <div className="animate-fade-in min-w-0" style={{ fontFamily: '"Cormorant Garamond", serif' }}>
+              <div className="flex items-center gap-[2px]">
+                <h1 className="font-bold text-xl leading-tight tracking-tight">Azura</h1>
+                <div className="w-[5px] h-[5px] rounded-full bg-primary mt-1"></div>
+              </div>
+              <p className="text-[10px] text-sidebar-muted truncate" style={{ fontFamily: '"Outfit", sans-serif' }}>Gestão Gastronômica</p>
             </div>
           )}
         </div>
