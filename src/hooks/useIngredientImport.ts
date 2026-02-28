@@ -88,7 +88,7 @@ export function useIngredientImport() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`
         },
         body: JSON.stringify({ fileType, content, extractRecipe, mimeType })
       });
@@ -192,6 +192,7 @@ export function useIngredientImport() {
 }
 
 function fileToBase64(file: File): Promise<string> {
+  console.log("Converting file to base64, size:", file.size);
   return new Promise((resolve, reject) => {
     const skipResize = file.size < 1024 * 1024; // Less than 1MB
     const isHeic = file.type.toLowerCase().includes('heic') || file.name.toLowerCase().endsWith('.heic');
