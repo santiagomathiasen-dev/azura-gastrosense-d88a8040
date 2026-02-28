@@ -49,16 +49,15 @@ serve(async (req: any) => {
 
     // System instruction for better compliance
     const systemPrompt = `Você é um assistente especializado em gestão de estoque e culinária profissional.
-Sua tarefa é extrair itens, produtos ou ingredientes de documentos (PDFs, fotos, textos).
+Sua tarefa é extrair itens, produtos ou ingredientes de documentos (PDFs, fotos, textos digitados ou MANUSCRITOS).
 
 REGRAS CRÍTICAS:
-1. Analise INTEGRALMENTE o documento, percorrendo todas as páginas e colunas (especialmente em notas fiscais e listas longas).
-2. Identifique nomes de produtos, quantidades, unidades de medida, preços unitários ou totais e, SE DISPONÍVEL, a data de validade/vencimento.
-3. Se for uma Nota Fiscal (NF), extraia cada item da lista de produtos.
+1. Analise INTEGRALMENTE o documento. Se for uma foto de caderno ou receita manuscrita, esforce-se ao máximo para entender a caligrafia.
+2. Identifique nomes de produtos, quantidades, unidades de medida, preços unitários/totais e data de validade (se aplicável).
+3. Converta frações ou marcações informais para decimais (ex: 1/2 colher -> 0.5, "uma pitada" -> "1g", etc).
 4. Categorias válidas: laticinios, secos_e_graos, hortifruti, carnes_e_peixes, embalagens, limpeza, outros.
 5. Unidades permitidas: kg, g, L, ml, unidade, caixa, dz.
-6. Retorne SEMPRE um JSON válido.
-7. Se o documento for um PDF, certifique-se de ler TODOS os dados contidos nele.`;
+6. Retorne SEMPRE um JSON válido. Formate os produtos corretamente. Se o texto estiver confuso, deduza o ingrediente mais provável da gastronomia.`;
 
     let userPrompt = "";
     if (extractRecipe) {
@@ -120,8 +119,8 @@ REGRAS CRÍTICAS:
     };
 
     console.log("Calling Gemini API...");
-    // Use gemini-2.5-flash
-    const model = "gemini-2.5-flash";
+    // Use gemini-1.5-flash
+    const model = "gemini-1.5-flash";
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,

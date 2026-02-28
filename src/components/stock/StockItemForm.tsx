@@ -26,6 +26,7 @@ import { AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import { getNow } from '@/lib/utils';
 import { useExpiryDates, parseSafeDate } from '@/hooks/useExpiryDates';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 
 const formSchema = z.object({
   name: z.string().min(1, 'Nome é obrigatório').max(100),
@@ -76,10 +77,10 @@ export function StockItemForm({
       name: '',
       category: 'outros',
       unit: 'unidade',
-      current_quantity: 0,
-      minimum_quantity: 0,
-      unit_price: 0,
-      waste_factor: 0,
+      current_quantity: '' as any,
+      minimum_quantity: '' as any,
+      unit_price: '' as any,
+      waste_factor: '' as any,
       expiration_date: '',
       supplier_id: '',
       notes: '',
@@ -93,10 +94,10 @@ export function StockItemForm({
         name: initialData?.name || '',
         category: (initialData?.category as StockCategory) || 'outros',
         unit: (initialData?.unit as StockUnit) || 'unidade',
-        current_quantity: Number(initialData?.current_quantity) || 0,
-        minimum_quantity: Number(initialData?.minimum_quantity) || 0,
-        unit_price: Number((initialData as any)?.unit_price) || 0,
-        waste_factor: Number((initialData as any)?.waste_factor) || 0,
+        current_quantity: initialData?.current_quantity ?? ('' as any),
+        minimum_quantity: initialData?.minimum_quantity ?? ('' as any),
+        unit_price: (initialData as any)?.unit_price ?? ('' as any),
+        waste_factor: (initialData as any)?.waste_factor ?? ('' as any),
         expiration_date: initialData?.expiration_date || '',
         supplier_id: initialData?.supplier_id || '',
         notes: initialData?.notes || '',
@@ -135,6 +136,10 @@ export function StockItemForm({
     onSubmit(cleanedData);
   };
 
+  const onInvalid = () => {
+    toast.error('Preencha os campos obrigatórios corretamente.');
+  };
+
   const expirationDate = watch('expiration_date');
   const isExpiringSoon = expirationDate && parseSafeDate(expirationDate) <= new Date(getNow().getTime() + 7 * 24 * 60 * 60 * 1000);
   const isExpired = expirationDate && parseSafeDate(expirationDate) < getNow();
@@ -147,7 +152,7 @@ export function StockItemForm({
             {initialData ? 'Editar Item' : 'Novo Item de Estoque'}
           </DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
+        <form onSubmit={handleSubmit(handleFormSubmit, onInvalid)} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Nome *</Label>
             <Input
