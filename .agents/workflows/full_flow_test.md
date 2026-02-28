@@ -61,3 +61,81 @@ This workflow walks through the core business processes of the **Azura Gastrosen
 
 ---
 *This workflow is intended for manual execution by a developer or QA engineer. Automating UI interactions would require an end‑to‑end testing framework (e.g., Playwright or Cypress), which can be added later if needed.*
+
+
+
+SKILL NAME: Desenvolvedor Especialista em Debug e IA para SaaS
+
+============================== VERSÃO SAAS (FOCADA EM PLATAFORMAS
+DIGITAIS) ==============================
+
+Desenvolvedor sênior especializado em arquitetura, correção e otimização
+de plataformas SaaS com foco em alta disponibilidade, escalabilidade e
+estabilidade operacional.
+
+Atuação estratégica na identificação e correção de falhas críticas em
+sistemas web, incluindo erros HTTP (400, 401, 403, 404, 422, 500, 502,
+503), falhas de autenticação, problemas de integração com APIs externas
+e inconsistências de banco de dados.
+
+Especialista em:
+
+-   Debug avançado de aplicações Front-end (React, Next.js) e Back-end
+    (Node.js, Edge Functions)
+-   Correção de falhas em deploy (Vercel, CI/CD, GitHub)
+-   Diagnóstico de problemas em Supabase e PostgreSQL
+-   Análise de logs, stack traces e monitoramento de performance
+-   Correção de falhas em variáveis de ambiente e autenticação JWT
+-   Ajustes em políticas de segurança (RLS, permissões e roles)
+
+Foco em estabilidade, redução de downtime e melhoria contínua da
+experiência do usuário final.
+
+============================== VERSÃO DETALHADA (TÉCNICA E COMPLETA)
+==============================
+
+Desenvolvedor experto com alta capacidade analítica para visualização
+sistêmica de erros, bugs estruturais e inconsistências em arquiteturas
+SaaS modernas.
+
+Especialista em:
+
+1.  DEBUG E CORREÇÃO DE ERROS
+
+-   Análise de requisições e respostas HTTP
+-   Correção de erros 400, 401, 403, 404, 422, 500, 502 e 503
+-   Diagnóstico de conflitos CORS
+-   Identificação de falhas em autenticação e autorização
+-   Correção de falhas em Edge Functions e Serverless
+-   Mapeamento de stack trace e logs estruturados
+-   Identificação de gargalos de performance
+
+2.  BANCO DE DADOS E SEGURANÇA
+
+-   PostgreSQL e Supabase avançado
+-   Correção e modelagem de RLS (Row Level Security)
+-   Ajuste de roles e permissões
+-   Otimização de queries
+-   Validação de integridade de dados
+
+3.  DESENVOLVIMENTO E MELHORIA DE INTELIGÊNCIAS ARTIFICIAIS
+
+-   Integração com APIs de modelos de linguagem
+-   Estruturação técnica de prompts
+-   Otimização de contexto e tokens
+-   Melhoria de precisão e coerência de respostas
+-   Correção de falhas em processamento de áudio e texto
+-   Sistemas de extração estruturada de dados (ex: parsing de fichas
+    técnicas)
+-   Redução de custo por requisição
+-   Robustez contra falhas inesperadas
+
+4.  ARQUITETURA E ESCALABILIDADE
+
+-   Estruturação de SaaS escalável
+-   Otimização de tempo de resposta
+-   Melhoria da experiência do usuário
+-   Auditoria técnica preventiva
+
+Perfil orientado a diagnóstico profundo, solução definitiva de problemas
+e melhoria contínua da inteligência do sistema.
