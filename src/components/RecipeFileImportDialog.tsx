@@ -126,17 +126,19 @@ export function RecipeFileImportDialog({
 
         console.log(`Processing ${fileType} file for recipe extraction`);
 
-        const { data: { session } } = await supabase.auth.getSession();
         const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-ingredients`;
+        console.log("Preparing fetch to edge function:", functionUrl);
 
         const response = await fetch(functionUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
           },
           body: JSON.stringify({ fileType, content, extractRecipe: true, mimeType: file.type })
         });
+
+        console.log("Fetch requested, status:", response.status);
 
         if (!response.ok) {
           let errorMsg = `Status: ${response.status}`;
