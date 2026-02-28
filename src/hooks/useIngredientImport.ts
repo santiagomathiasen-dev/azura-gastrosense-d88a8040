@@ -176,14 +176,74 @@ export function useIngredientImport() {
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      // Remove the data URL prefix if present
-      const base64 = result.includes(',') ? result.split(',')[1] : result;
-      resolve(base64);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
+    const skipResize = file.size < 1024 * 1024; // Less than 1MB
+    const isHeic = file.type.toLowerCase().includes('heic') || file.name.toLowerCase().endsWith('.heic');
+
+    if (!skipResize && !isHeic && file.type.startsWith('image/')) {
+      const img = new window.Image();
+      const objectUrl = URL.createObjectURL(file);
+      let isResolved = false;
+
+      const resolveFallback = () => {
+        if (isResolved) return;
+        isResolved = true;
+        URL.revokeObjectURL(objectUrl);
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result.includes(',') ? result.split(',')[1] : result);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      };
+
+      const fallbackTimer = setTimeout(resolveFallback, 3000);
+
+      img.onload = () => {
+        if (isResolved) return;
+        clearTimeout(fallbackTimer);
+        isResolved = true;
+        URL.revokeObjectURL(objectUrl);
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const MAX_SIZE = 1200;
+
+        if (width > height && width > MAX_SIZE) {
+          height *= MAX_SIZE / width;
+          width = MAX_SIZE;
+        } else if (height > MAX_SIZE) {
+          width *= MAX_SIZE / height;
+          height = MAX_SIZE;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          resolve(dataUrl.split(',')[1]);
+        } else {
+          resolveFallback();
+        }
+      };
+
+      img.onerror = () => {
+        if (isResolved) return;
+        clearTimeout(fallbackTimer);
+        resolveFallback();
+      };
+
+      img.src = objectUrl;
+    } else {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        resolve(result.includes(',') ? result.split(',')[1] : result);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    }
   });
 }
