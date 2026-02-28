@@ -1,0 +1,24 @@
+{
+  "data": {
+    "ingredients": [
+      {
+        "name": "leite de vaca",
+        "quantity": 1,
+        "unit": "L",
+        "category": "laticinios",
+        "price": null,
+        "supplier": null,
+        "minimum_quantity": null,
+        "expiration_date": null
+      }
+    ],
+    "summary": "Extraído 1 litro de leite de vaca.",
+    "preparationTime": 0,
+    "yieldQuantity": 0,
+    "labor_cost": 0,
+    "energy_cost": 0,
+    "other_costs": 0,
+    "markup": 0
+  },
+  "error": null
+}
