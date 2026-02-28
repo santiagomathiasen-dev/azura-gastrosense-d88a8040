@@ -8,6 +8,7 @@ import { useCollaboratorContext } from '@/contexts/CollaboratorContext';
 import { Button } from '@/components/ui/button';
 import { XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { AIAssistant } from '@/components/AIAssistant';
 
 export function MainLayout() {
   const { isImpersonating, stopImpersonation } = useCollaboratorContext();
@@ -48,6 +49,7 @@ export function MainLayout() {
             <div className="max-w-7xl mx-auto pb-8">
               <Outlet />
             </div>
+            <AIAssistant />
           </main>
         </div>
       </div>
