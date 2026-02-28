@@ -126,24 +126,33 @@ export function RecipeFileImportDialog({
 
         console.log(`Processing ${fileType} file for recipe extraction`);
 
-        return supabase.functions.invoke('extract-ingredients', {
-          body: {
-            fileType,
-            content,
-            mimeType: file.type,
-            extractRecipe: true // Tell the function to also extract recipe data
+        const { data: { session } } = await supabase.auth.getSession();
+        const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-ingredients`;
+
+        const response = await fetch(functionUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`
           },
+          body: JSON.stringify({ fileType, content, extractRecipe: true, mimeType: file.type })
         });
+
+        if (!response.ok) {
+          let errorMsg = `Status: ${response.status}`;
+          try {
+            const errData = await response.json();
+            errorMsg = errData.error || errData.message || errorMsg;
+          } catch (e) { /* ignore */ }
+          throw new Error(`Falha na nuvem: ${errorMsg}`);
+        }
+
+        return response.json();
       };
 
-      const { data, error } = await Promise.race([processTask(), timeoutPromise]) as any;
+      const data = await Promise.race([processTask(), timeoutPromise]) as any;
 
-      if (error) {
-        console.error('Edge function error:', error);
-        throw new Error(error.message);
-      }
-
-      if (data.error) {
+      if (data?.error) {
         toast.error(data.error);
         setStep('upload');
         return;

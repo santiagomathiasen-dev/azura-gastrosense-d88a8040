@@ -140,22 +140,31 @@ export function IngredientFileImportDialog({
 
         console.log(`Processing ${fileType} file for ingredient extraction`);
 
-        return supabase.functions.invoke('extract-ingredients', {
-          body: {
-            fileType,
-            content,
-            mimeType: file.type,
-            extractRecipe: false
+        const { data: { session } } = await supabase.auth.getSession();
+        const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-ingredients`;
+
+        const response = await fetch(functionUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`
           },
+          body: JSON.stringify({ fileType, content, extractRecipe: false, mimeType: file.type })
         });
+
+        if (!response.ok) {
+          let errorMsg = `Status: ${response.status}`;
+          try {
+            const errData = await response.json();
+            errorMsg = errData.error || errData.message || errorMsg;
+          } catch (e) { /* ignore */ }
+          throw new Error(`Falha na nuvem: ${errorMsg}`);
+        }
+
+        return response.json();
       };
 
-      const { data, error } = await Promise.race([processTask(), timeoutPromise]) as any;
-
-      if (error) {
-        console.error('Edge function error:', error);
-        throw new Error(error.message);
-      }
+      const data = await Promise.race([processTask(), timeoutPromise]) as any;
 
       if (data?.error) {
         toast.error(data.error);

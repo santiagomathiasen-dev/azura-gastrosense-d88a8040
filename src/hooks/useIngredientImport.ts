@@ -79,16 +79,33 @@ export function useIngredientImport() {
       const mimeType = file.type;
       console.log(`Sending ${fileType} to extract-ingredients, mimeType: ${mimeType}, base64 length: ${content.length}`);
 
-      const { data, error } = await supabase.functions.invoke('extract-ingredients', {
-        body: { fileType, content, extractRecipe, mimeType },
+      // Bypass supabase.functions.invoke limitation by using direct fetch
+      // This prevents the Supabase JS client from swallowing errors or timing out silently
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-ingredients`;
+
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({ fileType, content, extractRecipe, mimeType })
       });
 
-      console.log('Edge function response:', { data, error });
-
-      if (error) {
-        console.error('Edge function error:', error);
-        throw new Error(error.message);
+      if (!response.ok) {
+        let errorMsg = `Status: ${response.status}`;
+        try {
+          const errData = await response.json();
+          errorMsg = errData.error || errData.message || errorMsg;
+        } catch (e) { /* ignore */ }
+        throw new Error(`Falha na nuvem (Edge Function): ${errorMsg}`);
       }
+
+      const data = await response.json();
+
+      console.log('Edge function response:', { data });
 
       if (data.error) {
         toast.error(data.error);
