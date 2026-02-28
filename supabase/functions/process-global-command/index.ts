@@ -49,7 +49,7 @@ Retorne APENAS o JSON.`;
         };
 
         const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -58,6 +58,17 @@ Retorne APENAS o JSON.`;
         );
 
         const aiResponse = await response.json();
+
+        if (!response.ok) {
+            console.error("Gemini API Error:", aiResponse);
+            return new Response(JSON.stringify({
+                action: "toast",
+                message: `Erro na API da IA: ${aiResponse.error?.message || response.statusText}`
+            }), {
+                headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+        }
+
         const assistantMessage = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text || '{"action": "toast", "message": "Não entendi o comando."}';
 
         return new Response(assistantMessage, {
