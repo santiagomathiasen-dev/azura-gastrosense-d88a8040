@@ -4,6 +4,7 @@ import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
 import { getNow } from '@/lib/utils';
+import { supabaseFetch } from '@/lib/supabase-fetch';
 
 export interface ForecastProductionOrder {
     id: string;
@@ -60,33 +61,18 @@ export function useForecastProductionOrders(productionDate?: string) {
         queryFn: async () => {
             if (!user?.id && !ownerId) return [];
 
-            let query = supabase
-                .from('forecast_production_orders')
-                .select(`
-          *,
-          technical_sheet:technical_sheets(
-            id, 
-            name, 
-            yield_unit, 
-            yield_quantity, 
-            image_url,
-            ingredients:technical_sheet_ingredients(
-              stock_item_id,
-              quantity,
-              unit,
-              stock_item:stock_items(name)
-            )
-          )
-        `)
-                .order('production_date', { ascending: true });
+            try {
+                let path = 'forecast_production_orders?select=*,technical_sheet:technical_sheets(id,name,yield_unit,yield_quantity,image_url,ingredients:technical_sheet_ingredients(stock_item_id,quantity,unit,stock_item:stock_items(name)))&order=production_date.asc';
+                if (productionDate) {
+                    path += `&production_date=eq.${productionDate}`;
+                }
 
-            if (productionDate) {
-                query = query.eq('production_date', productionDate);
+                const data = await supabaseFetch(path);
+                return data as ForecastProductionOrder[];
+            } catch (err) {
+                console.error("Error fetching forecast orders:", err);
+                throw err;
             }
-
-            const { data, error } = await query;
-            if (error) throw error;
-            return data as ForecastProductionOrder[];
         },
         enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
         refetchInterval: 15_000,
@@ -105,33 +91,30 @@ export function useForecastProductionOrders(productionDate?: string) {
         for (const ingredient of order.technical_sheet.ingredients) {
             const stockItemId = ingredient.stock_item_id;
             // Apply waste factor from stock item
-            const wasteFactorResult = await supabase
-                .from('stock_items')
-                .select('waste_factor, current_quantity, name, unit')
-                .eq('id', stockItemId)
-                .single();
+            const itemData = await supabaseFetch(`stock_items?id=eq.${stockItemId}&select=waste_factor,current_quantity,name,unit`);
+            const wasteItem = Array.isArray(itemData) ? itemData[0] : itemData;
 
-            const wasteFactor = Number(wasteFactorResult.data?.waste_factor || 0) / 100;
+            const wasteFactor = Number(wasteItem?.waste_factor || 0) / 100;
             const baseQty = Number(ingredient.quantity) * multiplier;
             const neededQty = baseQty * (1 + wasteFactor); // Apply waste factor
 
             let remainingQty = neededQty;
 
             // 1. First, try to use from production stock
-            const { data: prodStock } = await supabase
-                .from('production_stock')
-                .select('id, quantity')
-                .eq('stock_item_id', stockItemId)
-                .single();
+            const prodStockData = await supabaseFetch(`production_stock?stock_item_id=eq.${stockItemId}&select=id,quantity`);
+            const prodStock = Array.isArray(prodStockData) ? prodStockData[0] : prodStockData;
 
             if (prodStock && Number(prodStock.quantity) > 0) {
                 const useFromProd = Math.min(Number(prodStock.quantity), remainingQty);
                 const newProdQty = Number(prodStock.quantity) - useFromProd;
 
                 if (newProdQty <= 0) {
-                    await supabase.from('production_stock').delete().eq('id', prodStock.id);
+                    await supabaseFetch(`production_stock?id=eq.${prodStock.id}`, { method: 'DELETE' });
                 } else {
-                    await supabase.from('production_stock').update({ quantity: newProdQty }).eq('id', prodStock.id);
+                    await supabaseFetch(`production_stock?id=eq.${prodStock.id}`, {
+                        method: 'PATCH',
+                        body: JSON.stringify({ quantity: newProdQty })
+                    });
                 }
 
                 remainingQty -= useFromProd;
@@ -139,20 +122,22 @@ export function useForecastProductionOrders(productionDate?: string) {
 
             // 2. If still need more, use from central stock
             if (remainingQty > 0) {
-                const centralQty = Number(wasteFactorResult.data?.current_quantity || 0);
+                const centralQty = Number(wasteItem?.current_quantity || 0);
 
                 if (centralQty > 0) {
                     const useFromCentral = Math.min(centralQty, remainingQty);
 
                     // Create exit movement from central stock
-                    await supabase.from('stock_movements').insert({
-                        stock_item_id: stockItemId,
-                        user_id: ownerId,
-                        type: 'exit',
-                        quantity: useFromCentral,
-                        source: 'production',
-                        // related_production_id: order.id, // Forecast orders might not link directly to productions table yet
-                        notes: `Baixa automática - Ordem Previsão: ${order.technical_sheet.name}`,
+                    await supabaseFetch('stock_movements', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            stock_item_id: stockItemId,
+                            user_id: ownerId,
+                            type: 'exit',
+                            quantity: useFromCentral,
+                            source: 'production',
+                            notes: `Baixa automática - Ordem Previsão: ${order.technical_sheet.name}`,
+                        })
                     });
 
                     remainingQty -= useFromCentral;
@@ -162,34 +147,33 @@ export function useForecastProductionOrders(productionDate?: string) {
             // 3. If still insufficient, track for purchase order
             if (remainingQty > 0) {
                 insufficientItems.push({
-                    name: wasteFactorResult.data?.name || ingredient.stock_item?.name || 'Item',
+                    name: wasteItem?.name || ingredient.stock_item?.name || 'Item',
                     needed: neededQty,
-                    available: (Number(prodStock?.quantity || 0) + Number(wasteFactorResult.data?.current_quantity || 0)),
-                    unit: wasteFactorResult.data?.unit || ingredient.unit,
+                    available: (Number(prodStock?.quantity || 0) + Number(wasteItem?.current_quantity || 0)),
+                    unit: wasteItem?.unit || ingredient.unit,
                 });
 
                 // Auto-generate purchase order for missing quantity
-                const { data: existingPurchase } = await supabase
-                    .from('purchase_list_items')
-                    .select('id, suggested_quantity')
-                    .eq('stock_item_id', stockItemId)
-                    .eq('status', 'pending')
-                    .single();
+                const existingPurchaseData = await supabaseFetch(`purchase_list_items?stock_item_id=eq.${stockItemId}&status=eq.pending&select=id,suggested_quantity`);
+                const existingPurchase = Array.isArray(existingPurchaseData) ? existingPurchaseData[0] : existingPurchaseData;
 
                 if (existingPurchase) {
-                    await supabase
-                        .from('purchase_list_items')
-                        .update({
+                    await supabaseFetch(`purchase_list_items?id=eq.${existingPurchase.id}`, {
+                        method: 'PATCH',
+                        body: JSON.stringify({
                             suggested_quantity: Number(existingPurchase.suggested_quantity) + remainingQty
                         })
-                        .eq('id', existingPurchase.id);
+                    });
                 } else {
-                    await supabase.from('purchase_list_items').insert({
-                        user_id: ownerId,
-                        stock_item_id: stockItemId,
-                        suggested_quantity: remainingQty,
-                        status: 'pending',
-                        notes: `Gerado automaticamente - Ordem Previsão: ${order.technical_sheet.name}`,
+                    await supabaseFetch('purchase_list_items', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            user_id: ownerId,
+                            stock_item_id: stockItemId,
+                            suggested_quantity: remainingQty,
+                            status: 'pending',
+                            notes: `Gerado automaticamente - Ordem Previsão: ${order.technical_sheet.name}`,
+                        })
                     });
                 }
             }
@@ -210,26 +194,23 @@ export function useForecastProductionOrders(productionDate?: string) {
         const quantity = order.net_quantity;
 
         // Check if entry already exists for this known sheet + praca
-        let query = supabase
-            .from('finished_productions_stock')
-            .select('id, quantity')
-            .eq('technical_sheet_id', technicalSheetId);
-
+        let path = `finished_productions_stock?technical_sheet_id=eq.${technicalSheetId}&select=id,quantity`;
         if (praca) {
-            query = query.eq('praca', praca);
+            path += `&praca=eq.${praca}`;
         } else {
-            query = query.is('praca', null);
+            path += `&praca=is.null`;
         }
 
-        const { data: existing } = await query.single();
+        const existingData = await supabaseFetch(path);
+        const existing = Array.isArray(existingData) ? existingData[0] : existingData;
 
         if (existing) {
-            await supabase
-                .from('finished_productions_stock')
-                .update({
+            await supabaseFetch(`finished_productions_stock?id=eq.${existing.id}`, {
+                method: 'PATCH',
+                body: JSON.stringify({
                     quantity: Number(existing.quantity) + Number(quantity),
                 })
-                .eq('id', existing.id);
+            });
         } else {
             const insertData: any = {
                 user_id: ownerId,
@@ -240,25 +221,21 @@ export function useForecastProductionOrders(productionDate?: string) {
             };
             if (praca) insertData.praca = praca;
 
-            await supabase
-                .from('finished_productions_stock')
-                .insert(insertData);
+            await supabaseFetch('finished_productions_stock', {
+                method: 'POST',
+                body: JSON.stringify(insertData)
+            });
         }
     };
 
     const updateOrderStatus = useMutation({
         mutationFn: async ({ id, status }: { id: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }) => {
-            const { data: order, error } = await supabase
-                .from('forecast_production_orders')
-                .update({ status })
-                .eq('id', id)
-                .select(`
-                    *,
-                    technical_sheet:technical_sheets(id, name, yield_unit, production_type)
-                `)
-                .single();
-
-            if (error) throw error;
+            const orderData = await supabaseFetch(`forecast_production_orders?id=eq.${id}`, {
+                method: 'PATCH',
+                headers: { 'Prefer': 'return=representation' },
+                body: JSON.stringify({ status })
+            });
+            const order = Array.isArray(orderData) ? orderData[0] : orderData;
 
             if (status === 'completed' && order) {
                 await addToFinishedStock(order);
@@ -304,11 +281,9 @@ export function useForecastProductionOrders(productionDate?: string) {
 
     const deleteOrder = useMutation({
         mutationFn: async (id: string) => {
-            const { error } = await supabase
-                .from('forecast_production_orders')
-                .delete()
-                .eq('id', id);
-            if (error) throw error;
+            await supabaseFetch(`forecast_production_orders?id=eq.${id}`, {
+                method: 'DELETE'
+            });
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['forecast_production_orders'] });

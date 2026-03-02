@@ -4,6 +4,7 @@ import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
 import type { StockItem } from './useStockItems';
+import { supabaseFetch } from '@/lib/supabase-fetch';
 
 interface ProductionStockItem {
   id: string;
@@ -37,14 +38,13 @@ export function useProductionStock() {
     queryKey: ['production_stock', ownerId],
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
-      const { data, error } = await supabase
-        .from('production_stock')
-        .select(`
-          *,
-          stock_item:stock_items(*)
-        `);
-      if (error) throw error;
-      return data as (ProductionStockItem & { stock_item: StockItem })[];
+      try {
+        const data = await supabaseFetch('production_stock?select=*,stock_item:stock_items(*)');
+        return data as (ProductionStockItem & { stock_item: StockItem })[];
+      } catch (err) {
+        console.error("Error fetching production stock:", err);
+        throw err;
+      }
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
   });
@@ -54,16 +54,13 @@ export function useProductionStock() {
     queryKey: ['stock_transfers', ownerId],
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
-      const { data, error } = await supabase
-        .from('stock_transfers')
-        .select(`
-          *,
-          stock_item:stock_items(name, unit)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(50);
-      if (error) throw error;
-      return data as (StockTransfer & { stock_item: { name: string; unit: string } })[];
+      try {
+        const data = await supabaseFetch('stock_transfers?select=*,stock_item:stock_items(name,unit)&order=created_at.desc&limit=50');
+        return data as (StockTransfer & { stock_item: { name: string; unit: string } })[];
+      } catch (err) {
+        console.error("Error fetching transfers:", err);
+        throw err;
+      }
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
   });
@@ -74,97 +71,93 @@ export function useProductionStock() {
       if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
       if (!ownerId) throw new Error('Usuário não autenticado');
 
-      // 1. Subtract from central stock (create exit movement)
-      const { error: movementError } = await supabase
-        .from('stock_movements')
-        .insert({
+      // 1. Subtract from central stock (create exit movement via supabaseFetch)
+      await supabaseFetch('stock_movements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           stock_item_id: stockItemId,
           user_id: ownerId,
           type: 'exit',
           quantity,
           source: 'manual',
           notes: notes || 'Transferência para estoque de produção',
-        });
-      if (movementError) throw movementError;
+        })
+      });
 
       // 1b. Deduct from expiry batches (FIFO)
-      const { data: batches } = await supabase
-        .from('item_expiry_dates' as any)
-        .select('*')
-        .eq('stock_item_id', stockItemId)
-        .gt('quantity', 0)
-        .order('expiry_date', { ascending: true });
+      const batchesData = await supabaseFetch(`item_expiry_dates?stock_item_id=eq.${stockItemId}&quantity=gt.0&order=expiry_date.asc`);
+      const batches = Array.isArray(batchesData) ? batchesData : [];
 
-      if (batches && batches.length > 0) {
+      if (batches.length > 0) {
         let remaining = quantity;
         for (const batch of batches) {
           if (remaining <= 0) break;
-          const take = Math.min(remaining, Number((batch as any).quantity));
-          const newQty = Number((batch as any).quantity) - take;
+          const take = Math.min(remaining, Number(batch.quantity));
+          const newQty = Number(batch.quantity) - take;
 
-          await supabase
-            .from('item_expiry_dates' as any)
-            .update({ quantity: newQty } as any)
-            .eq('id', (batch as any).id);
+          await supabaseFetch(`item_expiry_dates?id=eq.${batch.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ quantity: newQty })
+          });
 
           remaining -= take;
         }
 
         // IMPORTANT: If stock reaches 0 (or was already 0), ensure both batch and legacy fields are cleared
-        const { data: currentItem } = await supabase
-          .from('stock_items')
-          .select('current_quantity')
-          .eq('id', stockItemId)
-          .single();
+        const itemResult = await supabaseFetch(`stock_items?id=eq.${stockItemId}&select=current_quantity`);
+        const currentItem = Array.isArray(itemResult) ? itemResult[0] : itemResult;
 
         if (currentItem && Number(currentItem.current_quantity) <= 0) {
-          await supabase
-            .from('item_expiry_dates' as any)
-            .update({ quantity: 0 } as any)
-            .eq('stock_item_id', stockItemId);
+          await supabaseFetch(`item_expiry_dates?stock_item_id=eq.${stockItemId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ quantity: 0 })
+          });
 
-          await supabase
-            .from('stock_items')
-            .update({ expiration_date: null })
-            .eq('id', stockItemId);
+          await supabaseFetch(`stock_items?id=eq.${stockItemId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ expiration_date: null })
+          });
         }
       }
 
-      // 2. Add to production stock (upsert)
-      const { data: existing } = await supabase
-        .from('production_stock')
-        .select('id, quantity')
-        .eq('stock_item_id', stockItemId)
-        .single();
+      // 2. Add to production stock (upsert via supabaseFetch)
+      const existingData = await supabaseFetch(`production_stock?stock_item_id=eq.${stockItemId}&select=id,quantity`);
+      const existing = Array.isArray(existingData) ? existingData[0] : existingData;
 
       if (existing) {
-        const { error: updateError } = await supabase
-          .from('production_stock')
-          .update({ quantity: Number(existing.quantity) + quantity })
-          .eq('id', existing.id);
-        if (updateError) throw updateError;
+        await supabaseFetch(`production_stock?id=eq.${existing.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quantity: Number(existing.quantity) + quantity })
+        });
       } else {
-        const { error: insertError } = await supabase
-          .from('production_stock')
-          .insert({
+        await supabaseFetch('production_stock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
             user_id: ownerId,
             stock_item_id: stockItemId,
             quantity,
-          });
-        if (insertError) throw insertError;
+          })
+        });
       }
 
       // 3. Record transfer
-      const { error: transferError } = await supabase
-        .from('stock_transfers')
-        .insert({
+      await supabaseFetch('stock_transfers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           user_id: ownerId,
           stock_item_id: stockItemId,
           quantity,
           direction: 'to_production',
           notes,
-        });
-      if (transferError) throw transferError;
+        })
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['production_stock'] });
@@ -184,11 +177,8 @@ export function useProductionStock() {
       if (!ownerId) throw new Error('Usuário não autenticado');
 
       // 1. Check if we have enough in production stock
-      const { data: prodStock } = await supabase
-        .from('production_stock')
-        .select('id, quantity')
-        .eq('stock_item_id', stockItemId)
-        .single();
+      const prodStockData = await supabaseFetch(`production_stock?stock_item_id=eq.${stockItemId}&select=id,quantity`);
+      const prodStock = Array.isArray(prodStockData) ? prodStockData[0] : prodStockData;
 
       if (!prodStock || Number(prodStock.quantity) < quantity) {
         throw new Error('Quantidade insuficiente no estoque de produção');
@@ -197,43 +187,41 @@ export function useProductionStock() {
       // 2. Subtract from production stock
       const newQty = Number(prodStock.quantity) - quantity;
       if (newQty === 0) {
-        const { error: deleteError } = await supabase
-          .from('production_stock')
-          .delete()
-          .eq('id', prodStock.id);
-        if (deleteError) throw deleteError;
+        await supabaseFetch(`production_stock?id=eq.${prodStock.id}`, { method: 'DELETE' });
       } else {
-        const { error: updateError } = await supabase
-          .from('production_stock')
-          .update({ quantity: newQty })
-          .eq('id', prodStock.id);
-        if (updateError) throw updateError;
+        await supabaseFetch(`production_stock?id=eq.${prodStock.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quantity: newQty })
+        });
       }
 
       // 3. Add to central stock (create entry movement)
-      const { error: movementError } = await supabase
-        .from('stock_movements')
-        .insert({
+      await supabaseFetch('stock_movements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           stock_item_id: stockItemId,
           user_id: ownerId,
           type: 'entry',
           quantity,
           source: 'manual',
           notes: notes || 'Devolução do estoque de produção',
-        });
-      if (movementError) throw movementError;
+        })
+      });
 
       // 4. Record transfer
-      const { error: transferError } = await supabase
-        .from('stock_transfers')
-        .insert({
+      await supabaseFetch('stock_transfers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           user_id: ownerId,
           stock_item_id: stockItemId,
           quantity,
           direction: 'to_central',
           notes,
-        });
-      if (transferError) throw transferError;
+        })
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['production_stock'] });
@@ -252,11 +240,8 @@ export function useProductionStock() {
       if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
       if (!ownerId) throw new Error('Usuário não autenticado');
 
-      const { data: prodStock } = await supabase
-        .from('production_stock')
-        .select('id, quantity')
-        .eq('stock_item_id', stockItemId)
-        .single();
+      const prodStockData = await supabaseFetch(`production_stock?stock_item_id=eq.${stockItemId}&select=id,quantity`);
+      const prodStock = Array.isArray(prodStockData) ? prodStockData[0] : prodStockData;
 
       if (!prodStock) return 0; // Return 0 if item not in production stock
 
@@ -265,9 +250,13 @@ export function useProductionStock() {
       const newQty = available - toUse;
 
       if (newQty === 0) {
-        await supabase.from('production_stock').delete().eq('id', prodStock.id);
+        await supabaseFetch(`production_stock?id=eq.${prodStock.id}`, { method: 'DELETE' });
       } else {
-        await supabase.from('production_stock').update({ quantity: newQty }).eq('id', prodStock.id);
+        await supabaseFetch(`production_stock?id=eq.${prodStock.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quantity: newQty })
+        });
       }
 
       return toUse;
@@ -286,35 +275,29 @@ export function useProductionStock() {
       if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
       if (!ownerId) throw new Error('Usuário não autenticado');
 
-      const { data: existing } = await supabase
-        .from('production_stock')
-        .select('id, quantity')
-        .eq('stock_item_id', stockItemId)
-        .single();
+      const existingData = await supabaseFetch(`production_stock?stock_item_id=eq.${stockItemId}&select=id,quantity`);
+      const existing = Array.isArray(existingData) ? existingData[0] : existingData;
 
       if (existing) {
         if (quantity === 0) {
-          const { error } = await supabase
-            .from('production_stock')
-            .delete()
-            .eq('id', existing.id);
-          if (error) throw error;
+          await supabaseFetch(`production_stock?id=eq.${existing.id}`, { method: 'DELETE' });
         } else {
-          const { error } = await supabase
-            .from('production_stock')
-            .update({ quantity })
-            .eq('id', existing.id);
-          if (error) throw error;
+          await supabaseFetch(`production_stock?id=eq.${existing.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ quantity })
+          });
         }
       } else if (quantity > 0) {
-        const { error } = await supabase
-          .from('production_stock')
-          .insert({
+        await supabaseFetch('production_stock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
             user_id: ownerId,
             stock_item_id: stockItemId,
             quantity,
-          });
-        if (error) throw error;
+          })
+        });
       }
     },
     onSuccess: () => {

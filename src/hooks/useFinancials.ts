@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
+import { supabaseFetch } from '@/lib/supabase-fetch';
 
 export interface FinancialExpense {
     id: string;
@@ -41,17 +42,13 @@ export function useFinancials() {
         queryKey: ['financial_expenses', ownerId],
         queryFn: async () => {
             if (!ownerId) return [];
-            const { data, error } = await supabase
-                .from('financial_expenses' as any)
-                .select('*')
-                .eq('user_id', ownerId)
-                .order('date', { ascending: false });
-
-            if (error) {
-                console.error('Error fetching expenses:', error);
+            try {
+                const data = await supabaseFetch('financial_expenses?select=*&order=date.desc');
+                return data as FinancialExpense[];
+            } catch (err) {
+                console.error('Error fetching expenses:', err);
                 return [];
             }
-            return data as unknown as FinancialExpense[];
         },
         enabled: !!ownerId,
     });
@@ -60,17 +57,13 @@ export function useFinancials() {
         queryKey: ['payroll', ownerId],
         queryFn: async () => {
             if (!ownerId) return [];
-            const { data, error } = await supabase
-                .from('payroll_entries' as any)
-                .select('*')
-                .eq('user_id', ownerId)
-                .order('date', { ascending: false });
-
-            if (error) {
-                console.error('Error fetching payroll:', error);
+            try {
+                const data = await supabaseFetch('payroll_entries?select=*&order=date.desc');
+                return data as PayrollEntry[];
+            } catch (err) {
+                console.error('Error fetching payroll:', err);
                 return [];
             }
-            return data as unknown as PayrollEntry[];
         },
         enabled: !!ownerId,
     });
@@ -78,13 +71,12 @@ export function useFinancials() {
     const addExpense = useMutation({
         mutationFn: async (expense: Omit<FinancialExpense, 'id'>) => {
             if (!ownerId) throw new Error('Owner ID not found');
-            const { data, error } = await supabase
-                .from('financial_expenses' as any)
-                .insert([{ ...expense, user_id: ownerId }])
-                .select()
-                .single();
-            if (error) throw error;
-            return data;
+            const data = await supabaseFetch('financial_expenses', {
+                method: 'POST',
+                headers: { 'Prefer': 'return=representation' },
+                body: JSON.stringify({ ...expense, user_id: ownerId })
+            });
+            return Array.isArray(data) ? data[0] : data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['financial_expenses'] });
@@ -99,13 +91,12 @@ export function useFinancials() {
     const addPayroll = useMutation({
         mutationFn: async (entry: Omit<PayrollEntry, 'id'>) => {
             if (!ownerId) throw new Error('Owner ID not found');
-            const { data, error } = await supabase
-                .from('payroll_entries' as any)
-                .insert([{ ...entry, user_id: ownerId }])
-                .select()
-                .single();
-            if (error) throw error;
-            return data;
+            const data = await supabaseFetch('payroll_entries', {
+                method: 'POST',
+                headers: { 'Prefer': 'return=representation' },
+                body: JSON.stringify({ ...entry, user_id: ownerId })
+            });
+            return Array.isArray(data) ? data[0] : data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['payroll'] });

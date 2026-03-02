@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
+import { supabaseFetch } from '@/lib/supabase-fetch';
 
 export interface FinishedProductionStock {
   id: string;
@@ -34,22 +35,13 @@ export function useFinishedProductionsStock() {
     queryKey: ['finished_productions_stock', ownerId],
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
-      const { data, error } = await supabase
-        .from('finished_productions_stock')
-        .select(`
-          *,
-          technical_sheet:technical_sheets(
-            id,
-            name,
-            yield_unit,
-            image_url,
-            minimum_stock,
-            praca
-          )
-        `)
-        .order('updated_at', { ascending: false });
-      if (error) throw error;
-      return data as unknown as FinishedProductionStock[];
+      try {
+        const data = await supabaseFetch('finished_productions_stock?select=*,technical_sheet:technical_sheets(id,name,yield_unit,image_url,minimum_stock,praca)&order=updated_at.desc');
+        return data as unknown as FinishedProductionStock[];
+      } catch (err) {
+        console.error("Error fetching finished stock:", err);
+        throw err;
+      }
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
     refetchInterval: 30_000,
@@ -67,18 +59,12 @@ export function useFinishedProductionsStock() {
       if (!ownerId) throw new Error('Usuário não autenticado');
 
       // Get technical sheet to see if it has a default praca
-      const { data: sheet } = await supabase
-        .from('technical_sheets')
-        .select('praca')
-        .eq('id', data.technical_sheet_id)
-        .single();
+      const sheetData = await supabaseFetch(`technical_sheets?id=eq.${data.technical_sheet_id}&select=praca`);
+      const sheet = Array.isArray(sheetData) ? sheetData[0] : sheetData;
 
       // Check if entry already exists for this technical sheet
-      const { data: existing } = await supabase
-        .from('finished_productions_stock')
-        .select('id, quantity')
-        .eq('technical_sheet_id', data.technical_sheet_id)
-        .single();
+      const existingData = await supabaseFetch(`finished_productions_stock?technical_sheet_id=eq.${data.technical_sheet_id}&select=id,quantity`);
+      const existing = Array.isArray(existingData) ? existingData[0] : existingData;
 
       if (existing) {
         // Update existing entry
@@ -89,11 +75,10 @@ export function useFinishedProductionsStock() {
         };
         if (data.image_url) updateData.image_url = data.image_url;
 
-        const { error } = await supabase
-          .from('finished_productions_stock')
-          .update(updateData)
-          .eq('id', existing.id);
-        if (error) throw error;
+        await supabaseFetch(`finished_productions_stock?id=eq.${existing.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(updateData)
+        });
       } else {
         // Create new entry
         const insertData: {
@@ -114,10 +99,10 @@ export function useFinishedProductionsStock() {
         };
         if (data.image_url) insertData.image_url = data.image_url;
 
-        const { error } = await supabase
-          .from('finished_productions_stock')
-          .insert(insertData);
-        if (error) throw error;
+        await supabaseFetch('finished_productions_stock', {
+          method: 'POST',
+          body: JSON.stringify(insertData)
+        });
       }
     },
     onSuccess: () => {
@@ -135,11 +120,10 @@ export function useFinishedProductionsStock() {
       if (unit) updateData.unit = unit;
       if (image_url !== undefined) updateData.image_url = image_url || null;
 
-      const { error } = await supabase
-        .from('finished_productions_stock')
-        .update(updateData)
-        .eq('id', id);
-      if (error) throw error;
+      await supabaseFetch(`finished_productions_stock?id=eq.${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updateData)
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['finished_productions_stock'] });
@@ -152,11 +136,9 @@ export function useFinishedProductionsStock() {
 
   const deleteFinishedProduction = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('finished_productions_stock')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
+      await supabaseFetch(`finished_productions_stock?id=eq.${id}`, {
+        method: 'DELETE'
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['finished_productions_stock'] });
@@ -181,11 +163,8 @@ export function useFinishedProductionsStock() {
       }
 
       // Get the technical sheet to calculate the cost
-      const { data: technicalSheet } = await supabase
-        .from('technical_sheets')
-        .select('cost_per_unit, total_cost, yield_quantity')
-        .eq('id', item.technical_sheet_id)
-        .single();
+      const technicalSheetData = await supabaseFetch(`technical_sheets?id=eq.${item.technical_sheet_id}&select=cost_per_unit,total_cost,yield_quantity`);
+      const technicalSheet = Array.isArray(technicalSheetData) ? technicalSheetData[0] : technicalSheetData;
 
       // Calculate estimated value based on technical sheet cost
       let estimatedValue = 0;
@@ -201,15 +180,18 @@ export function useFinishedProductionsStock() {
       // Decrement quantity
       const newQuantity = Number(item.quantity) - quantity;
       if (newQuantity <= 0) {
-        await supabase.from('finished_productions_stock').delete().eq('id', id);
+        await supabaseFetch(`finished_productions_stock?id=eq.${id}`, { method: 'DELETE' });
       } else {
-        await supabase.from('finished_productions_stock').update({ quantity: newQuantity }).eq('id', id);
+        await supabaseFetch(`finished_productions_stock?id=eq.${id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ quantity: newQuantity })
+        });
       }
 
       // Record the loss with the technical sheet cost
-      const { error: lossError } = await supabase
-        .from('losses')
-        .insert({
+      await supabaseFetch('losses', {
+        method: 'POST',
+        body: JSON.stringify({
           user_id: ownerId,
           source_type: 'finished_production',
           source_id: item.technical_sheet_id,
@@ -217,8 +199,8 @@ export function useFinishedProductionsStock() {
           quantity: quantity,
           unit: item.unit,
           estimated_value: estimatedValue,
-        });
-      if (lossError) throw lossError;
+        })
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['finished_productions_stock'] });
@@ -239,9 +221,12 @@ export function useFinishedProductionsStock() {
 
     const newQuantity = Number(item.quantity) - quantity;
     if (newQuantity <= 0) {
-      await supabase.from('finished_productions_stock').delete().eq('id', item.id);
+      await supabaseFetch(`finished_productions_stock?id=eq.${item.id}`, { method: 'DELETE' });
     } else {
-      await supabase.from('finished_productions_stock').update({ quantity: newQuantity }).eq('id', item.id);
+      await supabaseFetch(`finished_productions_stock?id=eq.${item.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ quantity: newQuantity })
+      });
     }
 
     return true;

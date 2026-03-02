@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
+import { supabaseFetch } from '@/lib/supabase-fetch';
 
 export interface Loss {
   id: string;
@@ -36,12 +37,13 @@ export function useLosses() {
     queryKey: ['losses', ownerId],
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
-      const { data, error } = await supabase
-        .from('losses')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data as Loss[];
+      try {
+        const data = await supabaseFetch('losses?order=created_at.desc');
+        return data as Loss[];
+      } catch (err) {
+        console.error("Error fetching losses:", err);
+        throw err;
+      }
     },
     enabled: !!user?.id || !!ownerId,
   });
@@ -51,69 +53,67 @@ export function useLosses() {
       if (!ownerId) throw new Error('Usuário não autenticado');
 
       // 1. Register the loss in the unified losses table
-      const { data: lossData, error: lossError } = await supabase.from('losses').insert({
-        user_id: ownerId,
-        source_type: input.source_type,
-        source_id: input.source_id,
-        source_name: input.source_name,
-        quantity: input.quantity,
-        unit: input.unit,
-        estimated_value: input.estimated_value || 0,
-        notes: input.notes || null,
-      }).select().single();
-
-      if (lossError) throw lossError;
+      const lossData = await supabaseFetch('losses', {
+        method: 'POST',
+        headers: { 'Prefer': 'return=representation' },
+        body: JSON.stringify({
+          user_id: ownerId,
+          source_type: input.source_type,
+          source_id: input.source_id,
+          source_name: input.source_name,
+          quantity: input.quantity,
+          unit: input.unit,
+          estimated_value: input.estimated_value || 0,
+          notes: input.notes || null,
+        })
+      });
+      const loss = Array.isArray(lossData) ? lossData[0] : lossData;
 
       // 2. If flag is set, deduct from stock and record movement
       if (input.deductStock) {
         if (input.source_type === 'stock_item') {
           // A. Fetch current stock item to get current qty
-          const { data: item } = await supabase
-            .from('stock_items')
-            .select('current_quantity')
-            .eq('id', input.source_id)
-            .single();
+          const itemData = await supabaseFetch(`stock_items?id=eq.${input.source_id}&select=current_quantity`);
+          const item = Array.isArray(itemData) ? itemData[0] : itemData;
 
           if (item) {
             const newQty = Math.max(0, Number(item.current_quantity) - input.quantity);
 
             // B. Update stock_item quantity
-            await supabase
-              .from('stock_items')
-              .update({ current_quantity: newQty })
-              .eq('id', input.source_id);
+            await supabaseFetch(`stock_items?id=eq.${input.source_id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ current_quantity: newQty })
+            });
 
             // C. Register stock movement for audit
-            await supabase
-              .from('stock_movements')
-              .insert({
+            await supabaseFetch('stock_movements', {
+              method: 'POST',
+              body: JSON.stringify({
                 user_id: ownerId,
                 stock_item_id: input.source_id,
                 quantity: input.quantity,
                 type: 'exit',
                 source: 'manual',
                 notes: `Perda registrada: ${input.notes || 'Sem observação'}`,
-              });
+              })
+            });
           }
         } else if (input.source_type === 'finished_production') {
           // Fetch current stock
-          const { data: stock } = await supabase
-            .from('finished_productions_stock')
-            .select('quantity')
-            .eq('id', input.source_id)
-            .single();
+          const stockData = await supabaseFetch(`finished_productions_stock?id=eq.${input.source_id}&select=quantity`);
+          const stock = Array.isArray(stockData) ? stockData[0] : stockData;
 
           if (stock) {
             const newQty = Math.max(0, Number(stock.quantity) - input.quantity);
-            await supabase
-              .from('finished_productions_stock')
-              .update({ quantity: newQty })
-              .eq('id', input.source_id);
+            await supabaseFetch(`finished_productions_stock?id=eq.${input.source_id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ quantity: newQty })
+            });
           }
         }
       }
 
-      return lossData;
+      return loss;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['losses'] });
@@ -129,8 +129,7 @@ export function useLosses() {
 
   const deleteLoss = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('losses').delete().eq('id', id);
-      if (error) throw error;
+      await supabaseFetch(`losses?id=eq.${id}`, { method: 'DELETE' });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['losses'] });

@@ -5,6 +5,7 @@ import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
 import { getNow } from '@/lib/utils';
 import type { Database } from '@/integrations/supabase/types';
+import { supabaseFetch } from '@/lib/supabase-fetch';
 
 type Production = Database['public']['Tables']['productions']['Row'];
 type ProductionInsert = Database['public']['Tables']['productions']['Insert'];
@@ -67,28 +68,13 @@ export function useProductions() {
     queryKey: ['productions', ownerId],
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
-      const { data, error } = await supabase
-        .from('productions')
-        .select(`
-          *,
-          technical_sheet:technical_sheets(
-            id,
-            name,
-            yield_quantity,
-            yield_unit,
-            preparation_method,
-            ingredients:technical_sheet_ingredients(
-              stock_item_id,
-              quantity,
-              unit,
-              stage_id,
-              stock_item:stock_items(name)
-            )
-          )
-        `)
-        .order('scheduled_date', { ascending: true });
-      if (error) throw error;
-      return data as ProductionWithSheet[];
+      try {
+        const data = await supabaseFetch('productions?select=*,technical_sheet:technical_sheets(id,name,yield_quantity,yield_unit,preparation_method,ingredients:technical_sheet_ingredients(stock_item_id,quantity,unit,stage_id,stock_item:stock_items(name)))&order=scheduled_date.asc');
+        return data as ProductionWithSheet[];
+      } catch (err) {
+        console.error("Error fetching productions:", err);
+        throw err;
+      }
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
     refetchInterval: 30_000,
@@ -98,13 +84,13 @@ export function useProductions() {
     mutationFn: async (production: Omit<ProductionInsert, 'user_id'>) => {
       if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
       if (!ownerId) throw new Error('Usuário não autenticado');
-      const { data, error } = await supabase
-        .from('productions')
-        .insert({ ...production, user_id: ownerId })
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+
+      const data = await supabaseFetch('productions', {
+        method: 'POST',
+        headers: { 'Prefer': 'return=representation' },
+        body: JSON.stringify({ ...production, user_id: ownerId })
+      });
+      return Array.isArray(data) ? data[0] : data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['productions'] });
@@ -129,33 +115,30 @@ export function useProductions() {
     for (const ingredient of production.technical_sheet.ingredients) {
       const stockItemId = ingredient.stock_item_id;
       // Apply waste factor from stock item
-      const wasteFactorResult = await supabase
-        .from('stock_items')
-        .select('waste_factor, current_quantity, name, unit')
-        .eq('id', stockItemId)
-        .single();
+      const stockData = await supabaseFetch(`stock_items?id=eq.${stockItemId}&select=waste_factor,current_quantity,name,unit`);
+      const itemData = Array.isArray(stockData) ? stockData[0] : stockData;
 
-      const wasteFactor = Number(wasteFactorResult.data?.waste_factor || 0) / 100;
+      const wasteFactor = Number(itemData?.waste_factor || 0) / 100;
       const baseQty = Number(ingredient.quantity) * multiplier;
       const neededQty = baseQty * (1 + wasteFactor); // Apply waste factor
 
       let remainingQty = neededQty;
 
       // 1. First, try to use from production stock
-      const { data: prodStock } = await supabase
-        .from('production_stock')
-        .select('id, quantity')
-        .eq('stock_item_id', stockItemId)
-        .single();
+      const prodStockResult = await supabaseFetch(`production_stock?stock_item_id=eq.${stockItemId}&select=id,quantity`);
+      const prodStock = Array.isArray(prodStockResult) ? prodStockResult[0] : prodStockResult;
 
       if (prodStock && Number(prodStock.quantity) > 0) {
         const useFromProd = Math.min(Number(prodStock.quantity), remainingQty);
         const newProdQty = Number(prodStock.quantity) - useFromProd;
 
         if (newProdQty <= 0) {
-          await supabase.from('production_stock').delete().eq('id', prodStock.id);
+          await supabaseFetch(`production_stock?id=eq.${prodStock.id}`, { method: 'DELETE' });
         } else {
-          await supabase.from('production_stock').update({ quantity: newProdQty }).eq('id', prodStock.id);
+          await supabaseFetch(`production_stock?id=eq.${prodStock.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ quantity: newProdQty })
+          });
         }
 
         remainingQty -= useFromProd;
@@ -163,41 +146,39 @@ export function useProductions() {
 
       // 2. If still need more, use from central stock
       if (remainingQty > 0) {
-        const centralQty = Number(wasteFactorResult.data?.current_quantity || 0);
+        const centralQty = Number(itemData?.current_quantity || 0);
 
         if (centralQty > 0) {
           const useFromCentral = Math.min(centralQty, remainingQty);
 
           // Create exit movement from central stock
-          await supabase.from('stock_movements').insert({
-            stock_item_id: stockItemId,
-            user_id: ownerId,
-            type: 'exit',
-            quantity: useFromCentral,
-            source: 'production',
-            related_production_id: production.id,
-            notes: `Baixa automática - Produção: ${production.name}`,
+          await supabaseFetch('stock_movements', {
+            method: 'POST',
+            body: JSON.stringify({
+              stock_item_id: stockItemId,
+              user_id: ownerId,
+              type: 'exit',
+              quantity: useFromCentral,
+              source: 'production',
+              related_production_id: production.id,
+              notes: `Baixa automática - Produção: ${production.name}`,
+            })
           });
 
           // Deduct from expiry batches (FIFO)
-          const { data: batches } = await supabase
-            .from('item_expiry_dates' as any)
-            .select('*')
-            .eq('stock_item_id', stockItemId)
-            .gt('quantity', 0)
-            .order('expiry_date', { ascending: true });
+          const batches = await supabaseFetch(`item_expiry_dates?stock_item_id=eq.${stockItemId}&quantity=gt.0&order=expiry_date.asc`);
 
-          if (batches && batches.length > 0) {
+          if (Array.isArray(batches) && batches.length > 0) {
             let remaining = useFromCentral;
             for (const batch of batches) {
               if (remaining <= 0) break;
-              const take = Math.min(remaining, Number((batch as any).quantity));
-              const newQty = Number((batch as any).quantity) - take;
+              const take = Math.min(remaining, Number(batch.quantity));
+              const newQty = Number(batch.quantity) - take;
 
-              await supabase
-                .from('item_expiry_dates' as any)
-                .update({ quantity: newQty } as any)
-                .eq('id', (batch as any).id);
+              await supabaseFetch(`item_expiry_dates?id=eq.${batch.id}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ quantity: newQty })
+              });
 
               remaining -= take;
             }
@@ -210,37 +191,36 @@ export function useProductions() {
       // 3. If still insufficient, track for purchase order
       if (remainingQty > 0) {
         insufficientItems.push({
-          name: wasteFactorResult.data?.name || ingredient.stock_item?.name || 'Item',
+          name: itemData?.name || ingredient.stock_item?.name || 'Item',
           needed: neededQty,
-          available: (Number(prodStock?.quantity || 0) + Number(wasteFactorResult.data?.current_quantity || 0)),
-          unit: wasteFactorResult.data?.unit || ingredient.unit,
+          available: (Number(prodStock?.quantity || 0) + Number(itemData?.current_quantity || 0)),
+          unit: itemData?.unit || ingredient.unit,
         });
 
         // Auto-generate purchase order for missing quantity
         // Check if item already exists in purchase list
-        const { data: existingPurchase } = await supabase
-          .from('purchase_list_items')
-          .select('id, suggested_quantity')
-          .eq('stock_item_id', stockItemId)
-          .eq('status', 'pending')
-          .single();
+        const purchaseData = await supabaseFetch(`purchase_list_items?stock_item_id=eq.${stockItemId}&status=eq.pending&select=id,suggested_quantity`);
+        const existingPurchase = Array.isArray(purchaseData) ? purchaseData[0] : purchaseData;
 
         if (existingPurchase) {
           // Update existing purchase item
-          await supabase
-            .from('purchase_list_items')
-            .update({
+          await supabaseFetch(`purchase_list_items?id=eq.${existingPurchase.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
               suggested_quantity: Number(existingPurchase.suggested_quantity) + remainingQty
             })
-            .eq('id', existingPurchase.id);
+          });
         } else {
           // Create new purchase item
-          await supabase.from('purchase_list_items').insert({
-            user_id: ownerId,
-            stock_item_id: stockItemId,
-            suggested_quantity: remainingQty,
-            status: 'pending',
-            notes: `Gerado automaticamente - Produção: ${production.name}`,
+          await supabaseFetch('purchase_list_items', {
+            method: 'POST',
+            body: JSON.stringify({
+              user_id: ownerId,
+              stock_item_id: stockItemId,
+              suggested_quantity: remainingQty,
+              status: 'pending',
+              notes: `Gerado automaticamente - Produção: ${production.name}`,
+            })
           });
         }
       }
@@ -273,9 +253,9 @@ export function useProductions() {
       const random = Math.random().toString(36).substring(2, 6).toUpperCase();
       const batchCode = `${sheet.name.substring(0, 3).toUpperCase()}-${dateStr}-${random}`;
 
-      await supabase
-        .from('produced_inputs_stock')
-        .insert({
+      await supabaseFetch('produced_inputs_stock', {
+        method: 'POST',
+        body: JSON.stringify({
           user_id: ownerId,
           technical_sheet_id: technicalSheetId,
           batch_code: batchCode,
@@ -284,31 +264,29 @@ export function useProductions() {
           production_date: getNow().toISOString(),
           expiration_date: expirationDate,
           notes: `Produção: ${production.name}`,
-        });
+        })
+      });
     } else {
       // Add to finished_productions_stock
       // Check if entry already exists for this technical sheet + praca combo
-      let query = supabase
-        .from('finished_productions_stock')
-        .select('id, quantity')
-        .eq('technical_sheet_id', technicalSheetId);
-
+      let path = `finished_productions_stock?technical_sheet_id=eq.${technicalSheetId}&select=id,quantity`;
       if (praca) {
-        query = query.eq('praca', praca);
+        path += `&praca=eq.${praca}`;
       } else {
-        query = query.is('praca', null);
+        path += '&praca=is.null';
       }
 
-      const { data: existing, error: fetchError } = await query.maybeSingle();
+      const existingResult = await supabaseFetch(path);
+      const existing = Array.isArray(existingResult) ? existingResult[0] : existingResult;
 
       if (existing) {
         // Update existing entry
-        await supabase
-          .from('finished_productions_stock')
-          .update({
+        await supabaseFetch(`finished_productions_stock?id=eq.${existing.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
             quantity: Number(existing.quantity) + actualQuantity,
           })
-          .eq('id', existing.id);
+        });
       } else {
         // Create new entry
         const insertData: any = {
@@ -320,9 +298,10 @@ export function useProductions() {
         };
         if (praca) insertData.praca = praca;
 
-        await supabase
-          .from('finished_productions_stock')
-          .insert(insertData);
+        await supabaseFetch('finished_productions_stock', {
+          method: 'POST',
+          body: JSON.stringify(insertData)
+        });
       }
     }
   };
@@ -332,13 +311,12 @@ export function useProductions() {
       // Get the current production to check status change
       const currentProduction = productions.find(p => p.id === id);
 
-      const { data, error } = await supabase
-        .from('productions')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
+      const data = await supabaseFetch(`productions?id=eq.${id}`, {
+        method: 'PATCH',
+        headers: { 'Prefer': 'return=representation' },
+        body: JSON.stringify(updates)
+      });
+      const updatedData = Array.isArray(data) ? data[0] : data;
 
       // If changing from 'planned' or 'requested' to 'in_progress', subtract stock
       if (
@@ -360,7 +338,7 @@ export function useProductions() {
         await addToFinishedStock(currentProduction, Number(actualQty));
       }
 
-      return data;
+      return updatedData;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['productions'] });
@@ -383,11 +361,9 @@ export function useProductions() {
 
   const deleteProduction = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('productions')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
+      await supabaseFetch(`productions?id=eq.${id}`, {
+        method: 'DELETE'
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['productions'] });

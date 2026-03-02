@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
+import { supabaseFetch } from '@/lib/supabase-fetch';
 import { getNow } from '@/lib/utils';
 
 /**
@@ -42,18 +43,17 @@ export function useExpiryDates(stockItemId?: string) {
         queryKey: ['expiry-dates', stockItemId, ownerId],
         queryFn: async () => {
             if (!ownerId) return [];
-            let query = supabase
-                .from('item_expiry_dates' as any)
-                .select('*')
-                .order('expiry_date', { ascending: true });
-
-            if (stockItemId) {
-                query = query.eq('stock_item_id', stockItemId);
+            try {
+                let path = 'item_expiry_dates?select=*&order=expiry_date.asc';
+                if (stockItemId) {
+                    path += `&stock_item_id=eq.${stockItemId}`;
+                }
+                const data = await supabaseFetch(path);
+                return (data || []) as unknown as ExpiryDate[];
+            } catch (err) {
+                console.error("Error fetching expiry dates:", err);
+                throw err;
             }
-
-            const { data, error } = await query;
-            if (error) throw error;
-            return (data || []) as unknown as ExpiryDate[];
         },
         enabled: !!ownerId,
     });
@@ -192,16 +192,13 @@ export function useAllExpiryAlerts(daysThreshold = 7) {
     const { data: allExpiryDates = [], isLoading, error } = useQuery({
         queryKey: ['expiry-dates-all'],
         queryFn: async () => {
-            const { data, error } = await supabase
-                .from('item_expiry_dates' as any)
-                .select(`
-          *,
-          stock_item:stock_items(id, name, unit, category)
-        `)
-                .order('expiry_date', { ascending: true });
-
-            if (error) throw error;
-            return (data || []) as unknown as (ExpiryDate & { stock_item: { id: string; name: string; unit: string; category: string } })[];
+            try {
+                const data = await supabaseFetch('item_expiry_dates?select=*,stock_item:stock_items(id,name,unit,category)&order=expiry_date.asc');
+                return (data || []) as unknown as (ExpiryDate & { stock_item: { id: string; name: string; unit: string; category: string } })[];
+            } catch (err) {
+                console.error("Error fetching all expiry alerts:", err);
+                throw err;
+            }
         },
     });
 
@@ -240,14 +237,13 @@ export function useEarliestExpiryMap() {
     const { data: allExpiryDates = [], isLoading } = useQuery({
         queryKey: ['expiry-dates-all-map'],
         queryFn: async () => {
-            const { data, error } = await supabase
-                .from('item_expiry_dates' as any)
-                .select('stock_item_id, expiry_date')
-                .gt('quantity', 0)
-                .order('expiry_date', { ascending: true });
-
-            if (error) throw error;
-            return (data || []) as unknown as { stock_item_id: string; expiry_date: string }[];
+            try {
+                const data = await supabaseFetch('item_expiry_dates?select=stock_item_id,expiry_date&quantity=gt.0&order=expiry_date.asc');
+                return (data || []) as unknown as { stock_item_id: string; expiry_date: string }[];
+            } catch (err) {
+                console.error("Error fetching earliest expiry map:", err);
+                throw err;
+            }
         },
     });
 

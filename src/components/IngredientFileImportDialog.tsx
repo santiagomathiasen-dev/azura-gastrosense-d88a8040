@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { StockCategory, StockUnit } from '@/hooks/useStockItems';
+import { supabaseFetch } from '@/lib/supabase-fetch';
 
 export interface ExtractedIngredient {
   name: string;
@@ -138,32 +139,15 @@ export function IngredientFileImportDialog({
           throw new Error('Tipo de arquivo não suportado');
         }
 
-        console.log(`Processing ${fileType} file for ingredient extraction`);
+        console.log(`Processing ${fileType} file for ingredient extraction via supabaseFetch`);
 
-        const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-ingredients`;
-        console.log("Preparing fetch to edge function:", functionUrl);
-
-        const response = await fetch(functionUrl, {
+        const data = await supabaseFetch('functions/v1/extract-ingredients', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`
-          },
           body: JSON.stringify({ fileType, content, extractRecipe: false, mimeType: file.type })
         });
 
-        console.log("Fetch requested, status:", response.status);
-
-        if (!response.ok) {
-          let errorMsg = `Status: ${response.status}`;
-          try {
-            const errData = await response.json();
-            errorMsg = errData.error || errData.message || errorMsg;
-          } catch (e) { /* ignore */ }
-          throw new Error(`Falha na nuvem: ${errorMsg}`);
-        }
-
-        return response.json();
+        console.log("Extraction output:", data);
+        return data;
       };
 
       const data = await Promise.race([processTask(), timeoutPromise]) as any;

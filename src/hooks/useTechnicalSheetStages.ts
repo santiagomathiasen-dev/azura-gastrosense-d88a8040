@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
+import { supabaseFetch } from '@/lib/supabase-fetch';
 
 export interface TechnicalSheetStage {
   id: string;
@@ -38,22 +39,18 @@ export function useTechnicalSheetStages(technicalSheetId?: string) {
     queryFn: async () => {
       if (!technicalSheetId || (!user?.id && !ownerId)) return [];
 
-      const { data, error } = await supabase
-        .from('technical_sheet_stages')
-        .select(`
-          *,
-          steps:technical_sheet_stage_steps(*)
-        `)
-        .eq('technical_sheet_id', technicalSheetId)
-        .order('order_index');
+      try {
+        const data = await supabaseFetch(`technical_sheet_stages?technical_sheet_id=eq.${technicalSheetId}&select=*,steps:technical_sheet_stage_steps(*)&order=order_index`);
 
-      if (error) throw error;
-
-      // Sort steps within each stage
-      return (data || []).map(stage => ({
-        ...stage,
-        steps: (stage.steps || []).sort((a: TechnicalSheetStageStep, b: TechnicalSheetStageStep) => a.order_index - b.order_index)
-      })) as StageWithSteps[];
+        // Sort steps within each stage
+        return (data || []).map((stage: any) => ({
+          ...stage,
+          steps: (stage.steps || []).sort((a: TechnicalSheetStageStep, b: TechnicalSheetStageStep) => a.order_index - b.order_index)
+        })) as StageWithSteps[];
+      } catch (err) {
+        console.error("Error fetching stages:", err);
+        throw err;
+      }
     },
     enabled: !!technicalSheetId && (!!user?.id || !!ownerId),
   });
@@ -61,13 +58,12 @@ export function useTechnicalSheetStages(technicalSheetId?: string) {
   const createStage = useMutation({
     mutationFn: async (stage: Omit<TechnicalSheetStage, 'id' | 'created_at'>) => {
       if (!ownerId) throw new Error('Usuário não autenticado');
-      const { data, error } = await supabase
-        .from('technical_sheet_stages')
-        .insert({ ...stage, user_id: ownerId })
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      const data = await supabaseFetch('technical_sheet_stages', {
+        method: 'POST',
+        headers: { 'Prefer': 'return=representation' },
+        body: JSON.stringify({ ...stage, user_id: ownerId })
+      });
+      return Array.isArray(data) ? data[0] : data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['technical_sheet_stages'] });
@@ -80,14 +76,12 @@ export function useTechnicalSheetStages(technicalSheetId?: string) {
 
   const updateStage = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<TechnicalSheetStage> & { id: string }) => {
-      const { data, error } = await supabase
-        .from('technical_sheet_stages')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      const data = await supabaseFetch(`technical_sheet_stages?id=eq.${id}`, {
+        method: 'PATCH',
+        headers: { 'Prefer': 'return=representation' },
+        body: JSON.stringify(updates)
+      });
+      return Array.isArray(data) ? data[0] : data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['technical_sheet_stages'] });
@@ -99,11 +93,9 @@ export function useTechnicalSheetStages(technicalSheetId?: string) {
 
   const deleteStage = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('technical_sheet_stages')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
+      await supabaseFetch(`technical_sheet_stages?id=eq.${id}`, {
+        method: 'DELETE'
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['technical_sheet_stages'] });
@@ -117,13 +109,12 @@ export function useTechnicalSheetStages(technicalSheetId?: string) {
   const createStep = useMutation({
     mutationFn: async (step: Omit<TechnicalSheetStageStep, 'id' | 'created_at'>) => {
       if (!ownerId) throw new Error('Usuário não autenticado');
-      const { data, error } = await supabase
-        .from('technical_sheet_stage_steps')
-        .insert({ ...step, user_id: ownerId })
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      const data = await supabaseFetch('technical_sheet_stage_steps', {
+        method: 'POST',
+        headers: { 'Prefer': 'return=representation' },
+        body: JSON.stringify({ ...step, user_id: ownerId })
+      });
+      return Array.isArray(data) ? data[0] : data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['technical_sheet_stages'] });
@@ -135,14 +126,12 @@ export function useTechnicalSheetStages(technicalSheetId?: string) {
 
   const updateStep = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<TechnicalSheetStageStep> & { id: string }) => {
-      const { data, error } = await supabase
-        .from('technical_sheet_stage_steps')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      const data = await supabaseFetch(`technical_sheet_stage_steps?id=eq.${id}`, {
+        method: 'PATCH',
+        headers: { 'Prefer': 'return=representation' },
+        body: JSON.stringify(updates)
+      });
+      return Array.isArray(data) ? data[0] : data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['technical_sheet_stages'] });
@@ -154,11 +143,9 @@ export function useTechnicalSheetStages(technicalSheetId?: string) {
 
   const deleteStep = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('technical_sheet_stage_steps')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
+      await supabaseFetch(`technical_sheet_stage_steps?id=eq.${id}`, {
+        method: 'DELETE'
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['technical_sheet_stages'] });

@@ -143,6 +143,7 @@ export default function Estoque() {
     activeItemId: activeVoiceItemId,
     transcript,
     pendingConfirmation,
+    toggleListening,
     startListening,
     stopListening,
     confirmUpdate,
@@ -662,7 +663,7 @@ export default function Estoque() {
               onCountedQuantityChange={handleCountedQuantityChange}
               isVoiceActive={isListening}
               activeVoiceItemId={activeVoiceItemId}
-              onVoiceToggle={voiceSupported ? startListening : undefined}
+              onVoiceToggle={voiceSupported ? toggleListening : undefined}
               onTransfer={openTransferDialog}
               onManageBatches={openBatchDialog}
               expiryMap={expiryMap}
@@ -674,17 +675,6 @@ export default function Estoque() {
         <TabsContent value="register" className="flex-1 overflow-auto space-y-4">
           {/* Action Cards */}
           <div className="grid grid-cols-3 gap-2">
-            <Card
-              className="cursor-pointer hover:border-primary transition-all group"
-              onClick={() => setVoiceDialogOpen(true)}
-            >
-              <CardHeader className="text-center p-3">
-                <div className="mx-auto w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-1 group-hover:bg-primary/20">
-                  <Mic className="h-5 w-5 text-primary" />
-                </div>
-                <CardTitle className="text-sm">Falar Ingredientes</CardTitle>
-              </CardHeader>
-            </Card>
 
             <Card
               className="cursor-pointer hover:border-primary transition-all group"
@@ -979,112 +969,6 @@ export default function Estoque() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {/* Voice Confirmation Dialog */}
-      <Dialog open={!!pendingConfirmation} onOpenChange={(open) => !open && cancelUpdate()}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Confirmar Atualização de Voz</DialogTitle>
-            <DialogDescription>
-              A IA interpretou seu comando. Confirme os dados abaixo:
-            </DialogDescription>
-          </DialogHeader>
-
-          {pendingConfirmation && (
-            <div className="space-y-4 py-4">
-              <div className="flex flex-col gap-1 p-4 bg-muted rounded-lg">
-                <span className="text-sm text-muted-foreground">Item</span>
-                <span className="font-semibold text-lg">{pendingConfirmation.itemName}</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1 p-4 bg-muted rounded-lg">
-                  <span className="text-sm text-muted-foreground">Quantidade</span>
-                  <span className="font-semibold text-lg">
-                    {pendingConfirmation.quantity ?? '---'} {pendingConfirmation.unit}
-                  </span>
-                </div>
-
-                <div className="flex flex-col gap-1 p-4 bg-muted rounded-lg">
-                  <span className="text-sm text-muted-foreground">Validade</span>
-                  <span className="font-semibold text-lg">
-                    {pendingConfirmation.expirationDate
-                      ? new Date(pendingConfirmation.expirationDate + 'T12:00:00').toLocaleDateString('pt-BR')
-                      : '---'}
-                  </span>
-                </div>
-              </div>
-
-              {transcript && (
-                <div className="p-3 bg-secondary/30 rounded italic text-sm text-muted-foreground">
-                  " {transcript} "
-                </div>
-              )}
-            </div>
-          )}
-
-          <DialogFooter className="flex gap-2 sm:justify-end">
-            <Button variant="outline" onClick={cancelUpdate} className="flex gap-2">
-              <X className="h-4 w-4" /> Cancelar
-            </Button>
-            <Button onClick={confirmUpdate} className="flex gap-2 bg-green-600 hover:bg-green-700">
-              <Check className="h-4 w-4" /> Confirmar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      {/* Voice Confirmation Dialog */}
-      <Dialog open={!!pendingConfirmation} onOpenChange={(open) => !open && cancelUpdate()}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Confirmar Atualização de Voz</DialogTitle>
-            <DialogDescription>
-              A IA interpretou seu comando. Confirme os dados abaixo:
-            </DialogDescription>
-          </DialogHeader>
-
-          {pendingConfirmation && (
-            <div className="space-y-4 py-4">
-              <div className="flex flex-col gap-1 p-4 bg-muted rounded-lg border border-primary/10">
-                <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Item</span>
-                <span className="font-semibold text-lg">{pendingConfirmation.itemName}</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1 p-4 bg-muted rounded-lg border border-primary/10">
-                  <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Quantidade</span>
-                  <span className="font-semibold text-lg">
-                    {pendingConfirmation.quantity ?? '---'} {pendingConfirmation.unit}
-                  </span>
-                </div>
-
-                <div className="flex flex-col gap-1 p-4 bg-muted rounded-lg border border-primary/10">
-                  <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Validade</span>
-                  <span className="font-semibold text-lg">
-                    {pendingConfirmation.expirationDate
-                      ? new Date(pendingConfirmation.expirationDate + 'T12:00:00').toLocaleDateString('pt-BR')
-                      : '---'}
-                  </span>
-                </div>
-              </div>
-
-              {transcript && (
-                <div className="p-3 bg-secondary/30 rounded italic text-sm text-muted-foreground border-l-4 border-primary/30">
-                  " {transcript} "
-                </div>
-              )}
-            </div>
-          )}
-
-          <DialogFooter className="flex gap-2 sm:justify-end">
-            <Button variant="outline" onClick={cancelUpdate} className="flex gap-2">
-              <X className="h-4 w-4" /> Cancelar
-            </Button>
-            <Button onClick={confirmUpdate} className="flex gap-2 bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-600/20 transition-all hover:scale-105 active:scale-95">
-              <Check className="h-4 w-4" /> Confirmar Alteração
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
       {/* Voice Confirmation Dialog */}
       <Dialog open={!!pendingConfirmation} onOpenChange={(open) => !open && cancelUpdate()}>
         <DialogContent className="sm:max-w-md">

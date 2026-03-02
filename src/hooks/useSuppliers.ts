@@ -42,6 +42,7 @@ export function useSuppliers() {
         const data = await supabaseFetch('suppliers', {
           method: 'POST',
           headers: {
+            'Content-Type': 'application/json',
             'Prefer': 'return=representation'
           },
           body: JSON.stringify({ ...supplier, user_id: ownerId })
@@ -66,6 +67,7 @@ export function useSuppliers() {
         const data = await supabaseFetch(`suppliers?id=eq.${id}`, {
           method: 'PATCH',
           headers: {
+            'Content-Type': 'application/json',
             'Prefer': 'return=representation'
           },
           body: JSON.stringify(updates)
@@ -86,11 +88,9 @@ export function useSuppliers() {
 
   const deleteSupplier = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('suppliers')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
+      await supabaseFetch(`suppliers?id=eq.${id}`, {
+        method: 'DELETE'
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });

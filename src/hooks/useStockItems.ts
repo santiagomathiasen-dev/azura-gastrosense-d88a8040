@@ -72,6 +72,7 @@ export function useStockItems() {
         const data = await supabaseFetch('stock_items', {
           method: 'POST',
           headers: {
+            'Content-Type': 'application/json',
             'Prefer': 'return=representation'
           },
           body: JSON.stringify({ ...item, user_id: ownerId })
@@ -95,6 +96,10 @@ export function useStockItems() {
       try {
         await supabaseFetch(`stock_items?id=eq.${id}`, {
           method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+          },
           body: JSON.stringify(updates)
         });
         return null;
@@ -113,11 +118,9 @@ export function useStockItems() {
 
   const deleteItem = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('stock_items')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
+      await supabaseFetch(`stock_items?id=eq.${id}`, {
+        method: 'DELETE'
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['stock_items'] });
@@ -142,6 +145,9 @@ export function useStockItems() {
       try {
         await supabaseFetch('stock_items', {
           method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
           body: JSON.stringify(itemsWithUser)
         });
         return null;

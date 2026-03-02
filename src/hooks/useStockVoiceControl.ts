@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { StockItem } from './useStockItems';
 import { addDays, format, isValid } from 'date-fns';
 import { getNow } from '@/lib/utils';
+import { supabaseFetch } from '@/lib/supabase-fetch';
 
 // Speech Recognition types
 interface SpeechRecognitionEvent extends Event {
@@ -187,19 +188,20 @@ export function useStockVoiceControl({ stockItems, onQuantityUpdate, onExpiryUpd
 
   // Find item by name in voice input
   const findItemByVoice = useCallback((text: string): StockItem | null => {
-    const cleanText = text.toLowerCase().trim();
+    const cleanText = text.toLowerCase().trim().replace(/s$/, ''); // Basic singularization
 
     // Try exact match first
-    const exactMatch = stockItems.find(item =>
-      cleanText.includes(item.name.toLowerCase())
-    );
+    const exactMatch = stockItems.find(item => {
+      const itemName = item.name.toLowerCase().trim();
+      return cleanText === itemName || cleanText.includes(itemName) || itemName.includes(cleanText);
+    });
     if (exactMatch) return exactMatch;
 
-    // Try partial match
+    // Try partial match with words
     for (const item of stockItems) {
-      const itemWords = item.name.toLowerCase().split(' ');
+      const itemWords = item.name.toLowerCase().split(' ').filter(w => w.length > 2);
       for (const word of itemWords) {
-        if (word.length > 2 && cleanText.includes(word)) {
+        if (cleanText.includes(word)) {
           return item;
         }
       }
@@ -227,118 +229,6 @@ export function useStockVoiceControl({ stockItems, onQuantityUpdate, onExpiryUpd
       recognition.abort();
     };
   }, [isSupported, clearVoiceTimeout]);
-
-  // Setup event handlers separately to avoid recreating recognition
-  useEffect(() => {
-    const recognition = recognitionRef.current;
-    if (!recognition) return;
-
-    recognition.onresult = async (event: SpeechRecognitionEvent) => {
-      let finalTranscript = '';
-      let interimTranscript = '';
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const resultTranscript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += resultTranscript;
-        } else {
-          interimTranscript += resultTranscript;
-        }
-      }
-
-      // Reset timeout on every speech event
-      resetVoiceTimeout();
-      setTranscript(finalTranscript || interimTranscript);
-
-      if (event.results[event.results.length - 1].isFinal && finalTranscript.trim()) {
-        const cleanFinal = finalTranscript.toLowerCase().trim();
-        const currentActiveItemId = activeItemId;
-
-        // Stop listening to process with AI
-        stopListening();
-        toast.info('Processando áudio com IA...');
-
-        try {
-          const now = new Date();
-          const dateContext = `Data atual: ${now.toLocaleDateString('pt-BR')} (${now.toLocaleDateString('pt-BR', { weekday: 'long' })}).`;
-
-          const systemPrompt = `${dateContext}
-Você é um assistente que atualiza itens de estoque a partir de áudio.
-Determine o item mencionado e extraia a quantidade (que deve ser número decimal caso falarem "vírgula") e a validade (YYYY-MM-DD ou null).
-Retorne APENAS um array JSON: [{"name": string, "quantity": number, "expiration_date": string | null}]`;
-
-          const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-voice-text`;
-          console.log("Calling process-voice-text (stock control):", functionUrl);
-
-          const response = await fetch(functionUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-              'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
-            },
-            body: JSON.stringify({ text: cleanFinal, systemPrompt })
-          });
-
-          if (!response.ok) {
-            throw new Error(`Cloud Error: ${response.status}`);
-          }
-
-          const data = await response.json();
-
-          if (data && data.error) {
-            console.error('Voice process logic error:', data.error);
-            throw new Error(`Erro na IA: ${data.error}`);
-          }
-
-          if (!data || !data.ingredients || data.ingredients.length === 0) {
-            console.error('Voice process returned no ingredients. Data:', data);
-            throw new Error('Não consegui entender o comando ou extrair ingredientes.');
-          }
-
-          const extracted = data.ingredients[0];
-
-          // Match extracted item with stockItems
-          const item = currentActiveItemId
-            ? stockItems.find(i => i.id === currentActiveItemId)
-            : findItemByVoice(extracted.name);
-
-          if (item) {
-            const pending: PendingVoiceUpdate = {
-              itemId: item.id,
-              itemName: item.name,
-              quantity: extracted.quantity ?? undefined,
-              expirationDate: extracted.expiration_date ?? undefined,
-              unit: item.unit
-            };
-            setPendingConfirmation(pending);
-          } else {
-            toast.error(`Não encontrei o item "${extracted.name}"`);
-          }
-        } catch (err) {
-          console.error('Erro no processamento de voz AI:', err);
-          toast.error('Erro ao processar áudio. Tente novamente.');
-        } finally {
-          setActiveItemId(null);
-          setTranscript('');
-        }
-      }
-    };
-
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.error('Speech recognition error:', event.error);
-      clearVoiceTimeout();
-      if (event.error !== 'no-speech' && event.error !== 'aborted') {
-        setIsListening(false);
-        setActiveItemId(null);
-      }
-    };
-
-    recognition.onend = () => {
-      clearVoiceTimeout();
-      setIsListening(false);
-    };
-  }, [activeItemId, parseQuantity, parseDate, parseUnit, findItemByVoice, stockItems, onQuantityUpdate, onExpiryUpdate, resetVoiceTimeout, clearVoiceTimeout]);
 
   const startListening = useCallback((itemId?: string) => {
     if (!recognitionRef.current) return;
@@ -378,6 +268,117 @@ Retorne APENAS um array JSON: [{"name": string, "quantity": number, "expiration_
     setIsListening(false);
     // Don't clear transcripts here if we just stopped to process
   }, [clearVoiceTimeout]);
+
+  // Setup event handlers separately to avoid recreating recognition
+  useEffect(() => {
+    const recognition = recognitionRef.current;
+    if (!recognition) return;
+
+    recognition.onresult = async (event: SpeechRecognitionEvent) => {
+      let finalTranscript = '';
+      let interimTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const resultTranscript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += resultTranscript;
+        } else {
+          interimTranscript += resultTranscript;
+        }
+      }
+
+      // Reset timeout on every speech event
+      resetVoiceTimeout();
+      setTranscript(finalTranscript || interimTranscript);
+
+      if (event.results[event.results.length - 1].isFinal && finalTranscript.trim()) {
+        const cleanFinal = finalTranscript.toLowerCase().trim();
+        const currentActiveItemId = activeItemId;
+
+        // Stop listening to process with AI
+        stopListening();
+        toast.info('Processando áudio com IA...');
+
+        try {
+          const now = new Date();
+          const dateContext = `Data atual: ${now.toLocaleDateString('pt-BR')} (${now.toLocaleDateString('pt-BR', { weekday: 'long' })}).`;
+
+          const systemPrompt = `${dateContext}
+Você é um assistente que atualiza itens de estoque a partir de áudio.
+Determine o item mencionado e extraia a quantidade (que deve ser número decimal caso falarem "vírgula") e a validade (YYYY-MM-DD ou null).
+Retorne APENAS um objeto JSON: {"ingredients": [{"name": string, "quantity": number, "expiration_date": string | null}]}
+IMPORTANTE: Retorne um OBJETO contendo a chave "ingredients", não um array diretamente.`;
+
+          console.log("Calling process-voice-text (stock control) via supabaseFetch");
+          const data = await supabaseFetch('functions/v1/process-voice-text', {
+            method: 'POST',
+            body: JSON.stringify({ text: cleanFinal, systemPrompt })
+          });
+
+          console.log("Voice process output:", data);
+
+          if (data && data.error) {
+            console.error('Voice process logic error:', data.error);
+            throw new Error(`Erro na IA: ${data.error}`);
+          }
+
+          if (!data || !data.ingredients || data.ingredients.length === 0) {
+            console.error('Voice process returned no ingredients. Data:', data);
+            throw new Error('Não consegui entender o comando ou extrair ingredientes.');
+          }
+
+          const extracted = data.ingredients && data.ingredients.length > 0
+            ? data.ingredients[0]
+            : (Array.isArray(data) && data.length > 0 ? data[0] : null);
+
+          if (!extracted) {
+            console.error('No extracted data found in:', data);
+            throw new Error('Não consegui extrair informações do áudio.');
+          }
+
+          // Match extracted item with stockItems
+          const item = currentActiveItemId
+            ? stockItems.find(i => i.id === currentActiveItemId)
+            : findItemByVoice(extracted.name);
+
+          if (item) {
+            console.log("Matched item:", item.name);
+            const pending: PendingVoiceUpdate = {
+              itemId: item.id,
+              itemName: item.name,
+              quantity: extracted.quantity ?? undefined,
+              expirationDate: extracted.expiration_date ?? undefined,
+              unit: item.unit
+            };
+            setPendingConfirmation(pending);
+          } else {
+            console.warn("Item not found for name:", extracted.name);
+            toast.error(`Não encontrei o item "${extracted.name}"`);
+          }
+        } catch (err) {
+          console.error('Erro no processamento de voz AI:', err);
+          toast.error('Erro ao processar áudio. Tente novamente.');
+        } finally {
+          setActiveItemId(null);
+          setTranscript('');
+        }
+      }
+    };
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.error('Speech recognition error:', event.error);
+      clearVoiceTimeout();
+      if (event.error !== 'no-speech' && event.error !== 'aborted') {
+        setIsListening(false);
+        setActiveItemId(null);
+      }
+    };
+
+    recognition.onend = () => {
+      clearVoiceTimeout();
+      setIsListening(false);
+    };
+  }, [activeItemId, parseQuantity, parseDate, parseUnit, findItemByVoice, stockItems, onQuantityUpdate, onExpiryUpdate, resetVoiceTimeout, clearVoiceTimeout, stopListening]);
 
   const toggleListening = useCallback((itemId?: string) => {
     if (isListening) {

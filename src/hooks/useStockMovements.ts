@@ -4,6 +4,7 @@ import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
+import { supabaseFetch } from '@/lib/supabase-fetch';
 
 type StockMovement = Database['public']['Tables']['stock_movements']['Row'];
 type StockMovementInsert = Database['public']['Tables']['stock_movements']['Insert'];
@@ -61,47 +62,64 @@ export function useStockMovements(stockItemId?: string) {
       if (!ownerId) throw new Error('Usuário não autenticado');
 
       // 1. Create the movement
-      const { data, error } = await supabase
-        .from('stock_movements')
-        .insert({ ...movement, user_id: ownerId })
-        .select()
-        .single();
-
-      if (error) throw error;
+      let movementData: any;
+      try {
+        movementData = await supabaseFetch('stock_movements', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify({ ...movement, user_id: ownerId })
+        });
+        if (Array.isArray(movementData)) movementData = movementData[0];
+      } catch (err: any) {
+        console.error("Error creating movement:", err);
+        throw err;
+      }
 
       // 2. Process deductions or adjustments to sync batches
       if (movement.type === 'exit' && deductions && deductions.length > 0) {
         for (const deduction of deductions) {
-          const { data: batch } = await supabase
-            .from('item_expiry_dates' as any)
-            .select('quantity')
-            .eq('id', deduction.id)
-            .single();
+          try {
+            const batch = await supabaseFetch(`item_expiry_dates?id=eq.${deduction.id}`);
+            const batchData = Array.isArray(batch) ? batch[0] : batch;
 
-          if (batch) {
-            const currentQty = (batch as any).quantity;
-            const newQty = Math.max(0, Number(currentQty) - deduction.quantity);
-            await supabase
-              .from('item_expiry_dates' as any)
-              .update({ quantity: newQty } as any)
-              .eq('id', deduction.id);
+            if (batchData) {
+              const currentQty = Number(batchData.quantity);
+              const newQty = Math.max(0, currentQty - deduction.quantity);
+
+              await supabaseFetch(`item_expiry_dates?id=eq.${deduction.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ quantity: newQty })
+              });
+            }
+          } catch (err) {
+            console.error("Error updating batch qty:", err);
           }
         }
       } else if (movement.type === 'adjustment' && movement.quantity === 0) {
         // If adjusted to zero, clear ALL batches for this item
-        await supabase
-          .from('item_expiry_dates' as any)
-          .update({ quantity: 0 } as any)
-          .eq('stock_item_id', movement.stock_item_id);
+        try {
+          await supabaseFetch(`item_expiry_dates?stock_item_id=eq.${movement.stock_item_id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ quantity: 0 })
+          });
 
-        // ALSO clear the legacy expiration_date in stock_items to prevent phantom alerts
-        await supabase
-          .from('stock_items')
-          .update({ expiration_date: null })
-          .eq('id', movement.stock_item_id);
+          // ALSO clear the legacy expiration_date in stock_items to prevent phantom alerts
+          await supabaseFetch(`stock_items?id=eq.${movement.stock_item_id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ expiration_date: null })
+          });
+        } catch (err) {
+          console.error("Error clearing batches/expiry info:", err);
+        }
       }
 
-      return data;
+      return movementData;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['stock_movements'] });

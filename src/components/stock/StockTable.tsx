@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { MoreHorizontal, Pencil, Trash2, ArrowUpDown, Check, X, ArrowRightLeft, Calendar } from 'lucide-react';
+import { MoreHorizontal, Pencil, Trash2, ArrowUpDown, Check, X, ArrowRightLeft, Calendar, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -54,6 +54,9 @@ export function StockTable({
   onCountedQuantityChange,
   onTransfer,
   onManageBatches,
+  isVoiceActive,
+  activeVoiceItemId,
+  onVoiceToggle,
   expiryMap = {}
 }: StockTableProps) {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -116,6 +119,19 @@ export function StockTable({
             )}
             actions={
               <div className="flex items-center gap-1">
+                {onVoiceToggle && (
+                  <Button
+                    variant={isVoiceActive && activeVoiceItemId === item.id ? "destructive" : "outline"}
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onVoiceToggle(item.id);
+                    }}
+                    className={cn(isVoiceActive && activeVoiceItemId === item.id && "animate-pulse")}
+                  >
+                    <Mic className="h-4 w-4" />
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="sm"

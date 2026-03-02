@@ -4,6 +4,7 @@ import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
+import { supabaseFetch } from '@/lib/supabase-fetch';
 
 type SaleComponentType = Database['public']['Enums']['sale_component_type'];
 
@@ -51,20 +52,18 @@ export function useSaleProducts() {
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
 
-      const { data, error } = await supabase
-        .from('sale_products')
-        .select(`
-          *,
-          components:sale_product_components(*)
-        `)
-        .order('name', { ascending: true });
-      if (error) throw error;
+      try {
+        const data = await supabaseFetch('sale_products?select=*,components:sale_product_components(*)&order=name.asc');
 
-      return (data || []).map(p => ({
-        ...p,
-        minimum_stock: Number(p.minimum_stock || 0),
-        sale_price: p.sale_price ? Number(p.sale_price) : null,
-      })) as SaleProduct[];
+        return (data || []).map((p: any) => ({
+          ...p,
+          minimum_stock: Number(p.minimum_stock || 0),
+          sale_price: p.sale_price ? Number(p.sale_price) : null,
+        })) as SaleProduct[];
+      } catch (err) {
+        console.error("Error fetching sale products:", err);
+        throw err;
+      }
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
   });
@@ -84,9 +83,10 @@ export function useSaleProducts() {
       if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
       if (!ownerId) throw new Error('Usuário não autenticado');
 
-      const { data: product, error: productError } = await supabase
-        .from('sale_products')
-        .insert({
+      const product = await supabaseFetch('sale_products', {
+        method: 'POST',
+        headers: { 'Prefer': 'return=representation' },
+        body: JSON.stringify({
           user_id: ownerId,
           name: data.name,
           description: data.description,
@@ -94,27 +94,26 @@ export function useSaleProducts() {
           image_url: data.image_url,
           minimum_stock: data.minimum_stock || 0,
         })
-        .select()
-        .single();
-      if (productError) throw productError;
+      });
+      const productId = Array.isArray(product) ? product[0].id : product.id;
 
       if (data.components.length > 0) {
         const componentsToInsert = data.components.map(c => ({
           user_id: ownerId,
-          sale_product_id: product.id,
+          sale_product_id: productId,
           component_type: c.component_type,
           component_id: c.component_id,
           quantity: c.quantity,
           unit: c.unit,
         }));
 
-        const { error: componentsError } = await supabase
-          .from('sale_product_components')
-          .insert(componentsToInsert);
-        if (componentsError) throw componentsError;
+        await supabaseFetch('sale_product_components', {
+          method: 'POST',
+          body: JSON.stringify(componentsToInsert)
+        });
       }
 
-      return product;
+      return Array.isArray(product) ? product[0] : product;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sale_products'] });
@@ -151,16 +150,17 @@ export function useSaleProducts() {
         } = updates as any;
 
         if (Object.keys(validUpdates).length > 0) {
-          const { error } = await supabase
-            .from('sale_products')
-            .update(validUpdates)
-            .eq('id', id);
-          if (error) throw error;
+          await supabaseFetch(`sale_products?id=eq.${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(validUpdates)
+          });
         }
       }
 
       if (components !== undefined) {
-        await supabase.from('sale_product_components').delete().eq('sale_product_id', id);
+        await supabaseFetch(`sale_product_components?sale_product_id=eq.${id}`, {
+          method: 'DELETE'
+        });
 
         if (components.length > 0) {
           const componentsToInsert = components.map(c => ({
@@ -172,10 +172,10 @@ export function useSaleProducts() {
             unit: c.unit,
           }));
 
-          const { error: componentsError } = await supabase
-            .from('sale_product_components')
-            .insert(componentsToInsert);
-          if (componentsError) throw componentsError;
+          await supabaseFetch('sale_product_components', {
+            method: 'POST',
+            body: JSON.stringify(componentsToInsert)
+          });
         }
       }
     },
@@ -190,11 +190,9 @@ export function useSaleProducts() {
 
   const deleteSaleProduct = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('sale_products')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
+      await supabaseFetch(`sale_products?id=eq.${id}`, {
+        method: 'DELETE'
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sale_products'] });
@@ -221,18 +219,12 @@ export function useSaleProducts() {
         const neededTotalQty = Number(component.quantity) * quantity;
 
         if (component.component_type === 'finished_production') {
-          const { data: stock } = await supabase
-            .from('finished_productions_stock')
-            .select('id, quantity')
-            .eq('technical_sheet_id', component.component_id)
-            .maybeSingle();
+          const stockData = await supabaseFetch(`finished_productions_stock?technical_sheet_id=eq.${component.component_id}&select=id,quantity`);
+          const stock = Array.isArray(stockData) ? stockData[0] : stockData;
 
           if (!stock || Number(stock.quantity) < neededTotalQty) {
-            const { data: sheet } = await supabase
-              .from('technical_sheets')
-              .select('name')
-              .eq('id', component.component_id)
-              .single();
+            const sheetData = await supabaseFetch(`technical_sheets?id=eq.${component.component_id}&select=name`);
+            const sheet = Array.isArray(sheetData) ? sheetData[0] : sheetData;
 
             insufficientItems.push({
               id: component.component_id,
@@ -245,31 +237,22 @@ export function useSaleProducts() {
 
           const newQty = Number(stock.quantity) - neededTotalQty;
           if (newQty <= 0) {
-            const { error: deleteError } = await supabase
-              .from('finished_productions_stock')
-              .delete()
-              .eq('id', stock.id);
-            if (deleteError) throw deleteError;
+            await supabaseFetch(`finished_productions_stock?id=eq.${stock.id}`, {
+              method: 'DELETE'
+            });
           } else {
-            const { error: updateError } = await supabase
-              .from('finished_productions_stock')
-              .update({ quantity: newQty })
-              .eq('id', stock.id);
-            if (updateError) throw updateError;
+            await supabaseFetch(`finished_productions_stock?id=eq.${stock.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ quantity: newQty })
+            });
           }
         } else if (component.component_type === 'stock_item') {
-          const { data: prodStock } = await supabase
-            .from('production_stock')
-            .select('id, quantity, stock_item:stock_items(name)')
-            .eq('stock_item_id', component.component_id)
-            .maybeSingle();
+          const prodStockData = await supabaseFetch(`production_stock?stock_item_id=eq.${component.component_id}&select=id,quantity,stock_item:stock_items(name)`);
+          const prodStock = Array.isArray(prodStockData) ? prodStockData[0] : prodStockData;
 
           if (!prodStock || Number(prodStock.quantity) < neededTotalQty) {
-            const { data: stockItem } = await supabase
-              .from('stock_items')
-              .select('name')
-              .eq('id', component.component_id)
-              .single();
+            const stockItemData = await supabaseFetch(`stock_items?id=eq.${component.component_id}&select=name`);
+            const stockItem = Array.isArray(stockItemData) ? stockItemData[0] : stockItemData;
 
             insufficientItems.push({
               id: component.component_id,
@@ -282,24 +265,18 @@ export function useSaleProducts() {
 
           const newProdQty = Number(prodStock.quantity) - neededTotalQty;
           if (newProdQty <= 0) {
-            const { error: deleteError } = await supabase
-              .from('production_stock')
-              .delete()
-              .eq('id', prodStock.id);
-            if (deleteError) throw deleteError;
+            await supabaseFetch(`production_stock?id=eq.${prodStock.id}`, {
+              method: 'DELETE'
+            });
           } else {
-            const { error: updateError } = await supabase
-              .from('production_stock')
-              .update({ quantity: newProdQty })
-              .eq('id', prodStock.id);
-            if (updateError) throw updateError;
+            await supabaseFetch(`production_stock?id=eq.${prodStock.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ quantity: newProdQty })
+            });
           }
         } else if (component.component_type === 'sale_product') {
-          const { data: otherProduct } = await supabase
-            .from('sale_products')
-            .select('id, ready_quantity, name')
-            .eq('id', component.component_id)
-            .single();
+          const otherProductData = await supabaseFetch(`sale_products?id=eq.${component.component_id}&select=id,ready_quantity,name`);
+          const otherProduct = Array.isArray(otherProductData) ? otherProductData[0] : otherProductData;
 
           if (!otherProduct || Number(otherProduct.ready_quantity) < neededTotalQty) {
             insufficientItems.push({
@@ -311,11 +288,10 @@ export function useSaleProducts() {
             continue;
           }
 
-          const { error: updateError } = await supabase
-            .from('sale_products')
-            .update({ ready_quantity: Number(otherProduct.ready_quantity) - neededTotalQty })
-            .eq('id', otherProduct.id);
-          if (updateError) throw updateError;
+          await supabaseFetch(`sale_products?id=eq.${otherProduct.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ ready_quantity: Number(otherProduct.ready_quantity) - neededTotalQty })
+          });
         }
       }
 
@@ -330,16 +306,13 @@ export function useSaleProducts() {
           resolved: false,
         }));
 
-        const { error: alertError } = await supabase
-          .from('preparation_alerts')
-          .insert(alertsToInsert);
+        await supabaseFetch('preparation_alerts', {
+          method: 'POST',
+          body: JSON.stringify(alertsToInsert)
+        });
 
-        if (alertError) {
-          console.error('Error recording preparation alerts:', alertError);
-        } else {
-          // Invalidate alerts query to update dashboard immediately
-          queryClient.invalidateQueries({ queryKey: ['preparation_alerts'] });
-        }
+        // Invalidate alerts query to update dashboard immediately
+        queryClient.invalidateQueries({ queryKey: ['preparation_alerts'] });
 
         const error = new Error(`Estoque insuficiente`);
         (error as any).insufficientItems = insufficientItems;
@@ -347,11 +320,10 @@ export function useSaleProducts() {
       }
 
       // Increment ready_quantity by the full amount
-      const { error: finalUpdateError } = await supabase
-        .from('sale_products')
-        .update({ ready_quantity: (product.ready_quantity || 0) + quantity })
-        .eq('id', sale_product_id);
-      if (finalUpdateError) throw finalUpdateError;
+      await supabaseFetch(`sale_products?id=eq.${sale_product_id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ ready_quantity: (product.ready_quantity || 0) + quantity })
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sale_products'] });
@@ -378,21 +350,20 @@ export function useSaleProducts() {
       }
 
       // Decrement ready_quantity
-      const { error: updateError } = await supabase
-        .from('sale_products')
-        .update({ ready_quantity: product.ready_quantity - 1 })
-        .eq('id', sale_product_id);
-      if (updateError) throw updateError;
+      await supabaseFetch(`sale_products?id=eq.${sale_product_id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ ready_quantity: product.ready_quantity - 1 })
+      });
 
       // Record the sale
-      const { error: saleError } = await supabase
-        .from('sales')
-        .insert({
+      await supabaseFetch('sales', {
+        method: 'POST',
+        body: JSON.stringify({
           user_id: ownerId,
           sale_product_id: sale_product_id,
           quantity_sold: 1,
-        });
-      if (saleError) throw saleError;
+        })
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sale_products'] });
@@ -414,11 +385,10 @@ export function useSaleProducts() {
       if (!product) throw new Error('Produto não encontrado');
 
       // Increment ready_quantity (product returns to ready stock)
-      const { error: updateError } = await supabase
-        .from('sale_products')
-        .update({ ready_quantity: (product.ready_quantity || 0) + 1 })
-        .eq('id', sale_product_id);
-      if (updateError) throw updateError;
+      await supabaseFetch(`sale_products?id=eq.${sale_product_id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ ready_quantity: (product.ready_quantity || 0) + 1 })
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sale_products'] });
@@ -443,16 +413,15 @@ export function useSaleProducts() {
       }
 
       // Decrement ready_quantity (loss)
-      const { error: updateError } = await supabase
-        .from('sale_products')
-        .update({ ready_quantity: product.ready_quantity - 1 })
-        .eq('id', sale_product_id);
-      if (updateError) throw updateError;
+      await supabaseFetch(`sale_products?id=eq.${sale_product_id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ ready_quantity: product.ready_quantity - 1 })
+      });
 
       // Record the loss in the losses table
-      const { error: lossError } = await supabase
-        .from('losses')
-        .insert({
+      await supabaseFetch('losses', {
+        method: 'POST',
+        body: JSON.stringify({
           user_id: ownerId,
           source_type: 'sale_product',
           source_id: sale_product_id,
@@ -460,8 +429,8 @@ export function useSaleProducts() {
           quantity: 1,
           unit: 'unidade',
           estimated_value: product.sale_price || 0,
-        });
-      if (lossError) throw lossError;
+        })
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sale_products'] });
@@ -489,18 +458,12 @@ export function useSaleProducts() {
         const neededTotalQty = Number(component.quantity) * quantity;
 
         if (component.component_type === 'finished_production') {
-          const { data: stock } = await supabase
-            .from('finished_productions_stock')
-            .select('id, quantity')
-            .eq('technical_sheet_id', component.component_id)
-            .maybeSingle();
+          const stockResult = await supabaseFetch(`finished_productions_stock?technical_sheet_id=eq.${component.component_id}&select=id,quantity`);
+          const stock = Array.isArray(stockResult) ? stockResult[0] : stockResult;
 
           if (!stock || Number(stock.quantity) < neededTotalQty) {
-            const { data: sheet } = await supabase
-              .from('technical_sheets')
-              .select('name')
-              .eq('id', component.component_id)
-              .single();
+            const sheetResult = await supabaseFetch(`technical_sheets?id=eq.${component.component_id}&select=name`);
+            const sheet = Array.isArray(sheetResult) ? sheetResult[0] : sheetResult;
 
             insufficientItems.push({
               id: component.component_id,
@@ -513,31 +476,20 @@ export function useSaleProducts() {
 
           const newQty = Number(stock.quantity) - neededTotalQty;
           if (newQty <= 0) {
-            const { error: deleteError } = await supabase
-              .from('finished_productions_stock')
-              .delete()
-              .eq('id', stock.id);
-            if (deleteError) throw deleteError;
+            await supabaseFetch(`finished_productions_stock?id=eq.${stock.id}`, { method: 'DELETE' });
           } else {
-            const { error: updateError } = await supabase
-              .from('finished_productions_stock')
-              .update({ quantity: newQty })
-              .eq('id', stock.id);
-            if (updateError) throw updateError;
+            await supabaseFetch(`finished_productions_stock?id=eq.${stock.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ quantity: newQty })
+            });
           }
         } else if (component.component_type === 'stock_item') {
-          const { data: prodStock } = await supabase
-            .from('production_stock')
-            .select('id, quantity, stock_item:stock_items(name)')
-            .eq('stock_item_id', component.component_id)
-            .maybeSingle();
+          const prodStockResult = await supabaseFetch(`production_stock?stock_item_id=eq.${component.component_id}&select=id,quantity`);
+          const prodStock = Array.isArray(prodStockResult) ? prodStockResult[0] : prodStockResult;
 
           if (!prodStock || Number(prodStock.quantity) < neededTotalQty) {
-            const { data: stockItem } = await supabase
-              .from('stock_items')
-              .select('name')
-              .eq('id', component.component_id)
-              .single();
+            const stockItemResult = await supabaseFetch(`stock_items?id=eq.${component.component_id}&select=name`);
+            const stockItem = Array.isArray(stockItemResult) ? stockItemResult[0] : stockItemResult;
 
             insufficientItems.push({
               id: component.component_id,
@@ -550,40 +502,31 @@ export function useSaleProducts() {
 
           const newProdQty = Number(prodStock.quantity) - neededTotalQty;
           if (newProdQty <= 0) {
-            const { error: deleteError } = await supabase
-              .from('production_stock')
-              .delete()
-              .eq('id', prodStock.id);
-            if (deleteError) throw deleteError;
+            await supabaseFetch(`production_stock?id=eq.${prodStock.id}`, { method: 'DELETE' });
           } else {
-            const { error: updateError } = await supabase
-              .from('production_stock')
-              .update({ quantity: newProdQty })
-              .eq('id', prodStock.id);
-            if (updateError) throw updateError;
+            await supabaseFetch(`production_stock?id=eq.${prodStock.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ quantity: newProdQty })
+            });
           }
         } else if (component.component_type === 'sale_product') {
-          const { data: otherProduct } = await supabase
-            .from('sale_products')
-            .select('id, ready_quantity, name')
-            .eq('id', component.component_id)
-            .single();
+          const otherProductResult = await supabaseFetch(`sale_products?id=eq.${component.component_id}&select=id,ready_quantity,name`);
+          const otherProduct = Array.isArray(otherProductResult) ? otherProductResult[0] : otherProductResult;
 
           if (!otherProduct || Number(otherProduct.ready_quantity) < neededTotalQty) {
             insufficientItems.push({
               id: component.component_id,
               name: otherProduct?.name || 'Produto desconhecido',
               type: 'sale_product',
-              amount: neededTotalQty - (Number(otherProduct?.ready_quantity) || 0)
+              amount: Math.max(0, neededTotalQty - (Number(otherProduct?.ready_quantity) || 0))
             });
             continue;
           }
 
-          const { error: updateError } = await supabase
-            .from('sale_products')
-            .update({ ready_quantity: Number(otherProduct.ready_quantity) - neededTotalQty })
-            .eq('id', otherProduct.id);
-          if (updateError) throw updateError;
+          await supabaseFetch(`sale_products?id=eq.${otherProduct.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ ready_quantity: Number(otherProduct.ready_quantity) - neededTotalQty })
+          });
         }
       }
 
@@ -597,7 +540,10 @@ export function useSaleProducts() {
           missing_quantity: item.amount,
           resolved: false,
         }));
-        await supabase.from('preparation_alerts').insert(alertsToInsert);
+        await supabaseFetch('preparation_alerts', {
+          method: 'POST',
+          body: JSON.stringify(alertsToInsert)
+        });
         queryClient.invalidateQueries({ queryKey: ['preparation_alerts'] });
 
         const error = new Error(`Estoque insuficiente`);
@@ -606,14 +552,14 @@ export function useSaleProducts() {
       }
 
       // Record Sale Directly
-      const { error: saleError } = await supabase
-        .from('sales')
-        .insert({
+      await supabaseFetch('sales', {
+        method: 'POST',
+        body: JSON.stringify({
           user_id: ownerId,
           sale_product_id: sale_product_id,
           quantity_sold: quantity,
-        });
-      if (saleError) throw saleError;
+        })
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sale_products'] });

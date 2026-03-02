@@ -4,6 +4,7 @@ import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
 import type { StockItem } from './useStockItems';
+import { supabaseFetch } from '@/lib/supabase-fetch';
 
 export interface StockRequest {
   id: string;
@@ -28,15 +29,13 @@ export function useStockRequests() {
     queryKey: ['stock_requests', ownerId],
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
-      const { data, error } = await supabase
-        .from('stock_requests')
-        .select(`
-          *,
-          stock_item:stock_items(*)
-        `)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data as (StockRequest & { stock_item: StockItem })[];
+      try {
+        const data = await supabaseFetch('stock_requests?select=*,stock_item:stock_items(*)&order=created_at.desc');
+        return data as (StockRequest & { stock_item: StockItem })[];
+      } catch (err) {
+        console.error("Error fetching stock requests:", err);
+        throw err;
+      }
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
   });
@@ -51,56 +50,52 @@ export function useStockRequests() {
       if (!ownerId) throw new Error('Usuário não autenticado');
 
       // Check central stock availability
-      const { data: centralItem, error: centralError } = await supabase
-        .from('stock_items')
-        .select('current_quantity, minimum_quantity, supplier_id')
-        .eq('id', stockItemId)
-        .single();
-      if (centralError) throw centralError;
+      const itemData = await supabaseFetch(`stock_items?id=eq.${stockItemId}&select=current_quantity,minimum_quantity,supplier_id`);
+      const centralItem = Array.isArray(itemData) ? itemData[0] : itemData;
 
       const currentQty = Number(centralItem?.current_quantity || 0);
       const shortfall = quantity - currentQty;
 
       // Create the stock request
-      const { error } = await supabase
-        .from('stock_requests')
-        .insert({
+      await supabaseFetch('stock_requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           user_id: ownerId,
           stock_item_id: stockItemId,
           requested_quantity: quantity,
           notes,
-        });
-      if (error) throw error;
+        })
+      });
 
       // If stock is insufficient, add shortfall to purchase list
       if (shortfall > 0) {
         // Check if item is already in purchase list (pending or ordered)
-        const { data: existingPurchase } = await supabase
-          .from('purchase_list_items')
-          .select('id, suggested_quantity')
-          .eq('stock_item_id', stockItemId)
-          .in('status', ['pending', 'ordered'])
-          .single();
+        const existingData = await supabaseFetch(`purchase_list_items?stock_item_id=eq.${stockItemId}&status=in.(pending,ordered)&select=id,suggested_quantity`);
+        const existingPurchase = Array.isArray(existingData) ? existingData[0] : existingData;
 
         if (existingPurchase) {
           // Update existing purchase item to increase quantity
-          await supabase
-            .from('purchase_list_items')
-            .update({ 
-              suggested_quantity: Number(existingPurchase.suggested_quantity) + shortfall 
+          await supabaseFetch(`purchase_list_items?id=eq.${existingPurchase.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              suggested_quantity: Number(existingPurchase.suggested_quantity) + shortfall
             })
-            .eq('id', existingPurchase.id);
+          });
         } else {
           // Create new purchase list item
-          await supabase
-            .from('purchase_list_items')
-            .insert({
+          await supabaseFetch('purchase_list_items', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
               user_id: ownerId,
               stock_item_id: stockItemId,
               suggested_quantity: shortfall,
               supplier_id: centralItem?.supplier_id || null,
               status: 'pending',
-            });
+            })
+          });
         }
 
         return { addedToPurchaseList: true, shortfall };
@@ -129,87 +124,79 @@ export function useStockRequests() {
       if (!ownerId) throw new Error('Usuário não autenticado');
 
       // Get the request
-      const { data: request, error: fetchError } = await supabase
-        .from('stock_requests')
-        .select('*')
-        .eq('id', requestId)
-        .single();
-      if (fetchError) throw fetchError;
+      const requestData = await supabaseFetch(`stock_requests?id=eq.${requestId}&select=*`);
+      const request = Array.isArray(requestData) ? requestData[0] : requestData;
       if (!request) throw new Error('Solicitação não encontrada');
 
       // Check if central stock has enough
-      const { data: centralItem, error: centralError } = await supabase
-        .from('stock_items')
-        .select('current_quantity')
-        .eq('id', request.stock_item_id)
-        .single();
-      if (centralError) throw centralError;
+      const itemData = await supabaseFetch(`stock_items?id=eq.${request.stock_item_id}&select=current_quantity`);
+      const centralItem = Array.isArray(itemData) ? itemData[0] : itemData;
       if (!centralItem || Number(centralItem.current_quantity) < deliverQuantity) {
         throw new Error('Quantidade insuficiente no estoque central');
       }
 
       // 1. Create exit movement from central stock
-      const { error: movementError } = await supabase
-        .from('stock_movements')
-        .insert({
+      await supabaseFetch('stock_movements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           stock_item_id: request.stock_item_id,
           user_id: ownerId,
           type: 'exit',
           quantity: deliverQuantity,
           source: 'manual',
           notes: `Entrega de solicitação #${requestId.slice(0, 8)}`,
-        });
-      if (movementError) throw movementError;
+        })
+      });
 
       // 2. Add to production stock (upsert)
-      const { data: existingProdStock } = await supabase
-        .from('production_stock')
-        .select('id, quantity')
-        .eq('stock_item_id', request.stock_item_id)
-        .single();
+      const prodStockData = await supabaseFetch(`production_stock?stock_item_id=eq.${request.stock_item_id}&select=id,quantity`);
+      const existingProdStock = Array.isArray(prodStockData) ? prodStockData[0] : prodStockData;
 
       if (existingProdStock) {
-        const { error: updateError } = await supabase
-          .from('production_stock')
-          .update({ quantity: Number(existingProdStock.quantity) + deliverQuantity })
-          .eq('id', existingProdStock.id);
-        if (updateError) throw updateError;
+        await supabaseFetch(`production_stock?id=eq.${existingProdStock.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quantity: Number(existingProdStock.quantity) + deliverQuantity })
+        });
       } else {
-        const { error: insertError } = await supabase
-          .from('production_stock')
-          .insert({
+        await supabaseFetch('production_stock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
             user_id: ownerId,
             stock_item_id: request.stock_item_id,
             quantity: deliverQuantity,
-          });
-        if (insertError) throw insertError;
+          })
+        });
       }
 
       // 3. Record transfer
-      const { error: transferError } = await supabase
-        .from('stock_transfers')
-        .insert({
+      await supabaseFetch('stock_transfers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           user_id: ownerId,
           stock_item_id: request.stock_item_id,
           quantity: deliverQuantity,
           direction: 'to_production',
           notes: `Entrega de solicitação #${requestId.slice(0, 8)}`,
-        });
-      if (transferError) throw transferError;
+        })
+      });
 
       // 4. Update request status
       const newDeliveredQty = Number(request.delivered_quantity) + deliverQuantity;
       const requestedQty = Number(request.requested_quantity);
       const newStatus = newDeliveredQty >= requestedQty ? 'completed' : 'partial';
 
-      const { error: updateRequestError } = await supabase
-        .from('stock_requests')
-        .update({
+      await supabaseFetch(`stock_requests?id=eq.${requestId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           delivered_quantity: newDeliveredQty,
           status: newStatus,
         })
-        .eq('id', requestId);
-      if (updateRequestError) throw updateRequestError;
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['stock_requests'] });
@@ -229,11 +216,11 @@ export function useStockRequests() {
       if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
       if (!ownerId) throw new Error('Usuário não autenticado');
 
-      const { error } = await supabase
-        .from('stock_requests')
-        .update({ status: 'cancelled' })
-        .eq('id', requestId);
-      if (error) throw error;
+      await supabaseFetch(`stock_requests?id=eq.${requestId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'cancelled' })
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['stock_requests'] });

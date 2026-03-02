@@ -29,6 +29,11 @@ export async function supabaseFetch(path: string, options: RequestInit = {}) {
     const headers = new Headers(options.headers);
     headers.set('apikey', supabaseKey);
 
+    // Set default Content-Type for requests with body if not already set
+    if (options.body && !headers.has('Content-Type')) {
+        headers.set('Content-Type', 'application/json');
+    }
+
     if (!headers.has('Authorization')) {
         try {
             // Extrai o project ref de forma robusta (ex: lqktevnjfywrujdhetlo)

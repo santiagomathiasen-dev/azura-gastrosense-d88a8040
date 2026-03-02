@@ -123,14 +123,10 @@ export function useCollaborators() {
       }
 
       // Update collaborators table
-      try {
-        await supabaseFetch(`collaborators?id=eq.${id}`, {
-          method: 'PATCH',
-          body: JSON.stringify(updateData)
-        });
-      } catch (collabError) {
-        throw collabError;
-      }
+      await supabaseFetch(`collaborators?id=eq.${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updateData)
+      });
 
       // Also update role in profiles table if it's connected to an auth user
       try {
@@ -183,14 +179,10 @@ export function useCollaborators() {
 
   const toggleActive = useMutation({
     mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
-      try {
-        await supabaseFetch(`collaborators?id=eq.${id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ is_active: isActive })
-        });
-      } catch (error) {
-        throw error;
-      }
+      await supabaseFetch(`collaborators?id=eq.${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_active: isActive })
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['collaborators'] });
@@ -199,14 +191,10 @@ export function useCollaborators() {
 
   const resetPin = useMutation({
     mutationFn: async (id: string) => {
-      try {
-        await supabaseFetch(`collaborators?id=eq.${id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ pin_hash: null })
-        });
-      } catch (error) {
-        throw error;
-      }
+      await supabaseFetch(`collaborators?id=eq.${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ pin_hash: null })
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['collaborators'] });
@@ -232,14 +220,14 @@ export function useCollaboratorAuth() {
   const verifyPin = async (collaboratorId: string, pin: string): Promise<boolean> => {
     const hashedPin = await hashPin(pin);
 
-    const { data, error } = await supabase
-      .from('collaborators')
-      .select('pin_hash')
-      .eq('id', collaboratorId)
-      .single();
-
-    if (error || !data) return false;
-    return data.pin_hash === hashedPin;
+    try {
+      const data = await supabaseFetch(`collaborators?id=eq.${collaboratorId}&select=pin_hash`);
+      const collab = Array.isArray(data) ? data[0] : data;
+      return collab?.pin_hash === hashedPin;
+    } catch (error) {
+      console.error("Error verifying PIN:", error);
+      return false;
+    }
   };
 
   const setPin = async (collaboratorId: string, pin: string): Promise<boolean> => {
