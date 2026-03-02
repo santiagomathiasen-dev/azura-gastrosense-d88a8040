@@ -1,5 +1,5 @@
 -- ============================================
--- CRIAÇÃO DE TABELAS FINANCEIRAS E FOLHA
+-- CRIAÇÃO DE TABELAS FINANCEIRAS E FOLHA (VERSÃO CORRIGIDA)
 -- ============================================
 -- 1. Tabela de Gastos/Despesas
 CREATE TABLE IF NOT EXISTS public.financial_expenses (
@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS public.financial_expenses (
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('paid', 'pending')),
     invoice_number TEXT,
     notes TEXT,
+    document_url TEXT,
+    -- URL para PDF/Imagem da Nota Fiscal
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 -- 2. Tabela de Folha de Pagamento (Payroll)
@@ -20,6 +22,8 @@ CREATE TABLE IF NOT EXISTS public.payroll_entries (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     collaborator_id UUID NOT NULL REFERENCES public.collaborators(id) ON DELETE CASCADE,
+    collaborator_name TEXT NOT NULL,
+    -- Adicionado para facilitar exibição
     amount NUMERIC NOT NULL DEFAULT 0,
     date DATE NOT NULL DEFAULT CURRENT_DATE,
     type TEXT NOT NULL DEFAULT 'salary' CHECK (type IN ('salary', 'freelance', 'bonus')),
@@ -31,7 +35,16 @@ CREATE TABLE IF NOT EXISTS public.payroll_entries (
 -- 3. Políticas de RLS
 ALTER TABLE public.financial_expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payroll_entries ENABLE ROW LEVEL SECURITY;
--- Políticas para financial_expenses
+-- DROP das políticas antigas se existirem para evitar erro de duplicata ao re-executar
+DROP POLICY IF EXISTS "Users can view their own expenses" ON public.financial_expenses;
+DROP POLICY IF EXISTS "Users can insert their own expenses" ON public.financial_expenses;
+DROP POLICY IF EXISTS "Users can update their own expenses" ON public.financial_expenses;
+DROP POLICY IF EXISTS "Users can delete their own expenses" ON public.financial_expenses;
+DROP POLICY IF EXISTS "Users can view their own payroll" ON public.payroll_entries;
+DROP POLICY IF EXISTS "Users can insert their own payroll" ON public.payroll_entries;
+DROP POLICY IF EXISTS "Users can update their own payroll" ON public.payroll_entries;
+DROP POLICY IF EXISTS "Users can delete their own payroll" ON public.payroll_entries;
+-- Políticas Unificadas (Owner + Gestor check)
 CREATE POLICY "Users can view their own expenses" ON public.financial_expenses FOR
 SELECT USING (
         user_id = auth.uid()

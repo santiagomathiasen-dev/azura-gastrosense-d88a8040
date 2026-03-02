@@ -113,7 +113,9 @@ export default function Financeiro() {
         category: 'fixed',
         type: 'other',
         date: getNow().toISOString().split('T')[0],
-        status: 'pending'
+        status: 'pending',
+        invoice_number: '',
+        document_url: ''
     });
 
     const [newPayroll, setNewPayroll] = useState<Omit<PayrollEntry, 'id'>>({
@@ -146,7 +148,9 @@ export default function Financeiro() {
                     category: 'fixed',
                     type: 'other',
                     date: getNow().toISOString().split('T')[0],
-                    status: 'pending'
+                    status: 'pending',
+                    invoice_number: '',
+                    document_url: ''
                 });
             }
         });
@@ -413,6 +417,7 @@ export default function Financeiro() {
                                             <TableHead>Categoria</TableHead>
                                             <TableHead className="text-right">Valor</TableHead>
                                             <TableHead>Status</TableHead>
+                                            <TableHead className="text-right">Ação</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -435,6 +440,13 @@ export default function Financeiro() {
                                                         <Badge variant={exp.status === 'paid' ? 'default' : 'secondary'} className={exp.status === 'paid' ? 'bg-emerald-100 text-emerald-700' : ''}>
                                                             {exp.status === 'paid' ? 'Pago' : 'Pendente'}
                                                         </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-right">
+                                                        {exp.document_url && (
+                                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-blue-600" onClick={() => window.open(exp.document_url, '_blank')}>
+                                                                <FileText className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
                                                     </TableCell>
                                                 </TableRow>
                                             ))
@@ -504,6 +516,7 @@ export default function Financeiro() {
                                             <TableHead>Data</TableHead>
                                             <TableHead className="text-right">Valor</TableHead>
                                             <TableHead>Status</TableHead>
+                                            <TableHead className="text-right">Ação</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -530,6 +543,12 @@ export default function Financeiro() {
                                                         <Badge variant={p.status === 'paid' ? 'default' : 'secondary'}>
                                                             {p.status === 'paid' ? 'Pago' : 'Agendado'}
                                                         </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-right">
+                                                        <Button size="sm" variant="outline" className="h-8 gap-1 pr-2 pl-2" onClick={() => toast.info('Gerando PDF do holerite...')}>
+                                                            <FileText className="h-3 w-3" />
+                                                            PDF
+                                                        </Button>
                                                     </TableCell>
                                                 </TableRow>
                                             ))
@@ -642,6 +661,22 @@ export default function Financeiro() {
                                     <option value="pending">Pendente</option>
                                     <option value="paid">Pago</option>
                                 </select>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Nº do Documento (NF-e)</Label>
+                                <Input
+                                    value={newExpense.invoice_number}
+                                    onChange={e => setNewExpense({ ...newExpense, invoice_number: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Link do Documento (Cloud)</Label>
+                                <Input
+                                    value={newExpense.document_url}
+                                    onChange={e => setNewExpense({ ...newExpense, document_url: e.target.value })}
+                                />
                             </div>
                         </div>
                     </div>

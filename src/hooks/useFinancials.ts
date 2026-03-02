@@ -13,6 +13,7 @@ export interface FinancialExpense {
     date: string;
     status: 'paid' | 'pending';
     invoice_number?: string;
+    document_url?: string;
 }
 
 export interface PayrollEntry {
