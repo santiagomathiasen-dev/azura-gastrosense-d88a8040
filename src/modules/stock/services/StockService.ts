@@ -1,6 +1,20 @@
-import { StockStatus } from '../types';
+import { StockStatus, StockItemSchema, StockItemInsertSchema, StockItem } from '../types';
 
 export class StockService {
+    /**
+     * Validates a stock item.
+     */
+    static validateItem(item: any): StockItem {
+        return StockItemSchema.parse(item);
+    }
+
+    /**
+     * Validates a partial stock item for creation.
+     */
+    static validateInsert(item: any) {
+        return StockItemInsertSchema.parse(item);
+    }
+
     /**
      * Calculates the status of a stock item based on current and minimum quantities.
      */

@@ -6,9 +6,8 @@ import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
 import { supabaseFetch } from '@/lib/supabase-fetch';
 
-type Supplier = Database['public']['Tables']['suppliers']['Row'];
-type SupplierInsert = Database['public']['Tables']['suppliers']['Insert'];
-type SupplierUpdate = Database['public']['Tables']['suppliers']['Update'];
+import { SupplierService } from '../modules/supplier/services/SupplierService';
+import type { Supplier, SupplierInsert, SupplierUpdate } from '../modules/supplier/types';
 
 export type { Supplier, SupplierInsert, SupplierUpdate };
 

@@ -1,10 +1,52 @@
 import type { Database } from '@/integrations/supabase/types';
+import { z } from 'zod';
 
-export type StockItem = Database['public']['Tables']['stock_items']['Row'];
-export type StockItemInsert = Database['public']['Tables']['stock_items']['Insert'];
-export type StockItemUpdate = Database['public']['Tables']['stock_items']['Update'];
-export type StockCategory = Database['public']['Enums']['stock_category'];
-export type StockUnit = Database['public']['Enums']['stock_unit'];
+export const StockCategorySchema = z.enum([
+    'laticinios',
+    'secos_e_graos',
+    'hortifruti',
+    'carnes_e_peixes',
+    'embalagens',
+    'limpeza',
+    'outros'
+]);
+
+export const StockUnitSchema = z.enum([
+    'kg',
+    'g',
+    'L',
+    'ml',
+    'unidade',
+    'caixa',
+    'dz'
+]);
+
+export const StockItemSchema = z.object({
+    id: z.string().uuid(),
+    user_id: z.string().uuid(),
+    name: z.string().min(2, "O nome deve ter pelo menos 2 caracteres"),
+    current_quantity: z.number().min(0, "A quantidade não pode ser negativa"),
+    minimum_quantity: z.number().min(0, "A quantidade mínima não pode ser negativa"),
+    unit: StockUnitSchema,
+    category: StockCategorySchema,
+    unit_price: z.number().nullable().optional(),
+    supplier_id: z.string().uuid().nullable().optional(),
+    created_at: z.string().optional(),
+    updated_at: z.string().optional(),
+    is_expired: z.boolean().optional(),
+});
+
+export const StockItemInsertSchema = StockItemSchema.omit({
+    id: true,
+    created_at: true,
+    updated_at: true
+});
+
+export type StockItem = z.infer<typeof StockItemSchema>;
+export type StockItemInsert = z.infer<typeof StockItemInsertSchema>;
+export type StockItemUpdate = Partial<StockItemInsert>;
+export type StockCategory = z.infer<typeof StockCategorySchema>;
+export type StockUnit = z.infer<typeof StockUnitSchema>;
 
 export interface StockStatus {
     status: 'green' | 'yellow' | 'red';

@@ -6,10 +6,14 @@ import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
 import { supabaseFetch } from '@/lib/supabase-fetch';
 
-type TechnicalSheet = Database['public']['Tables']['technical_sheets']['Row'];
-type TechnicalSheetInsert = Database['public']['Tables']['technical_sheets']['Insert'];
-type TechnicalSheetUpdate = Database['public']['Tables']['technical_sheets']['Update'];
-type TechnicalSheetIngredient = Database['public']['Tables']['technical_sheet_ingredients']['Row'];
+import { TechnicalSheetService } from '../modules/technical-sheets/services/TechnicalSheetService';
+import type {
+  TechnicalSheet,
+  TechnicalSheetInsert,
+  TechnicalSheetUpdate,
+  TechnicalSheetIngredient
+} from '../modules/technical-sheets/types';
+
 type ProductionType = 'insumo' | 'final';
 
 export type { TechnicalSheet, TechnicalSheetInsert, TechnicalSheetUpdate, TechnicalSheetIngredient, ProductionType };
