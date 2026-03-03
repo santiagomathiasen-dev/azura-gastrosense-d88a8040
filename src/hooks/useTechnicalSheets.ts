@@ -23,7 +23,6 @@ export interface TechnicalSheetWithIngredients extends TechnicalSheet {
   other_costs: number;
   markup: number;
   target_price: number | null;
-  praca: string | null;
   ingredients: (TechnicalSheetIngredient & {
     stock_item: { name: string; unit: string; unit_price: number | null } | null;
     stage_id?: string | null;
@@ -53,7 +52,6 @@ export function useTechnicalSheets() {
           other_costs: Number(sheet.other_costs || 0),
           markup: Number(sheet.markup || 0),
           target_price: sheet.target_price || null,
-          praca: sheet.praca || null,
         })) as TechnicalSheetWithIngredients[];
       } catch (err) {
         console.error("Error fetching technical sheets:", err);
