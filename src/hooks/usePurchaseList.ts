@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
+import { supabaseFetch } from '@/lib/supabase-fetch';
 import type { Database } from '@/integrations/supabase/types';
 
 type PurchaseListItem = Database['public']['Tables']['purchase_list_items']['Row'];
@@ -39,16 +40,8 @@ export function usePurchaseList() {
     queryKey: ['purchase_list_items', ownerId],
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
-      const { data, error } = await supabase
-        .from('purchase_list_items')
-        .select(`
-          *,
-          stock_item:stock_items(name, unit, category),
-          supplier:suppliers(name, whatsapp_number, whatsapp, phone)
-        `)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data as PurchaseListItemWithDetails[];
+      const data = await supabaseFetch('purchase_list_items?select=*,stock_item:stock_items(name,unit,category),supplier:suppliers(name,whatsapp_number,whatsapp,phone)&order=created_at.desc');
+      return data as unknown as PurchaseListItemWithDetails[];
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
   });
@@ -57,13 +50,12 @@ export function usePurchaseList() {
     mutationFn: async (item: Omit<PurchaseListItemInsert, 'user_id'>) => {
       if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
       if (!ownerId) throw new Error('Usuário não autenticado');
-      const { data, error } = await supabase
-        .from('purchase_list_items')
-        .insert({ ...item, user_id: ownerId })
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+
+      const data = await supabaseFetch('purchase_list_items', {
+        method: 'POST',
+        body: JSON.stringify({ ...item, user_id: ownerId })
+      });
+      return Array.isArray(data) ? data[0] : data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['purchase_list_items'] });
@@ -76,14 +68,11 @@ export function usePurchaseList() {
 
   const updateItem = useMutation({
     mutationFn: async ({ id, ...updates }: PurchaseListItemUpdate & { id: string }) => {
-      const { data, error } = await supabase
-        .from('purchase_list_items')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      const data = await supabaseFetch(`purchase_list_items?id=eq.${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updates)
+      });
+      return Array.isArray(data) ? data[0] : data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['purchase_list_items'] });
@@ -96,11 +85,9 @@ export function usePurchaseList() {
 
   const deleteItem = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('purchase_list_items')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
+      await supabaseFetch(`purchase_list_items?id=eq.${id}`, {
+        method: 'DELETE'
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['purchase_list_items'] });

@@ -748,7 +748,7 @@ export default function Compras() {
                           ) : item.isUrgent ? (
                             <MobileListBadge variant="warning">Urgente</MobileListBadge>
                           ) : item.isManual ? (
-                            <MobileListBadge variant="default" className="bg-blue-100 text-blue-700 border-blue-200">
+                            <MobileListBadge variant="default" className="bg-emerald-100 text-emerald-700 border-emerald-200">
                               Na Lista
                             </MobileListBadge>
                           ) : null}

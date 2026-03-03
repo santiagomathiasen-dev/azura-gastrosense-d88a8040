@@ -4,6 +4,7 @@ import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
 import { getTodayStr } from '@/lib/utils';
+import { supabaseFetch } from '@/lib/supabase-fetch';
 import type { Database } from '@/integrations/supabase/types';
 
 type PurchaseListItem = Database['public']['Tables']['purchase_list_items']['Row'];
@@ -23,17 +24,8 @@ export function usePendingDeliveries() {
     queryKey: ['pending_deliveries', ownerId],
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
-      const { data, error } = await supabase
-        .from('purchase_list_items')
-        .select(`
-          *,
-          stock_item:stock_items(name, unit, category),
-          supplier:suppliers(name)
-        `)
-        .eq('status', 'ordered')
-        .order('order_date', { ascending: false });
-      if (error) throw error;
-      return data as PendingDeliveryItem[];
+      const data = await supabaseFetch('purchase_list_items?status=eq.ordered&select=*,stock_item:stock_items(name,unit,category),supplier:suppliers(name)&order=order_date.desc');
+      return data as unknown as PendingDeliveryItem[];
     },
     enabled: !!user?.id || !!ownerId,
     refetchInterval: 30_000,
@@ -56,30 +48,25 @@ export function usePendingDeliveries() {
     }) => {
       if (!ownerId) throw new Error('Usuário não autenticado');
 
-      // Create or update purchase list item with "ordered" status
-      const { data: existing } = await supabase
-        .from('purchase_list_items')
-        .select('id')
-        .eq('stock_item_id', stockItemId)
-        .eq('status', 'ordered')
-        .single();
+      // Check for existing ordered item
+      const existingData = await supabaseFetch(`purchase_list_items?stock_item_id=eq.${stockItemId}&status=eq.ordered&select=id`);
+      const existing = Array.isArray(existingData) ? existingData[0] : existingData;
 
       if (existing) {
         // Update existing ordered item
-        const { error } = await supabase
-          .from('purchase_list_items')
-          .update({
+        await supabaseFetch(`purchase_list_items?id=eq.${existing.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
             ordered_quantity: orderedQuantity,
             order_date: getTodayStr(),
             expected_delivery_date: expectedDeliveryDate || null,
           })
-          .eq('id', existing.id);
-        if (error) throw error;
+        });
       } else {
         // Create new ordered item
-        const { error } = await supabase
-          .from('purchase_list_items')
-          .insert({
+        await supabaseFetch('purchase_list_items', {
+          method: 'POST',
+          body: JSON.stringify({
             user_id: ownerId,
             stock_item_id: stockItemId,
             suggested_quantity: suggestedQuantity,
@@ -88,8 +75,8 @@ export function usePendingDeliveries() {
             status: 'ordered',
             order_date: getTodayStr(),
             expected_delivery_date: expectedDeliveryDate || null,
-          });
-        if (error) throw error;
+          })
+        });
       }
     },
     onSuccess: () => {
@@ -116,27 +103,26 @@ export function usePendingDeliveries() {
       if (!ownerId) throw new Error('Usuário não autenticado');
 
       // 1. Create entry movement for stock
-      const { error: movementError } = await supabase
-        .from('stock_movements')
-        .insert({
+      await supabaseFetch('stock_movements', {
+        method: 'POST',
+        body: JSON.stringify({
           stock_item_id: stockItemId,
           user_id: ownerId,
           type: 'entry',
           quantity: receivedQuantity,
           source: 'manual',
           notes: 'Entrada de compra',
-        });
-      if (movementError) throw movementError;
+        })
+      });
 
       // 2. Mark purchase item as delivered
-      const { error: updateError } = await supabase
-        .from('purchase_list_items')
-        .update({
+      await supabaseFetch(`purchase_list_items?id=eq.${itemId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
           status: 'delivered',
           actual_delivery_date: getTodayStr(),
         })
-        .eq('id', itemId);
-      if (updateError) throw updateError;
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pending_deliveries'] });
@@ -153,11 +139,10 @@ export function usePendingDeliveries() {
   // Cancel pending order
   const cancelOrder = useMutation({
     mutationFn: async (itemId: string) => {
-      const { error } = await supabase
-        .from('purchase_list_items')
-        .update({ status: 'cancelled' })
-        .eq('id', itemId);
-      if (error) throw error;
+      await supabaseFetch(`purchase_list_items?id=eq.${itemId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'cancelled' })
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pending_deliveries'] });
