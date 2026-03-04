@@ -15,7 +15,7 @@ export function useUserRole() {
       console.log("useUserRole: Querying profile for user:", user?.id);
       const { data, error } = await supabase
         .from('profiles')
-        .select('role, status')
+        .select('role')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -38,7 +38,7 @@ export function useUserRole() {
   const isAdmin = userRole === 'admin';
   const isGestor = userRole === 'gestor';
   const isColaborador = userRole === 'colaborador';
-  const isBlocked = profile?.status === 'inativo';
+  const isBlocked = false; // The status column is not present in the production profiles table
 
   const assignRole = useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: AppRole }) => {

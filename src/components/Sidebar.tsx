@@ -1,6 +1,9 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+'use client';
+
+import { useNavigate } from '@/hooks/useNavigate';
+import { NavigationLink } from '@/components/NavigationLink';
 import { Sun, Moon } from 'lucide-react';
-import { useTheme } from '@/contexts/ThemeContext';
+import { useTheme } from 'next-themes';
 import {
   LogOut,
   ChevronLeft,
@@ -61,7 +64,8 @@ export function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
   const { isAdmin, isGestor } = useUserRole();
   const { profile } = useProfile();
   const navigate = useNavigate();
-  const { theme, toggleTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
+  const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
 
   const handleLogout = async () => {
     if (isCollaboratorMode) {
@@ -131,7 +135,7 @@ export function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
         {visibleNavItems.map((item) => (
-          <NavLink
+          <NavigationLink
             key={item.to}
             to={item.to}
             className={({ isActive }) =>
@@ -143,7 +147,7 @@ export function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
           >
             <item.icon className="h-4 w-4 flex-shrink-0" />
             {!collapsed && <span className="animate-fade-in truncate">{item.label}</span>}
-          </NavLink>
+          </NavigationLink>
         ))}
       </nav>
 

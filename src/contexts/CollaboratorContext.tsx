@@ -1,3 +1,5 @@
+'use client';
+
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Collaborator } from '@/hooks/useCollaborators';
 import { supabase } from '@/integrations/supabase/client';
