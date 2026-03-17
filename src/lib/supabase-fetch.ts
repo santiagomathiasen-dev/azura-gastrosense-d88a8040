@@ -36,22 +36,15 @@ export async function supabaseFetch(path: string, options: RequestInit = {}) {
 
     if (!headers.has('Authorization')) {
         try {
-            // Tenta obter o token de forma mais segura
-            if (typeof window !== 'undefined') {
-                const hostname = new URL(baseUrl).hostname;
-                const projectRef = hostname.split('.')[0];
-                const storageKey = `sb-${projectRef}-auth-token`;
-
-                const authStorage = localStorage.getItem(storageKey);
-                if (authStorage) {
-                    const sessionData = JSON.parse(authStorage);
-                    if (sessionData?.access_token) {
-                        headers.set('Authorization', `Bearer ${sessionData.access_token}`);
-                    }
-                }
+            // Usa o cliente Supabase real para garantir que pegamos o token válido
+            const { supabase } = await import('@/integrations/supabase/client');
+            const { data: { session } } = await supabase.auth.getSession();
+            
+            if (session?.access_token) {
+                headers.set('Authorization', `Bearer ${session.access_token}`);
             }
         } catch (e) {
-            console.warn("Supabase Fetch: Could not extract auth token", e);
+            console.warn("Supabase Fetch: Could not extract auth token via getSession", e);
         }
     }
 
