@@ -27,7 +27,7 @@ export function usePreparationAlerts() {
         queryFn: async () => {
             if (!user?.id && !ownerId) return [];
 
-            const { data, error } = await supabase
+            const { data, error } = await (supabase as any)
                 .from('preparation_alerts')
                 .select(`
           *,
@@ -41,25 +41,25 @@ export function usePreparationAlerts() {
             // We need to fetch the names of missing components manually since they can be from different tables
             // This is a bit inefficient but works for now. 
             // A better approach might be a database view or function.
-            const alertsWithNames = await Promise.all(data.map(async (alert) => {
+            const alertsWithNames = await Promise.all(data.map(async (alert: any) => {
                 let missingName = 'Desconhecido';
 
                 if (alert.missing_component_type === 'stock_item') {
-                    const { data: item } = await supabase
+                    const { data: item } = await (supabase as any)
                         .from('stock_items')
                         .select('name')
                         .eq('id', alert.missing_component_id)
                         .single();
                     if (item) missingName = item.name;
                 } else if (alert.missing_component_type === 'finished_production') {
-                    const { data: sheet } = await supabase
+                    const { data: sheet } = await (supabase as any)
                         .from('technical_sheets')
                         .select('name')
                         .eq('id', alert.missing_component_id)
                         .single();
                     if (sheet) missingName = sheet.name;
                 } else if (alert.missing_component_type === 'sale_product') {
-                    const { data: product } = await supabase
+                    const { data: product } = await (supabase as any)
                         .from('sale_products')
                         .select('name')
                         .eq('id', alert.missing_component_id)
@@ -82,7 +82,7 @@ export function usePreparationAlerts() {
 
     const resolveAlert = useMutation({
         mutationFn: async (id: string) => {
-            const { error } = await supabase
+            const { error } = await (supabase as any)
                 .from('preparation_alerts')
                 .update({ resolved: true })
                 .eq('id', id);

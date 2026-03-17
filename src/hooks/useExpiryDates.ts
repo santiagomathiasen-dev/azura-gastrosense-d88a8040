@@ -90,8 +90,8 @@ export function useExpiryDates(stockItemId?: string) {
 
     const updateExpiryQuantity = useMutation({
         mutationFn: async ({ id, quantity }: { id: string, quantity: number }) => {
-            const { error } = await supabase
-                .from('item_expiry_dates' as any)
+            const { error } = await (supabase as any)
+                .from('item_expiry_dates')
                 .update({ quantity } as any)
                 .eq('id', id);
 
@@ -166,8 +166,8 @@ export function useExpiryDates(stockItemId?: string) {
             const take = Math.min(remaining, Number((batch as any).quantity));
             const newQty = Number((batch as any).quantity) - take;
 
-            const { error: updateError } = await supabase
-                .from('item_expiry_dates' as any)
+            const { error: updateError } = await (supabase as any)
+                .from('item_expiry_dates')
                 .update({ quantity: newQty } as any)
                 .eq('id', (batch as any).id);
 

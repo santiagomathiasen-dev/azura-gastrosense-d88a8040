@@ -40,7 +40,7 @@ export function CollaboratorProvider({ children }: { children: ReactNode }) {
                     .from('profiles')
                     .select('*')
                     .eq('id', session.user.id)
-                    .single();
+                    .single() as { data: any, error: any };
 
                 if (!error && profile && profile.role === 'colaborador') {
                     // Fetch additional collaborator data (permissions)
@@ -52,17 +52,18 @@ export function CollaboratorProvider({ children }: { children: ReactNode }) {
 
                     if (!collabError && collaboratorData) {
                         const collabData = {
-                            ...profile,
-                            ...collaboratorData,
+                            ...(profile as any),
+                            ...(collaboratorData as any),
                             auth_user_id: profile.id,
-                            name: profile.full_name || profile.email || collaboratorData.name || '',
-                            is_active: (profile as any).status === 'ativo' || collaboratorData.is_active
+                            name: profile.full_name || profile.email || (collaboratorData as any).name || '',
+                            is_active: (profile as any).status === 'ativo' || (collaboratorData as any).is_active
                         } as Collaborator;
 
                         setCollaborator(collabData);
-                        setGestorId(profile.gestor_id || collaboratorData.gestor_id);
+                        const finalGestorId = (profile as any).gestor_id || (collaboratorData as any).gestor_id;
+                        setGestorId(finalGestorId);
                         // Sync to localStorage for consistency
-                        localStorage.setItem(STORAGE_KEY, JSON.stringify({ collaborator: collabData, gestorId: profile.gestor_id || collaboratorData.gestor_id }));
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify({ collaborator: collabData, gestorId: finalGestorId }));
                     }
                 } else {
                     // If not a collaborator, or sign-out event

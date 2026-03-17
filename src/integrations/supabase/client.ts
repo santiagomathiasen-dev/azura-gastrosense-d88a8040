@@ -1,5 +1,5 @@
-// This file is adapted for Next.js and Vite coexistence.
-import { createClient } from '@supabase/supabase-js';
+// This file is adapted for Next.js App Router to use SSR Cookies
+import { createBrowserClient } from '@supabase/ssr';
 import type { Database } from './types';
 
 // Detect environment variables for both Vite and Next.js
@@ -10,12 +10,7 @@ if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
   console.warn("Supabase Client: Environment variables are missing.");
 }
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-  auth: {
-    // Only use localStorage on the client side
-    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-    persistSession: true,
-    autoRefreshToken: true,
-  }
-});
-
+export const supabase = createBrowserClient<any>(
+  SUPABASE_URL,
+  SUPABASE_PUBLISHABLE_KEY
+);
