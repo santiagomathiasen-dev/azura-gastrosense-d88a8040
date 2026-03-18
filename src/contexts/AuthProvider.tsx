@@ -113,12 +113,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const loginWithGoogle = async (redirectTo?: string): Promise<{ error?: string }> => {
-        const origin = typeof window !== 'undefined' ? window.location.origin : '';
+        // Detect origin correctly for both local dev and production
+        const origin = typeof window !== 'undefined' 
+            ? window.location.origin 
+            : 'https://santiagomathiasen-dev-azura-gastros.vercel.app';
+        
         const nextPath = redirectTo || '/dashboard';
+        // Use the same /auth/v1/callback route which handles cookie exchange
         const callbackUrl = `${origin}/auth/v1/callback?next=${encodeURIComponent(nextPath)}`;
         
-        console.log("AuthProvider: Current Origin:", origin);
-        console.log("AuthProvider: Initiating Google Login with redirect:", callbackUrl);
+        console.log("AuthProvider: Google Login redirect:", callbackUrl);
 
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
@@ -126,7 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 redirectTo: callbackUrl,
                 queryParams: {
                     access_type: 'offline',
-                    prompt: 'consent',
+                    prompt: 'select_account',
                 },
             },
         });
