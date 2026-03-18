@@ -25,13 +25,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // 2. Check for initial session (and allow hash parsing)
         const initSession = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!mounted) return;
-            if (session) {
-                setSession(session);
-                setUser(session.user);
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!mounted) return;
+                if (session) {
+                    setSession(session);
+                    setUser(session.user);
+                }
+            } catch (error) {
+                console.error("AuthInit Error:", error);
+            } finally {
+                if (mounted) {
+                    setIsLoading(false);
+                }
             }
-            setIsLoading(false);
         };
 
         initSession();
