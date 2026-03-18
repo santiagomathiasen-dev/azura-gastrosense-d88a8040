@@ -1,3 +1,4 @@
+// Vercel Preview Deployment Trigger - 2026-03-17
 import { createClient } from '@supabase/supabase-js';
 import * as fs from 'fs';
 
