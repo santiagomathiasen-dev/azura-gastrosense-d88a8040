@@ -30,12 +30,22 @@ export async function GET(request: Request) {
                 },
             }
         );
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (!error) {
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+        if (!error && data?.session) {
+            const user = data.session.user;
+            // Se o usuário acabou de ser criado (created_at é de poucos segundos atrás) e usou o google:
+            const isNewUser = new Date(user.created_at).getTime() > Date.now() - 15000;
+            
+            if (isNewUser) {
+                // Bloqueia e desloga o usuário, forçando ele a criar conta por email primeiro
+                await supabase.auth.signOut();
+                return NextResponse.redirect(`${origin}/auth?error=Sua conta não existe. Faça o cadastro pelo formulário de email primeiro.`);
+            }
+
             return NextResponse.redirect(`${origin}${next}`);
         }
     }
 
     // return the user to an error page with instructions
-    return NextResponse.redirect(`${origin}/auth?error=Code exchange failed`);
+    return NextResponse.redirect(`${origin}/auth?error=Falha na autenticação do Google`);
 }
