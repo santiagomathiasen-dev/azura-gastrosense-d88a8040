@@ -53,6 +53,7 @@ import { StockItemForm } from '@/components/stock/StockItemForm';
 import { StockMovementDialog } from '@/components/stock/StockMovementDialog';
 import { VoiceImportDialog, type ExtractedItem } from '@/components/VoiceImportDialog';
 import { IngredientFileImportDialog, type ExtractedIngredient } from '@/components/IngredientFileImportDialog';
+import { InvoiceImportDialog } from '@/components/stock/InvoiceImportDialog';
 import { formatQuantity } from '@/lib/utils';
 import { SupplierManagement } from '@/components/suppliers/SupplierManagement';
 import { BatchManagementDialog } from '@/components/stock/BatchManagementDialog';
@@ -62,7 +63,7 @@ import { toast } from 'sonner';
 type TransferDestination = 'production' | 'sale';
 
 export default function Estoque() {
-  const { items, isLoading, isOwnerLoading, createItem, batchCreateItems, updateItem, deleteItem, itemsInAlert } = useStockItems();
+  const { items, isLoading, isOwnerLoading, createItem, batchCreateItems, processInvoiceImport, updateItem, deleteItem, itemsInAlert } = useStockItems();
   const { expiryMap, isLoading: expiryMapLoading } = useEarliestExpiryMap();
   const { pendingItems, confirmDelivery, cancelOrder } = usePendingDeliveries();
   const { createMovement } = useStockMovements();
@@ -82,6 +83,7 @@ export default function Estoque() {
   // Voice and file import dialogs
   const [voiceDialogOpen, setVoiceDialogOpen] = useState(false);
   const [fileImportDialogOpen, setFileImportDialogOpen] = useState(false);
+  const [invoiceImportDialogOpen, setInvoiceImportDialogOpen] = useState(false);
 
   // Transfer dialog state
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
@@ -674,7 +676,19 @@ export default function Estoque() {
         {/* Register Tab - For creating new stock items */}
         <TabsContent value="register" className="flex-1 overflow-auto space-y-4">
           {/* Action Cards */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <Card
+              className="cursor-pointer hover:border-primary transition-all group bg-emerald-500/5 hover:bg-emerald-500/10 border-emerald-500/20"
+              onClick={() => setInvoiceImportDialogOpen(true)}
+            >
+              <CardHeader className="text-center p-3">
+                <div className="mx-auto w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center mb-1 group-hover:bg-emerald-500/20">
+                  <FileText className="h-5 w-5 text-emerald-600" />
+                </div>
+                <CardTitle className="text-sm font-bold">Importar Nota Fiscal (XML)</CardTitle>
+                <CardDescription className="text-[10px]">Entrada rápida e CMV</CardDescription>
+              </CardHeader>
+            </Card>
 
             <Card
               className="cursor-pointer hover:border-primary transition-all group"
@@ -750,6 +764,12 @@ export default function Estoque() {
         open={fileImportDialogOpen}
         onOpenChange={setFileImportDialogOpen}
         onImport={handleFileImport}
+      />
+
+      {/* Invoice Import Dialog */}
+      <InvoiceImportDialog
+        open={invoiceImportDialogOpen}
+        onOpenChange={setInvoiceImportDialogOpen}
       />
 
       {/* Form Dialog */}

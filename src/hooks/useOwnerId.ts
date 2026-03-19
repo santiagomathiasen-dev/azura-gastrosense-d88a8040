@@ -50,7 +50,7 @@ export function useOwnerId() {
   });
 
   return {
-    ownerId: ownerId || impersonatedGestorId || gestorId || user?.id || null,
-    isLoading,
+    ownerId: ownerId ?? impersonatedGestorId ?? gestorId ?? user?.id ?? null,
+    isLoading: isLoading && !ownerId, // Don't show loading if we already have a value
   };
 }

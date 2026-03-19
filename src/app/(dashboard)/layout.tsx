@@ -3,7 +3,9 @@
 import { Sidebar } from '@/components/Sidebar';
 import { MobileNav } from '@/components/MobileNav';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function DashboardLayout({
     children,
@@ -11,6 +13,30 @@ export default function DashboardLayout({
     children: React.ReactNode;
 }) {
     const [collapsed, setCollapsed] = useState(false);
+    const pathname = usePathname();
+    const queryClient = useQueryClient();
+
+    // Auto-refresh data when navigating between tabs/pages
+    useEffect(() => {
+        // Invalidate main queries to ensure the new page has fresh data
+        // but don't do it forEVERY single query to avoid overkill
+        // Focus on stock, reports, and purchases
+        queryClient.invalidateQueries({
+            queryKey: ['stock_items'],
+            exact: false,
+            refetchType: 'active'
+        });
+        queryClient.invalidateQueries({
+            queryKey: ['reports'],
+            exact: false,
+            refetchType: 'active'
+        });
+        queryClient.invalidateQueries({
+            queryKey: ['purchase_list'],
+            exact: false,
+            refetchType: 'active'
+        });
+    }, [pathname, queryClient]);
 
     return (
         <div className="flex min-h-screen bg-background text-foreground">
