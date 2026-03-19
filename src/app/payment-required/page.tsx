@@ -178,7 +178,7 @@ export default function PaymentRequiredPage() {
                         </div>
 
                         <div className="space-y-3">
-                            {/* PIX BUTTON */}
+                            {/* PIX BUTTON (AUTOMATED) */}
                             <Button 
                                 className="w-full h-14 justify-between px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-lg rounded-xl transition-all shadow-md group"
                                 onClick={() => handleCheckout('pro', 'pix')}
@@ -186,12 +186,12 @@ export default function PaymentRequiredPage() {
                             >
                                 <span className="flex items-center gap-3">
                                     {loading ? <RefreshCw className="h-6 w-6 animate-spin" /> : <QrCode className="h-6 w-6" />}
-                                    Pagar com PIX
+                                    Pagar com PIX Automático
                                 </span>
                                 <span className="text-sm font-normal opacity-0 group-hover:opacity-100 transition-opacity underline">Gerar QR →</span>
                             </Button>
 
-                            {/* PAYPAL BUTTON */}
+                            {/* PAYPAL / CARD BUTTON */}
                             <Button 
                                 className="w-full h-14 justify-between px-6 bg-[#003087] hover:bg-[#00246B] text-white font-bold text-lg rounded-xl transition-all shadow-md group"
                                 onClick={() => handleCheckout('pro', 'paypal')}
@@ -203,19 +203,9 @@ export default function PaymentRequiredPage() {
                                 </span>
                                 <span className="text-sm font-normal opacity-0 group-hover:opacity-100 transition-opacity underline">Pagar →</span>
                             </Button>
-
-                            {/* MERCADO PAGO FALLBACK */}
-                            <Button 
-                                variant="outline"
-                                className="w-full h-12 justify-center px-6 border-blue-200 hover:bg-blue-50 text-blue-600 font-medium rounded-xl transition-all"
-                                onClick={() => handleCheckout('pro', 'mercadopago')}
-                                disabled={loading}
-                            >
-                                Pagar com Mercado Pago
-                            </Button>
                         </div>
 
-                        {/* PIX DISPLAY AREA */}
+                        {/* PIX DISPLAY AREA (AUTOMATED) */}
                         {pixData && (
                             <div className="bg-emerald-50 p-6 rounded-2xl border-2 border-emerald-100 space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
                                 <div className="text-center space-y-2">
@@ -228,7 +218,6 @@ export default function PaymentRequiredPage() {
                                         />
                                     </div>
                                 </div>
-                                
                                 <div className="space-y-2">
                                     <p className="text-xs font-medium text-emerald-700 text-center uppercase">Ou copie o código:</p>
                                     <div className="flex items-center gap-2 bg-white p-3 rounded-lg border border-emerald-200 shadow-inner">
@@ -245,13 +234,54 @@ export default function PaymentRequiredPage() {
                                         </Button>
                                     </div>
                                 </div>
-                                
                                 <div className="flex items-center justify-center gap-2 text-xs text-emerald-600 font-medium animate-pulse">
                                     <Clock className="h-3 w-3" />
                                     <span>Aguardando confirmação...</span>
                                 </div>
                             </div>
                         )}
+
+                        <div className="relative">
+                            <div className="absolute inset-0 flex items-center">
+                                <span className="w-full border-t border-border/50" />
+                            </div>
+                            <div className="relative flex justify-center text-xs uppercase font-medium">
+                                <span className="bg-card px-2 text-muted-foreground italic">Se o automático falhar:</span>
+                            </div>
+                        </div>
+
+                        {/* MANUAL PIX FALLBACK */}
+                        <Card className="bg-muted/30 border-dashed border-border p-5 rounded-2xl space-y-4">
+                            <div className="flex items-start gap-4">
+                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+                                    <QrCode className="h-5 w-5 text-primary" />
+                                </div>
+                                <div className="space-y-1">
+                                    <h4 className="text-sm font-bold text-foreground">PIX Manual (E-mail)</h4>
+                                    <p className="text-xs text-muted-foreground">Pague para esta chave e envie o comprovante.</p>
+                                </div>
+                            </div>
+                            
+                            <div className="flex items-center justify-between gap-3 bg-white p-3 rounded-xl border border-primary/20 shadow-sm">
+                                <code className="text-sm font-mono font-bold text-primary select-all">santiago.aloom@gmail.com</code>
+                                <Button 
+                                    size="icon" 
+                                    variant="ghost" 
+                                    className="h-9 w-9 shrink-0 hover:bg-primary/10 hover:text-primary transition-colors" 
+                                    onClick={() => handleCopyPix("santiago.aloom@gmail.com")}
+                                >
+                                    {pixCopied ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                                </Button>
+                            </div>
+
+                            <Button
+                                className="w-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 border-none font-bold gap-2 text-sm h-11 transition-all shadow-none"
+                                onClick={openWhatsApp}
+                            >
+                                <MessageSquare className="h-4 w-4" />
+                                Confirmar pelo WhatsApp (Envio de Comprovante)
+                            </Button>
+                        </Card>
 
                         <div className="grid grid-cols-2 gap-3 mt-auto">
                             <Button
@@ -265,11 +295,12 @@ export default function PaymentRequiredPage() {
                             </Button>
                             <Button
                                 variant="ghost"
-                                className="h-12 gap-2 text-green-600 hover:bg-green-50 hover:text-green-700 transition-all font-medium text-sm"
-                                onClick={openWhatsApp}
+                                className="h-12 gap-2 text-blue-600 hover:bg-blue-50 transition-all font-medium text-sm border border-blue-100 rounded-xl"
+                                onClick={() => handleCheckout('pro', 'mercadopago')}
+                                disabled={loading}
                             >
-                                <MessageSquare className="h-4 w-4" />
-                                Suporte
+                                <Wallet className="h-4 w-4" />
+                                Outras Opções (Mercado Pago)
                             </Button>
                         </div>
                     </div>
