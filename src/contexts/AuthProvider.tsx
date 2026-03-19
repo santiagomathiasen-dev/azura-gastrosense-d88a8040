@@ -113,12 +113,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const loginWithGoogle = async (redirectTo?: string): Promise<{ error?: string }> => {
-        const origin = typeof window !== 'undefined' ? window.location.origin : '';
+        const PROD_URL = 'https://azura-gastrosense-git-main-santiagos-projects-8a0036ba.vercel.app';
+        const origin = typeof window !== 'undefined' ? window.location.origin : PROD_URL;
         const nextPath = redirectTo || '/dashboard';
         const callbackUrl = `${origin}/auth/v1/callback?next=${encodeURIComponent(nextPath)}`;
         
-        console.log("AuthProvider: Current Origin:", origin);
-        console.log("AuthProvider: Initiating Google Login with redirect:", callbackUrl);
+        console.log("AuthProvider: Google Login redirect:", callbackUrl);
 
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
@@ -126,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 redirectTo: callbackUrl,
                 queryParams: {
                     access_type: 'offline',
-                    prompt: 'consent',
+                    prompt: 'select_account',
                 },
             },
         });
