@@ -65,35 +65,19 @@ serve(async (req: any) => {
       .map((item) => `- ${item.name} (ID: ${item.id}, unidade: ${item.unit}, category: ${item.category})`)
       .join("\n");
 
-    const promptText = `Você é um assistente especializado em gestão de estoque para cozinhas profissionais.
-Tarefa: Interpretar comandos e extrair informações sobre movimentações de estoque.
+    const promptText = `IA de Estoque Profissional.
+Extração direta de JSON. 
+Ação: entry, exit, adjustment.
 
-LISTA DE ITENS NO ESTOQUE:
-${stockItemsList || "Nenhum item cadastrado"}
+ITENS:
+${stockItemsList || "Nenhum"}
 
-REGRAS:
-1. Associe o item ao estoque (ID correspondente).
-2. Se não encontrar, sugira o item mais similar com matchedItemId: null.
-3. Ações válidas: entry (entrada), exit (saída), adjustment (ajuste).
-4. Retorne um JSON com a estrutura:
-{
-  "suggestions": [
-    {
-      "itemName": string,
-      "matchedItemId": string | null,
-      "quantity": number,
-      "unit": string,
-      "action": "entry"|"exit"|"adjustment",
-      "confidence": number
-    }
-  ],
-  "message": string
-}`;
+JSON apenas.`;
 
     const parts: any[] = [{ text: promptText }];
 
     if (type === "voice") {
-      parts.push({ text: `Comando de voz: "${content}"` });
+      parts.push({ text: `Voz: "${content}"` });
     } else {
       parts.push({
         inlineData: {
@@ -101,7 +85,7 @@ REGRAS:
           data: content.includes(",") ? content.split(",")[1] : content,
         },
       });
-      parts.push({ text: "Analise esta imagem e extraia as movimentações." });
+      parts.push({ text: "Analise imagem." });
     }
 
     const geminiBody = {
@@ -113,7 +97,7 @@ REGRAS:
     };
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

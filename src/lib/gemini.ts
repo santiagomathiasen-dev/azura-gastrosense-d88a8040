@@ -32,7 +32,7 @@ export const nfeSchema = {
 
 export const extractInvoiceData = async (content: string) => {
   const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
+    model: "gemini-2.0-flash",
     generationConfig: {
       responseMimeType: "application/json",
       responseSchema: nfeSchema as any,
@@ -40,12 +40,12 @@ export const extractInvoiceData = async (content: string) => {
   });
 
   const prompt = `
-    Extraia os dados da seguinte Nota Fiscal (NF-e). 
-    Retorne APENAS o JSON estruturado conforme o esquema fornecido.
-    Converta unidades para os padrões: kg, g, L, ml, unidade, caixa, dz.
-    Classifique os itens em categorias como: laticinios, carnes, hortifruti, secos_e_graos, embalagens, limpeza, bebidas, outros.
+    Extração de NF-e (Brasil).
+    Retorne apenas JSON.
+    Unidades: kg, g, L, ml, unidade, caixa, dz.
+    Categorias: laticinios, carnes, hortifruti, secos_e_graos, embalagens, limpeza, bebidas, outros.
 
-    Conteúdo da Nota:
+    Conteúdo:
     ${content}
   `;
 

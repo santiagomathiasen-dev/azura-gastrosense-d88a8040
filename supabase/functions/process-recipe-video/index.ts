@@ -36,21 +36,11 @@ serve(async (req: any) => {
         // A better approach is to use Gemini 1.5 Flash's ability to "see" URLs if we had the multimodal API,
         // but here we will provide a prompt that asks Gemini to analyze the context of the URL.
 
-        const systemPrompt = `Você é um assistente de chef profissional.
-O usuário forneceu uma URL de um vídeo de receita (YouTube ou Instagram).
-Sua tarefa é extrair ou inferir o modo de preparo, técnicas culinárias e possíveis ingredientes se o vídeo for conhecido ou baseado na URL.
+        const systemPrompt = `Assistente de Chef. Extraia técnica e ingredientes (JSON).
+Campos: name, preparation_method, techniques (array), estimated_time (number).
+Idioma: Português.`;
 
-Se você não conseguir acessar o vídeo diretamente, use o nome da URL (se contiver palavras-chave) para sugerir a técnica correta ou peça ao usuário para colar a descrição.
-
-REGRAS:
-1. Retorne um JSON com:
-   "name": "nome da receita",
-   "preparation_method": "texto detalhado",
-   "techniques": ["técnica 1", "técnica 2"],
-   "estimated_time": minutos (número)
-2. Idioma: Português Brasileiro.`;
-
-        const userPrompt = `Analise este vídeo: ${videoUrl}`;
+        const userPrompt = `Vídeo: ${videoUrl}`;
 
         const geminiBody = {
             contents: [
@@ -67,7 +57,7 @@ REGRAS:
         };
 
         const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },

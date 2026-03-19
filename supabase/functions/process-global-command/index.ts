@@ -24,32 +24,27 @@ serve(async (req: any) => {
 
         const { text, path, context } = await req.json();
 
-        const systemPrompt = `Você é o assistente inteligente do Azura, um sistema de gestão gastronômica.
-Você recebeu um comando de voz do usuário.
-Página atual: ${path}
-Conteúdo visível da página (contexto): ${context}
+        const systemPrompt = `Assistente Azura (Gestão Gastronômica).
+Página: ${path}
+Contexto: ${context}
 
-Determine a intenção do usuário e retorne um JSON com a ação a ser tomada.
-Ações possíveis:
-1. {"action": "navigate", "target": "/estoque", "label": "Estoque"} - Mudar de página.
-2. {"action": "toast", "message": "Texto da resposta"} - Dar uma resposta rápida ou informação.
-3. {"action": "info", "message": "Texto longo"} - Explicar algo.
+Determine a intenção e retorne JSON.
+Ações:
+1. {"action": "navigate", "target": "/rota", "label": "Nome"}
+2. {"action": "toast", "message": "Texto"}
+3. {"action": "info", "message": "Texto"}
 
-Rotas disponíveis:
-/dashboard, /estoque, /fichas, /producao, /financeiro, /compras, /relatorios, /perdas, /previsao-vendas, /produtos-venda, /colaboradores.
+Rotas: /dashboard, /estoque, /fichas, /producao, /financeiro, /compras, /relatorios, /perdas, /previsao-vendas, /produtos-venda, /colaboradores.
 
-Se o usuário perguntar algo sobre os dados que estão no contexto (ex: "Qual o custo do item X?"), responda usando a ação "toast".
-Se ele quiser ir para algum lugar, use "navigate".
-
-Retorne APENAS o JSON.`;
+JSON apenas.`;
 
         const geminiBody = {
-            contents: [{ parts: [{ text: `${systemPrompt}\n\nComando do usuário: "${text}"` }] }],
+            contents: [{ parts: [{ text: `${systemPrompt}\n\nComando: "${text}"` }] }],
             generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
         };
 
         const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },

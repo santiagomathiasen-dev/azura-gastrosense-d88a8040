@@ -48,39 +48,23 @@ serve(async (req: any) => {
     console.log(`Effective mimeType: ${mimeType}, content length: ${content.length}`);
 
     // System instruction for better compliance
-    const systemPrompt = `Você é um assistente especializado em gestão de estoque e culinária profissional.
-Sua tarefa é extrair itens, produtos ou ingredientes de documentos (PDFs, fotos, textos digitados ou MANUSCRITOS).
-
-REGRAS CRÍTICAS:
-1. Analise INTEGRALMENTE o documento. Se for uma foto de caderno ou receita manuscrita, esforce-se ao máximo para entender a caligrafia.
-2. Identifique nomes de produtos, quantidades, unidades de medida, preços unitários/totais e data de validade (se aplicável).
-3. Converta frações ou marcações informais para decimais (ex: 1/2 colher -> 0.5, "uma pitada" -> "1g", etc).
-4. Categorias válidas: laticinios, secos_e_graos, hortifruti, carnes_e_peixes, embalagens, limpeza, outros.
-5. Unidades permitidas: kg, g, L, ml, unidade, caixa, dz.
-6. Retorne SEMPRE um JSON válido. Formate os produtos corretamente. Se o texto estiver confuso, deduza o ingrediente mais provável da gastronomia.`;
+    const systemPrompt = `Assistente de Gestão Gastronômica. Extraia itens/ingredientes de documentos.
+    Unidades: kg, g, L, ml, unidade, caixa, dz.
+    Categorias: laticinios, secos_e_graos, hortifruti, carnes_e_peixes, embalagens, limpeza, outros.
+    Retorne apenas JSON válido.`;
 
     let userPrompt = "";
     if (extractRecipe) {
-      userPrompt = `Extraia os dados da receita e cada ingrediente individual para este JSON:
+      userPrompt = `Extraia dados da receita para este JSON:
 {
-  "recipeName": "nome da receita",
-  "preparationMethod": "passo a passo detalhado",
-  "preparationTime": minutos (número),
-  "yieldQuantity": porções (número),
-  "labor_cost": número decimal (mão de obra),
-  "energy_cost": número decimal (energia/gás),
-  "other_costs": número decimal (outros),
-  "markup": número decimal (markup desejado),
-  "praca": "setor/praça",
-  "ingredients": [{"name": string, "quantity": number, "unit": string, "category": string, "price": number, "supplier": string, "minimum_quantity": number, "expiration_date": "YYYY-MM-DD" ou null}],
-  "summary": "resumo do que foi extraído"
+  "recipeName": string, "preparationMethod": string, "preparationTime": number, "yieldQuantity": number,
+  "labor_cost": number, "energy_cost": number, "other_costs": number, "markup": number, "praca": string,
+  "ingredients": [{"name": string, "quantity": number, "unit": string, "category": string, "price": number}],
+  "summary": string
 }`;
     } else {
-      userPrompt = `Extraia todos os itens e produtos encontrados no documento para este JSON:
-{
-  "ingredients": [{"name": string, "quantity": number, "unit": string, "category": string, "price": number, "supplier": string, "minimum_quantity": number, "expiration_date": "YYYY-MM-DD" ou null}],
-  "summary": "resumo do que foi extraído"
-}`;
+      userPrompt = `Extraia itens para este JSON:
+{ "ingredients": [{"name": string, "quantity": number, "unit": string, "category": string, "price": number}], "summary": string }`;
     }
 
     // Normalization Helpers
@@ -108,7 +92,7 @@ REGRAS CRÍTICAS:
                 },
               }
               : { text: content },
-            { text: `Instrução do Sistema: ${systemPrompt}\n\nTarefa: ${userPrompt}` },
+            { text: `Instrução: ${systemPrompt}\n\nTarefa: ${userPrompt}` },
           ],
         },
       ],
@@ -119,8 +103,7 @@ REGRAS CRÍTICAS:
     };
 
     console.log("Calling Gemini API...");
-    // Use gemini-1.5-flash
-    const model = "gemini-1.5-flash";
+    const model = "gemini-2.0-flash";
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
