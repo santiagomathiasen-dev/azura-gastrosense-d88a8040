@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { FileText, Upload, Loader2, Check, AlertTriangle, Plus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,18 +15,27 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { parseNFeXML, type NFeData, type NFeItem } from '@/lib/nfe-parser';
 import { useStockItems, type StockCategory, type StockUnit } from '@/hooks/useStockItems';
 import { formatQuantity, cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 
 interface InvoiceImportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-type Step = 'upload' | 'mapping' | 'processing';
+type Step = 'upload' | 'ai_processing' | 'mapping' | 'saving';
 
-interface MappedItem extends NFeItem {
+interface ExtractionItem {
+  id?: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  category?: string;
+}
+
+interface MappedItem extends ExtractionItem {
   matchedId: string | 'new' | null;
   category?: StockCategory;
 }
@@ -35,53 +44,99 @@ export function InvoiceImportDialog({
   open,
   onOpenChange,
 }: InvoiceImportDialogProps) {
-  const { items: existingItems, batchCreateItems, createItem } = useStockItems();
+  const { items: existingItems, processInvoiceImport } = useStockItems();
   const [step, setStep] = useState<Step>('upload');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [nfeData, setNfeData] = useState<NFeData | null>(null);
+  const [importId, setImportId] = useState<string | null>(null);
+  const [nfeData, setNfeData] = useState<any>(null);
   const [mappedItems, setMappedItems] = useState<MappedItem[]>([]);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const resetState = () => {
+  const resetState = useCallback(() => {
     setStep('upload');
     setNfeData(null);
     setMappedItems([]);
+    setImportId(null);
     setIsProcessing(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
-  };
+  }, []);
+
+  // Realtime Subscription
+  useEffect(() => {
+    if (!importId || step !== 'ai_processing') return;
+
+    const channel = supabase
+      .channel('invoice_import_status')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'invoice_imports',
+          filter: `id=eq.${importId}`,
+        },
+        (payload) => {
+          const newRecord = payload.new as any;
+          console.log('Realtime Status Update:', newRecord.status);
+          
+          if (newRecord.status === 'completed' && newRecord.extracted_data) {
+            handleComplete(newRecord.extracted_data);
+          } else if (newRecord.status === 'error') {
+            toast.error(newRecord.error_message || 'Erro no processamento da IA');
+            resetState();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [importId, step, handleComplete, resetState]);
+
+  const handleComplete = useCallback((data: any) => {
+    setNfeData(data);
+    
+    // Auto-match items by name
+    const initialMapping = data.items.map((item: any) => {
+      const match = existingItems.find(
+        ei => ei.name.toLowerCase() === item.name.toLowerCase()
+      );
+      return {
+        ...item,
+        matchedId: match ? match.id : null,
+        category: match ? match.category as StockCategory : (item.category || 'outros') as StockCategory
+      };
+    });
+    
+    setMappedItems(initialMapping);
+    setStep('mapping');
+    toast.success('Nota Fiscal processada pela IA!');
+  }, [existingItems]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.name.toLowerCase().endsWith('.xml')) {
-      toast.error('Por favor, selecione um arquivo XML de NF-e.');
-      return;
-    }
+    setIsProcessing(true);
+    const formData = new FormData();
+    formData.append('file', file);
 
     try {
-      const text = await file.text();
-      const data = parseNFeXML(text);
-      setNfeData(data);
-      
-      // Auto-match items by name
-      const initialMapping = data.items.map(nfeItem => {
-        const match = existingItems.find(
-          ei => ei.name.toLowerCase() === nfeItem.name.toLowerCase()
-        );
-        return {
-          ...nfeItem,
-          matchedId: match ? match.id : null,
-          category: match ? match.category as StockCategory : 'outros' as StockCategory
-        };
+      const resp = await fetch('/api/invoices/upload', {
+        method: 'POST',
+        body: formData,
       });
-      
-      setMappedItems(initialMapping);
-      setStep('mapping');
-      toast.success('Nota Fiscal processada com sucesso!');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao ler arquivo XML');
+
+      const result = await resp.json();
+      if (!resp.ok) throw new Error(result.error);
+
+      setImportId(result.importId);
+      setStep('ai_processing');
+    } catch (err: any) {
+      toast.error(`Erro no upload: ${err.message}`);
+      setIsProcessing(false);
     }
   };
 
@@ -93,41 +148,18 @@ export function InvoiceImportDialog({
     }
 
     setIsProcessing(true);
-    setStep('processing');
+    setStep('saving');
 
     try {
-      // 1. Prepare items to create or update
-      // Logic would be:
-      // - For 'new': Create new stock item
-      // - For existing ID: Create stock movement (entry) + update unit price
-      
-      for (const item of mappedItems) {
-        if (item.matchedId === 'new') {
-          // Create new item
-          await createItem.mutateAsync({
-            name: item.name,
-            current_quantity: item.quantity,
-            unit: item.unit as StockUnit,
-            category: item.category || 'outros',
-            unit_price: item.unitPrice
-          });
-        } else if (item.matchedId) {
-          // We need a way to add movement directly or use existing hooks
-          // For simplicity in this UI, we'll assume the hook handles the movement
-          // when we "Update" the quantity or call a specific entry mutation.
-          // Since we already have batchCreateItems and createItem, 
-          // I will implement a more robust batch movement mutation in the hook later.
-          
-          // Temporary: just toast for now, will implement actual mutation next
-          console.log(`Updating existing item ${item.matchedId} with ${item.quantity}`);
-        }
-      }
+      await processInvoiceImport.mutateAsync({
+        nfeData,
+        mappedItems
+      });
 
-      toast.success('Importação concluída com sucesso!');
       onOpenChange(false);
       resetState();
     } catch (error) {
-      toast.error('Erro ao finalizar importação.');
+      // Error handled by mutation toast
     } finally {
       setIsProcessing(false);
     }
@@ -155,26 +187,45 @@ export function InvoiceImportDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-primary" />
-            Importar Nota Fiscal (XML)
+            Importar Nota Fiscal (Flash AI)
           </DialogTitle>
           <DialogDescription>
-            Importe itens e atualize o estoque automaticamente a partir do XML da NF-e.
+            Upgrade: Extração ultra-rápida via Gemini Flash com processamento em segundo plano.
           </DialogDescription>
         </DialogHeader>
 
         {step === 'upload' && (
           <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
-               onClick={() => fileInputRef.current?.click()}>
-            <Upload className="h-10 w-10 text-muted-foreground mb-4" />
-            <p className="text-sm font-medium">Clique para selecionar o arquivo XML</p>
-            <p className="text-xs text-muted-foreground mt-1">Apenas arquivos .xml de NF-e brasileira</p>
+               onClick={() => !isProcessing && fileInputRef.current?.click()}>
+            {isProcessing ? (
+              <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
+            ) : (
+              <Upload className="h-10 w-10 text-muted-foreground mb-4" />
+            )}
+            <p className="text-sm font-medium">
+              {isProcessing ? 'Enviando arquivo...' : 'Clique para selecionar o arquivo (XML, PDF ou Foto)'}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">Sua nota será processada em background</p>
             <input
               ref={fileInputRef}
               type="file"
-              accept=".xml"
               onChange={handleFileChange}
               className="hidden"
+              disabled={isProcessing}
             />
+          </div>
+        )}
+
+        {step === 'ai_processing' && (
+          <div className="flex flex-col items-center justify-center py-12 gap-4">
+            <div className="relative">
+              <Loader2 className="h-12 w-12 animate-spin text-primary" />
+              <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-primary">AI</div>
+            </div>
+            <div className="text-center">
+              <p className="font-medium">O Gemini Flash está analisando sua nota...</p>
+              <p className="text-xs text-muted-foreground">Isso geralmente leva menos de 10 segundos.</p>
+            </div>
           </div>
         )}
 
@@ -184,26 +235,19 @@ export function InvoiceImportDialog({
               <div>
                 <p className="text-muted-foreground text-xs uppercase font-bold">Fornecedor</p>
                 <p className="font-medium truncate">{nfeData.supplierName}</p>
-                <p className="text-xs text-muted-foreground">{nfeData.supplierCnpj}</p>
+                <p className="text-xs text-muted-foreground">{nfeData.supplierCnpj || 'CNPJ não identificado'}</p>
               </div>
               <div>
                 <p className="text-muted-foreground text-xs uppercase font-bold">Nota Fiscal</p>
                 <p className="font-medium">Nº {nfeData.invoiceNumber}</p>
-                <p className="text-xs text-muted-foreground">Emissão: {nfeData.emissionDate.split('T')[0]}</p>
+                <p className="text-xs text-muted-foreground">Valor: R$ {nfeData.totalValue.toFixed(2)}</p>
               </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold">Mapeamento de Itens ({nfeData.items.length})</h3>
-              <Badge variant="outline" className="text-emerald-600 bg-emerald-50 border-emerald-200">
-                Total NF: R$ {nfeData.totalValue.toFixed(2)}
-              </Badge>
             </div>
 
             <ScrollArea className="h-[40vh] border rounded-md p-2">
               <div className="space-y-3">
                 {mappedItems.map((item, index) => (
-                  <div key={item.id} className="p-3 border rounded-lg bg-background hover:border-primary/30 transition-colors">
+                  <div key={index} className="p-3 border rounded-lg bg-background hover:border-primary/30 transition-colors">
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex-1 min-w-0 mr-4">
                         <p className="text-sm font-bold truncate" title={item.name}>{item.name}</p>
@@ -264,7 +308,7 @@ export function InvoiceImportDialog({
           </div>
         )}
 
-        {step === 'processing' && (
+        {step === 'saving' && (
           <div className="flex flex-col items-center justify-center py-12 gap-4">
             <Loader2 className="h-12 w-12 animate-spin text-primary" />
             <p className="text-muted-foreground">Finalizando importação e atualizando estoque...</p>
@@ -275,7 +319,7 @@ export function InvoiceImportDialog({
           {step === 'mapping' && (
             <>
               <Button variant="outline" onClick={() => setStep('upload')} disabled={isProcessing}>
-                Voltar
+                Reiniciar
               </Button>
               <Button onClick={handleConfirmImport} disabled={isProcessing}>
                 {isProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}

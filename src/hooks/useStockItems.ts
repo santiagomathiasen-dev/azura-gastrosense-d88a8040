@@ -139,13 +139,16 @@ export function useStockItems() {
         body: JSON.stringify(expense)
       });
 
-      // 2. Process Items
-      for (const item of mappedItems) {
-        let stockItemId = item.matchedId;
+      // 2. Separate items for processing
+      const newItemsToCreate: any[] = [];
+      const existingItemsToUpdate: any[] = [];
+      const movementsToCreate: any[] = [];
+      const purchaseListToCreate: any[] = [];
 
+      // Calculate updates for existing items first (need snapshot data)
+      for (const item of mappedItems) {
         if (item.matchedId === 'new') {
-          // Create new item
-          const { data: newItem } = await supabase.from('stock_items').insert({
+          newItemsToCreate.push({
             user_id: ownerId,
             name: item.name,
             current_quantity: item.quantity,
@@ -153,22 +156,18 @@ export function useStockItems() {
             category: item.category || 'outros',
             unit_price: item.unitPrice,
             notes: `Criado via NF ${nfeData.invoiceNumber}`
-          }).select().single();
-          
-          if (newItem) stockItemId = newItem.id;
-        } else {
-          // Update existing item quantity and price
-          const existingItem = items.find(ei => ei.id === item.matchedId);
-          if (existingItem) {
-            const newQuantity = Number(existingItem.current_quantity) + item.quantity;
-            await supabase.from('stock_items').update({
-              current_quantity: newQuantity,
+          });
+        } else if (item.matchedId) {
+          const existing = items.find(ei => ei.id === item.matchedId);
+          if (existing) {
+            existingItemsToUpdate.push({
+              id: item.matchedId,
+              current_quantity: Number(existing.current_quantity) + item.quantity,
               unit_price: item.unitPrice,
               updated_at: new Date().toISOString()
-            }).eq('id', item.matchedId);
+            });
 
-            // Create movement
-            await supabase.from('stock_movements').insert({
+            movementsToCreate.push({
               user_id: ownerId,
               stock_item_id: item.matchedId,
               type: 'entry',
@@ -178,10 +177,54 @@ export function useStockItems() {
             });
           }
         }
+      }
 
-        // 3. Create Purchase List Entry (for reports)
-        if (stockItemId) {
-          await supabase.from('purchase_list_items').insert({
+      // 3. Bulk Operations
+      
+      // A. Create New Items
+      let newlyCreatedItems: any[] = [];
+      if (newItemsToCreate.length > 0) {
+        const { data, error } = await supabase.from('stock_items').insert(newItemsToCreate).select();
+        if (error) throw error;
+        newlyCreatedItems = data || [];
+        
+        // Add movements for new items
+        newlyCreatedItems.forEach((ni, idx) => {
+          const sourceItem = newItemsToCreate[idx];
+          movementsToCreate.push({
+            user_id: ownerId,
+            stock_item_id: ni.id,
+            type: 'entry',
+            quantity: sourceItem.current_quantity,
+            source: 'purchase',
+            notes: `NF ${nfeData.invoiceNumber} (Novo cadastro)`
+          });
+        });
+      }
+
+      // B. Update Existing Items (Upsert by ID)
+      if (existingItemsToUpdate.length > 0) {
+        const { error } = await supabase.from('stock_items').upsert(existingItemsToUpdate);
+        if (error) throw error;
+      }
+
+      // C. Bulk Create Movements
+      if (movementsToCreate.length > 0) {
+        const { error } = await supabase.from('stock_movements').insert(movementsToCreate);
+        if (error) throw error;
+      }
+
+      // D. Bulk Create Purchase List Entries
+      mappedItems.forEach((item, idx) => {
+        let stockItemId = item.matchedId;
+        if (stockItemId === 'new') {
+          // Find the ID in the newlyCreatedItems by name
+          const found = newlyCreatedItems.find(ni => ni.name === item.name);
+          if (found) stockItemId = found.id;
+        }
+
+        if (stockItemId && stockItemId !== 'new') {
+          purchaseListToCreate.push({
             user_id: ownerId,
             stock_item_id: stockItemId,
             suggested_quantity: item.quantity,
@@ -192,6 +235,11 @@ export function useStockItems() {
             notes: `NF ${nfeData.invoiceNumber}`
           });
         }
+      });
+
+      if (purchaseListToCreate.length > 0) {
+        const { error } = await supabase.from('purchase_list_items').insert(purchaseListToCreate);
+        if (error) throw error;
       }
 
       return { success: true };
