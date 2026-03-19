@@ -113,11 +113,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const loginWithGoogle = async (redirectTo?: string): Promise<{ error?: string }> => {
-        // Detect origin correctly for both local dev and production
-        const origin = typeof window !== 'undefined' 
-            ? window.location.origin 
-            : 'https://santiagomathiasen-dev-azura-gastros.vercel.app';
-        
+        const PROD_URL = 'https://azura-gastrosense-git-main-santiagos-projects-8a0036ba.vercel.app';
+        const origin = typeof window !== 'undefined' ? window.location.origin : PROD_URL;
         const nextPath = redirectTo || '/dashboard';
         // Use the same /auth/v1/callback route which handles cookie exchange
         const callbackUrl = `${origin}/auth/v1/callback?next=${encodeURIComponent(nextPath)}`;
