@@ -627,8 +627,8 @@ export default function Fichas() {
           <div className="hidden print:block space-y-8 p-4 bg-white text-black">
             <div className="border-b-2 border-black pb-4 flex justify-between items-start">
               <div>
-                <h1 className="text-3xl font-bold uppercase">{selectedSheet?.nome}</h1>
-                <p className="text-sm text-gray-600 italic">{selectedSheet?.descricao || 'Sem descrição'}</p>
+                <h1 className="text-3xl font-bold uppercase">{selectedSheet?.name}</h1>
+                <p className="text-sm text-gray-600 italic">{selectedSheet?.description || 'Sem descrição'}</p>
               </div>
               <div className="text-right text-xs">
                 <p className="font-bold">FICHA TÉCNICA OPERACIONAL</p>
@@ -668,12 +668,11 @@ export default function Fichas() {
                             </tr>
                           </thead>
                           <tbody>
-                            {stage.ingredients.map((ing, iidx) => {
-                              const stockItem = stockItems.find(si => si.id === ing.stockItemId);
+                            {(selectedSheet?.ingredients || []).filter(ing => ing.stage_id === stage.id).map((ing, iidx) => {
                               return (
                                 <tr key={iidx} className="border-b border-gray-50">
-                                  <td className="py-1">{stockItem?.name || 'Item não encontrado'}</td>
-                                  <td className="py-1 text-right">{ing.quantidade} {stockItem?.unit || ''}</td>
+                                  <td className="py-1">{ing.stock_item?.name || 'Item não encontrado'}</td>
+                                  <td className="py-1 text-right">{ing.quantity} {ing.stock_item?.unit || ''}</td>
                                 </tr>
                               );
                             })}
@@ -696,15 +695,14 @@ export default function Fichas() {
                         </tr>
                       </thead>
                       <tbody>
-                        {(selectedSheet?.ingredients || []).map((ing: any, idx: number) => {
-                          const stockItem = stockItems.find(si => si.id === ing.stockItemId);
-                          return (
-                            <tr key={idx} className="border-b border-gray-50">
-                              <td className="py-1">{stockItem?.name || 'Item não encontrado'}</td>
-                              <td className="py-1 text-right">{ing.quantidade} {stockItem?.unit || ''}</td>
-                            </tr>
-                          );
-                        })}
+                         {(selectedSheet?.ingredients || []).map((ing, idx) => {
+                           return (
+                             <tr key={idx} className="border-b border-gray-50">
+                               <td className="py-1">{ing.stock_item?.name || 'Item não encontrado'}</td>
+                               <td className="py-1 text-right">{ing.quantity} {ing.stock_item?.unit || ''}</td>
+                             </tr>
+                           );
+                         })}
                       </tbody>
                     </table>
                   )}
