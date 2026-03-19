@@ -29,8 +29,8 @@ const plans = [
       { label: '5 fichas técnicas', ok: true },
       { label: '1 gestor', ok: true },
       { label: '1 colaborador', ok: true },
-      { label: 'Bloqueio após 7 dias', ok: false },
-      { label: 'Dados podem ser apagados', ok: false },
+      { label: 'Bloqueio total após 7 dias', ok: true },
+      { label: 'Dados deletados após o prazo', ok: true },
     ],
   },
   {
@@ -210,9 +210,17 @@ export default function AssinaturaPage() {
 
               <CardFooter className="flex flex-col gap-2 pt-0">
                 {plan.id === 'gratis' ? (
-                  <Button variant="outline" className="w-full" disabled>
-                    {isCurrent ? 'Plano atual' : 'Indisponível'}
-                  </Button>
+                  <div className="w-full mt-auto">
+                    {isCurrent ? (
+                      <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 text-center text-sm font-bold text-primary">
+                        Plano Atual
+                      </div>
+                    ) : (
+                      <Button variant="outline" className="w-full opacity-50" disabled>
+                        Indisponível
+                      </Button>
+                    )}
+                  </div>
                 ) : (
                   <>
                     <Button
