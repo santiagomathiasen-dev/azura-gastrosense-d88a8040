@@ -8,40 +8,42 @@ const corsHeaders = {
 }
 
 Deno.serve(async (req) => {
-  // 1. Handle CORS (Essential for preventing 401/403 in preflight)
+  // --- DEBUG LOGS ---
+  console.log(`[DEBUG] Received ${req.method} request to ${req.url}`);
+  const allHeaders = Object.fromEntries(req.headers.entries());
+  console.log("[DEBUG] Headers:", JSON.stringify(allHeaders));
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    // 2. Auth Check (Optional but recommended for user context)
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "No Authorization header found" }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+    const bodyText = await req.text();
+    console.log("[DEBUG] Raw Body:", bodyText);
+    
+    let payload = {};
+    try {
+        payload = JSON.parse(bodyText);
+    } catch (e) {
+        console.error("[DEBUG] Error parsing JSON body:", e.message);
     }
 
-    // 3. Get Payload
-    const { integration_id } = await req.json();
+    const { integration_id } = payload;
     if (!integration_id) {
+      console.error("[DEBUG] Error: Missing integration_id");
       return new Response(JSON.stringify({ error: "Missing integration_id" }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    // 4. Initialize Supabase Admin Client
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // 5. Get Loyverse API Key (Try Secret first, then DB)
+    // 1. Get Loyverse token and user context
     let loyverseToken = Deno.env.get('LOYVERSE_API_KEY');
-    let userId = null;
-
-    // Fetch from DB if we need user context or if global secret is missing
+    
     const { data: integration, error: intError } = await supabase
       .from('pos_integrations')
       .select('*')
@@ -49,21 +51,20 @@ Deno.serve(async (req) => {
       .single();
     
     if (intError || !integration) {
-      throw new Error(`Integração ${integration_id} não encontrada no banco`);
+      console.error(`[DEBUG] Integration ${integration_id} not found in DB`);
+      throw new Error(`Integração não encontrada`);
     }
 
-    userId = integration.user_id;
-    // If no global secret, use the one stored in integration credentials
+    const userId = integration.user_id;
     if (!loyverseToken) {
       loyverseToken = integration.credentials?.access_token || integration.credentials?.api_key;
     }
 
     if (!loyverseToken) {
-      return new Response(JSON.stringify({ 
-        error: "Loyverse API Key not found. Please set LOYVERSE_API_KEY secret or configure integration credentials." 
-      }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      console.error("[DEBUG] Error: Loyverse API key not found in Secrets or DB");
+      return new Response(JSON.stringify({ error: "Loyverse API key missing (401)" }), { 
+        status: 401, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       });
     }
 
@@ -73,7 +74,9 @@ Deno.serve(async (req) => {
       'Content-Type': 'application/json'
     };
 
-    // --- PUSH LOGIC (Azura -> Loyverse) ---
+    console.log(`[DEBUG] Starting sync for user ${userId} using Loyverse Token: ${loyverseToken.substring(0, 5)}...`);
+
+    // --- PUSH: Azura -> Loyverse ---
     const { data: azuraProducts } = await supabase
       .from('sale_products')
       .select('*')
@@ -86,14 +89,15 @@ Deno.serve(async (req) => {
       const itemsRes = await fetch('https://api.loyverse.com/v1.0/items?limit=250', { headers: loyHeaders });
       
       if (itemsRes.status === 401) {
-        return new Response(JSON.stringify({ error: "Loyverse API rejected the token (401 Unauthorized)" }), {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        console.error("[DEBUG] Loyverse API returned 401 (Invalid Loyverse Token)");
+        return new Response(JSON.stringify({ error: "Chave do Loyverse Inválida (401)" }), { 
+          status: 401, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         });
       }
 
       const { items: loyItems = [] } = await itemsRes.json();
-      const loyItemMap = new Map(loyItems.map(item => [item.item_name.toLowerCase().trim(), item]));
+      const loyItemMap = new Map(loyItems.map(item => [item.item_name?.toLowerCase().trim(), item]));
 
       for (const prod of azuraProducts) {
         const existingItem = loyItemMap.get(prod.name.toLowerCase().trim());
@@ -126,8 +130,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // --- PULL LOGIC (Loyverse -> Azura) ---
+    // --- PULL: Loyverse -> Azura ---
     const pullSince = integration.last_sync_at || new Date(Date.now() - 86400000).toISOString();
+    console.log(`[DEBUG] Fetching Loyverse receipts since: ${pullSince}`);
+    
     const receiptsRes = await fetch(`https://api.loyverse.com/v1.0/receipts?updated_at_min=${pullSince}&limit=50`, {
         headers: loyHeaders
     });
@@ -159,14 +165,16 @@ Deno.serve(async (req) => {
             }
         }
         pushResults.pulled = pulledCount;
+    } else {
+        console.error(`[DEBUG] Failed to pull receipts: ${receiptsRes.status} ${receiptsRes.statusText}`);
     }
 
-    // Update last sync
     await supabase.from('pos_integrations').update({ last_sync_at: new Date().toISOString() }).eq('id', integration_id);
 
+    console.log("[DEBUG] Sync Success!");
     return new Response(JSON.stringify({ 
       success: true, 
-      message: "Sincronização concluída com sucesso!",
+      message: "Sincronização concluída com sucesso!", 
       push: pushResults 
     }), {
       status: 200,
@@ -174,7 +182,7 @@ Deno.serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("Critical Error:", error.message);
+    console.error("[DEBUG] CRITICAL ERROR:", error.message);
     return new Response(JSON.stringify({ error: error.message }), { 
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
