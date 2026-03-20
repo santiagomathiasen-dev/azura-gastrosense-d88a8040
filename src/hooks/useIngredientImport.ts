@@ -79,34 +79,17 @@ export function useIngredientImport() {
       const mimeType = file.type;
       console.log(`Sending ${fileType} to extract-ingredients, mimeType: ${mimeType}, base64 length: ${content.length}`);
 
-      // Bypass supabase.functions.invoke limitation by using direct fetch
-      // This prevents the Supabase JS client from swallowing errors or timing out silently
-      const functionUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/extract-ingredients`;
-      console.log("Preparing fetch to edge function:", functionUrl);
+      console.log(`Processing pdf file for ingredient extraction via supabaseFetch`);
 
-      const response = await fetch(functionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}`,
-          'apikey': process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-        },
-        body: JSON.stringify({ fileType, content, extractRecipe, mimeType })
+      const { data, error: funcError } = await supabase.functions.invoke('extract-ingredients', {
+        body: { fileType, content, extractRecipe, mimeType },
       });
-      console.log("Fetch requested, status:", response.status);
 
-      if (!response.ok) {
-        let errorMsg = `Status: ${response.status}`;
-        try {
-          const errData = await response.json();
-          errorMsg = errData.error || errData.message || errorMsg;
-        } catch (e) { /* ignore */ }
-        throw new Error(`Falha na nuvem (Edge Function): ${errorMsg}`);
+      console.log("Edge function response:", { data, funcError });
+
+      if (funcError) {
+        throw new Error(`Falha na nuvem (Edge Function): ${funcError.message}`);
       }
-
-      const data = await response.json();
-
-      console.log('Edge function response:', { data });
 
       if (data.error) {
         toast.error(data.error);
