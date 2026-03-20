@@ -14,7 +14,7 @@ export function MainLayout() {
   const { isImpersonating, stopImpersonation } = useCollaboratorContext();
   const [collapsed, setCollapsed] = useState(false);
   // Enable global realtime sync for all data tables
-  // useGlobalRealtimeSync();
+  useGlobalRealtimeSync();
 
 
   return (
