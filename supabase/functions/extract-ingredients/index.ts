@@ -3,189 +3,314 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 declare const Deno: any;
 
+// ─── CORS ────────────────────────────────────────────────────────────────────
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version",
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const VALID_UNITS = ["kg", "g", "L", "ml", "unidade", "caixa", "dz"];
-const VALID_CATEGORIES = [
-  "laticinios",
-  "secos_e_graos",
-  "hortifruti",
-  "carnes_e_peixes",
-  "embalagens",
-  "limpeza",
-  "outros",
-];
+// ─── SYSTEM INSTRUCTION (JSON MODE) ──────────────────────────────────────────
+// This instructs Gemini to always return a structured, valid JSON object.
+// Do NOT sanitize or strip original text — preserve currency symbols, punctuation,
+// measurement units and original formatting exactly as they appear in the document.
+const SYSTEM_INSTRUCTION_INGREDIENT = `
+Você é um extrator de dados de documentos fiscais e listas de compras.
+Leia o documento fornecido e extraia TODOS os itens listados.
+Preserve pontuação original, símbolos de moeda (R$, $), unidades de medida reais (kg, g, L, ml, cx, dz, un) e formatações dos documentos.
+Categorize cada item usando APENAS: laticinios, secos_e_graos, hortifruti, carnes_e_peixes, embalagens, limpeza, outros.
 
-const toNumber = (v: any) => {
-  if (typeof v === "number") return v;
-  if (!v) return 0;
-  const n = parseFloat(String(v).replace(",", "."));
-  return isNaN(n) ? 0 : n;
-};
+Retorne EXCLUSIVAMENTE este JSON (sem texto fora do JSON):
+{
+  "fornecedor": "nome do fornecedor ou null",
+  "numero_nota": "número da nota fiscal ou null",
+  "data_emissao": "data no formato YYYY-MM-DD ou null",
+  "valor_total": 0.00,
+  "ingredients": [
+    {
+      "nome": "nome exato do produto como no documento",
+      "codigo": "código do produto ou null",
+      "quantidade": 1.0,
+      "unidade": "unidade exata do documento",
+      "preco_unitario": 0.00,
+      "preco_total": 0.00,
+      "categoria": "categoria aqui"
+    }
+  ],
+  "summary": "resumo em 1 frase"
+}`;
 
+const SYSTEM_INSTRUCTION_RECIPE = `
+Você é um extrator de fichas técnicas de receitas gastronômicas.
+Leia o documento fornecido e extraia TODOS os dados da receita.
+Preserve nomes originais dos ingredientes, unidades de medida reais e formatações dos documentos.
+
+Retorne EXCLUSIVAMENTE este JSON:
+{
+  "recipeName": "nome da receita",
+  "preparationMethod": "modo de preparo completo",
+  "preparationTime": 0,
+  "yieldQuantity": 0,
+  "labor_cost": 0.00,
+  "energy_cost": 0.00,
+  "other_costs": 0.00,
+  "markup": 0.00,
+  "praca": "local de preparo ou null",
+  "ingredients": [
+    {
+      "nome": "nome exato como no documento",
+      "quantidade": 1.0,
+      "unidade": "unidade exata do documento",
+      "preco_unitario": 0.00,
+      "categoria": "categoria aqui"
+    }
+  ],
+  "summary": "resumo em 1 frase"
+}`;
+
+// ─── RETRY WITH BACKOFF + MODEL FALLBACK ─────────────────────────────────────
+async function callGeminiWithRetry(
+  apiKey: string,
+  geminiBody: any
+): Promise<any> {
+  const models = ["gemini-2.0-flash", "gemini-1.5-flash"];
+  const maxAttempts = 2;
+
+  for (const model of models) {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(geminiBody),
+        }
+      );
+
+      if (res.ok) {
+        const data = await res.json();
+        return { data, model };
+      }
+
+      if (res.status === 429) {
+        let waitMs = (attempt + 1) * 15000; // 15s, 30s
+        try {
+          const errJson = await res.clone().json();
+          const delay = errJson?.error?.details?.find((d: any) => d.retryDelay)?.retryDelay;
+          if (delay) {
+            const secs = parseInt(delay.replace("s", ""), 10);
+            if (!isNaN(secs)) waitMs = (secs + 3) * 1000;
+          }
+        } catch (_) {}
+        console.warn(`[${model}] 429 - aguardando ${waitMs}ms (tentativa ${attempt + 1})`);
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+
+      // Non-retryable: proceed to next model
+      console.warn(`[${model}] Erro ${res.status} — tentando próximo modelo`);
+      break;
+    }
+  }
+
+  throw new Error("Todos os modelos Gemini falharam. Tente novamente em 1 minuto.");
+}
+
+// ─── MAIN ─────────────────────────────────────────────────────────────────────
 Deno.serve(async (req: any) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
   try {
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     if (!GEMINI_API_KEY) {
-      return new Response(
-        JSON.stringify({ error: "GEMINI_API_KEY não configurada." }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      throw new Error("GEMINI_API_KEY não configurada.");
     }
 
     const body = await req.json();
-    const { content, fileType, extractRecipe, mimeType: customMimeType } = body;
+    const {
+      content,
+      fileType,
+      extractRecipe = false,
+      mimeType: customMimeType,
+      userId,
+      saveToDb = false, // set true to persist directly from the function
+    } = body;
 
     if (!content) {
-      return new Response(
-        JSON.stringify({ error: "Conteúdo ausente." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      throw new Error("Campo 'content' ausente no body.");
     }
 
-    // Determine effective MIME type
+    // ── Determine MIME type ──────────────────────────────────────────────────
     let mimeType = customMimeType;
     if (!mimeType) {
       if (fileType === "pdf") mimeType = "application/pdf";
       else if (fileType === "image") mimeType = "image/jpeg";
       else mimeType = "text/plain";
     }
-
     const isBase64 = mimeType !== "text/plain";
 
-    // ─── ULTRA-COMPACT PROMPTS ────────────────────────────────────────────────
-    const recipePrompt = `Chef Assistente. PDF/Imagem de receita.
-JSON: {"recipeName":str,"preparationMethod":str,"preparationTime":num,"yieldQuantity":num,"labor_cost":num,"energy_cost":num,"other_costs":num,"markup":num,"praca":str,"ingredients":[{"name":str,"quantity":num,"unit":"kg|g|L|ml|unidade|caixa|dz","category":"laticinios|secos_e_graos|hortifruti|carnes_e_peixes|embalagens|limpeza|outros","price":num}],"summary":str}`;
-
-    const ingredientPrompt = `Extrator de Estoque. PDF/Imagem de nota fiscal ou lista.
-JSON: {"ingredients":[{"name":str,"quantity":num,"unit":"kg|g|L|ml|unidade|caixa|dz","category":"laticinios|secos_e_graos|hortifruti|carnes_e_peixes|embalagens|limpeza|outros","price":num}],"summary":str}`;
-
-    const prompt = extractRecipe ? recipePrompt : ingredientPrompt;
-    // ─────────────────────────────────────────────────────────────────────────
-
-    const parts: any[] = [
-      isBase64
-        ? { inlineData: { mimeType, data: content } }
-        : { text: content },
-      { text: prompt },
-    ];
+    // ── Build Gemini request (JSON MODE) ────────────────────────────────────
+    const systemInstruction = extractRecipe
+      ? SYSTEM_INSTRUCTION_RECIPE
+      : SYSTEM_INSTRUCTION_INGREDIENT;
 
     const geminiBody = {
-      contents: [{ parts }],
+      // systemInstruction forces JSON-only output conforming to our schema
+      systemInstruction: {
+        parts: [{ text: systemInstruction }],
+      },
+      contents: [
+        {
+          parts: [
+            isBase64
+              ? { inlineData: { mimeType, data: content } }
+              : { text: content },
+            { text: "Extraia os dados conforme as instruções e retorne o JSON." },
+          ],
+        },
+      ],
       generationConfig: {
         temperature: 0.1,
+        // JSON MODE — Gemini will ONLY return valid JSON
         responseMimeType: "application/json",
       },
     };
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(geminiBody),
-      }
+    // ── Call Gemini with retry ───────────────────────────────────────────────
+    const { data: aiData, model: usedModel } = await callGeminiWithRetry(
+      GEMINI_API_KEY,
+      geminiBody
     );
 
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      console.error(`Gemini error ${geminiRes.status}:`, errText);
-      return new Response(
-        JSON.stringify({ error: "Erro na API do Gemini.", details: errText }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const aiData = await geminiRes.json();
     const rawText = aiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-
     if (!rawText) {
       const reason = aiData.candidates?.[0]?.finishReason || "UNKNOWN";
-      return new Response(
-        JSON.stringify({ ingredients: [], summary: `IA não processou (motivo: ${reason}).` }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      throw new Error(`Gemini não retornou dados (finishReason: ${reason}).`);
     }
 
-    // Parse JSON (with regex fallback)
-    let parsed: any = {};
+    // ── Parse JSON — no regex cleaning, preserve original values ─────────────
+    let parsed: any;
     try {
-      parsed = JSON.parse(rawText.trim());
+      parsed = JSON.parse(rawText);
     } catch (_) {
-      const m = rawText.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-      if (m) {
-        try { parsed = JSON.parse(m[0]); } catch (_2) { /* ignore */ }
+      // Last resort: find first JSON block (should rarely happen in JSON mode)
+      const match = rawText.match(/\{[\s\S]*\}/);
+      if (match) {
+        parsed = JSON.parse(match[0]);
+      } else {
+        throw new Error("Resposta do Gemini não é um JSON válido.");
       }
     }
 
-    // Normalize ingredients
-    const rawIngredients = Array.isArray(parsed.ingredients)
+    // ── Normalise ingredient keys (support both 'nome' and 'name') ──────────
+    const rawIngredients: any[] = Array.isArray(parsed.ingredients)
       ? parsed.ingredients
       : Array.isArray(parsed)
       ? parsed
       : [];
 
-    const ingredients = rawIngredients
-      .map((ing: any) => {
-        const name = String(ing.nome ?? ing.name ?? ing.item ?? ing.descricao ?? ing.produto ?? "").trim();
-        if (!name) return null;
+    const ingredients = rawIngredients.map((ing: any) => ({
+      name: ing.nome ?? ing.name ?? "",
+      codigo: ing.codigo ?? ing.code ?? null,
+      quantity: typeof ing.quantidade === "number" ? ing.quantidade : parseFloat(String(ing.quantidade ?? ing.quantity ?? 1).replace(",", ".")) || 1,
+      unit: ing.unidade ?? ing.unit ?? "unidade",
+      price: ing.preco_unitario ?? ing.price ?? ing.preco ?? null,
+      price_total: ing.preco_total ?? ing.total ?? null,
+      category: ing.categoria ?? ing.category ?? "outros",
+      supplier: parsed.fornecedor ?? null,
+    })).filter((i: any) => i.name);
 
-        let unit = String(ing.unidade ?? ing.unit ?? ing.un ?? "unidade").toLowerCase().trim();
-        if (unit === "l") unit = "L";
-        if (!VALID_UNITS.includes(unit)) unit = "unidade";
-
-        const rawCat = String(ing.categoria ?? ing.category ?? "outros").toLowerCase().trim();
-        const category = VALID_CATEGORIES.includes(rawCat) ? rawCat : "outros";
-
-        return {
-          name,
-          quantity: toNumber(ing.quantidade ?? ing.quantity ?? ing.qtd ?? 1),
-          unit,
-          category,
-          price: ing.price ?? ing.preco ?? ing.valor ?? null,
-          supplier: ing.supplier ?? ing.fornecedor ?? null,
-          minimum_quantity: ing.minimum_quantity ?? ing.estoque_minimo ?? null,
-          expiration_date: ing.expiration_date ?? ing.validade ?? ing.vencimento ?? null,
-        };
-      })
-      .filter(Boolean);
-
-    const result = {
+    // ── Build final result ───────────────────────────────────────────────────
+    const result: any = {
       ingredients,
-      summary: parsed.summary || `${ingredients.length} item(s) extraído(s).`,
+      summary: parsed.summary ?? `${ingredients.length} item(s) extraído(s) com ${usedModel}.`,
+      fornecedor: parsed.fornecedor ?? null,
+      numero_nota: parsed.numero_nota ?? null,
+      data_emissao: parsed.data_emissao ?? null,
+      valor_total: parsed.valor_total ?? null,
+      usedModel,
       ...(extractRecipe && {
-        recipeName: parsed.recipeName ? String(parsed.recipeName).trim() : undefined,
-        preparationMethod: parsed.preparationMethod
-          ? String(parsed.preparationMethod).trim()
-          : undefined,
-        preparationTime: toNumber(parsed.preparationTime),
-        yieldQuantity: toNumber(parsed.yieldQuantity),
-        labor_cost: toNumber(parsed.labor_cost),
-        energy_cost: toNumber(parsed.energy_cost),
-        other_costs: toNumber(parsed.other_costs),
-        markup: toNumber(parsed.markup),
-        praca: parsed.praca ? String(parsed.praca).trim() : undefined,
+        recipeName: parsed.recipeName ?? null,
+        preparationMethod: parsed.preparationMethod ?? null,
+        preparationTime: parsed.preparationTime ?? 0,
+        yieldQuantity: parsed.yieldQuantity ?? 0,
+        labor_cost: parsed.labor_cost ?? 0,
+        energy_cost: parsed.energy_cost ?? 0,
+        other_costs: parsed.other_costs ?? 0,
+        markup: parsed.markup ?? 0,
+        praca: parsed.praca ?? null,
       }),
     };
 
-    console.log(`Extracted ${ingredients.length} ingredients. extractRecipe=${extractRecipe}`);
+    // ── Optional: Save directly to Supabase ──────────────────────────────────
+    // When saveToDb=true and userId is provided, the validated data is persisted
+    // directly from the Edge Function without relying on the frontend to do it.
+    if (saveToDb && userId && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+      // 1. Record the invoice import
+      const { data: importRecord, error: importError } = await supabase
+        .from("invoice_imports")
+        .insert({
+          user_id: userId,
+          supplier_name: result.fornecedor,
+          invoice_number: result.numero_nota,
+          emission_date: result.data_emissao,
+          total_value: result.valor_total,
+          items_count: ingredients.length,
+          raw_data: parsed, // preserve full original JSON from Gemini
+        })
+        .select("id")
+        .single();
+
+      if (importError) {
+        console.error("Erro ao salvar invoice_imports:", importError.message);
+        // Don't fail the whole request — still return the extracted data
+        result.dbError = importError.message;
+      } else {
+        result.importId = importRecord?.id;
+
+        // 2. Upsert each ingredient into stock_items
+        for (const ing of ingredients) {
+          const { error: stockErr } = await supabase
+            .from("stock_items")
+            .upsert(
+              {
+                user_id: userId,
+                name: ing.name,
+                quantity: ing.quantity,
+                unit: ing.unit,
+                category: ing.category,
+                cost_price: ing.price,
+                supplier: ing.supplier,
+              },
+              { onConflict: "user_id,name", ignoreDuplicates: false }
+            );
+
+          if (stockErr) {
+            console.warn(`Erro ao inserir item '${ing.name}':`, stockErr.message);
+          }
+        }
+
+        result.savedToDb = true;
+      }
+    }
+
+    console.log(`[extract-ingredients] ${ingredients.length} itens extraídos via ${usedModel}. saveToDb=${saveToDb}`);
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: any) {
-    console.error("Edge Function Error:", err);
+    console.error("[extract-ingredients] Erro:", err?.message ?? err);
     return new Response(
-      JSON.stringify({ error: "Erro interno.", details: err?.message || String(err) }),
+      JSON.stringify({ error: err?.message ?? "Erro interno.", ingredients: [] }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
