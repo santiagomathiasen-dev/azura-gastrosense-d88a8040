@@ -3,34 +3,49 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 declare const Deno: any;
 
-// ─── CORS ────────────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+// 1. CORS ABSOLUTO — aplicado em TODAS as respostas sem exceção
+// ══════════════════════════════════════════════════════════════════
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// ─── SYSTEM INSTRUCTION (JSON MODE) ──────────────────────────────────────────
-// This instructs Gemini to always return a structured, valid JSON object.
-// Do NOT sanitize or strip original text — preserve currency symbols, punctuation,
-// measurement units and original formatting exactly as they appear in the document.
-const SYSTEM_INSTRUCTION_INGREDIENT = `
-Você é um extrator de dados de documentos fiscais e listas de compras.
-Leia o documento fornecido e extraia TODOS os itens listados.
-Preserve pontuação original, símbolos de moeda (R$, $), unidades de medida reais (kg, g, L, ml, cx, dz, un) e formatações dos documentos.
-Categorize cada item usando APENAS: laticinios, secos_e_graos, hortifruti, carnes_e_peixes, embalagens, limpeza, outros.
+// ══════════════════════════════════════════════════════════════════
+// 2. HELPERS
+// ══════════════════════════════════════════════════════════════════
+function jsonOk(data: unknown): Response {
+  return new Response(JSON.stringify(data), {
+    status: 200,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
-Retorne EXCLUSIVAMENTE este JSON (sem texto fora do JSON):
+function jsonError(message: string, status = 400): Response {
+  return new Response(JSON.stringify({ error: message, ingredients: [] }), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 3. SCHEMA / PROMPTS
+// ══════════════════════════════════════════════════════════════════
+const PROMPT_INGREDIENT = `Você é um extrator de dados de notas fiscais e listas de compras.
+Leia o documento e extraia TODOS os itens. Preserve pontuação, símbolos de moeda (R$), unidades reais e formatação original.
+Categorias permitidas: laticinios, secos_e_graos, hortifruti, carnes_e_peixes, embalagens, limpeza, outros.
+
+Retorne SOMENTE este JSON (nenhum texto fora do JSON):
 {
   "fornecedor": "nome do fornecedor ou null",
-  "numero_nota": "número da nota fiscal ou null",
-  "data_emissao": "data no formato YYYY-MM-DD ou null",
+  "numero_nota": "número da nota ou null",
+  "data_emissao": "YYYY-MM-DD ou null",
   "valor_total": 0.00,
   "ingredients": [
     {
-      "nome": "nome exato do produto como no documento",
-      "codigo": "código do produto ou null",
+      "nome": "nome exato do produto",
+      "codigo": "código ou null",
       "quantidade": 1.0,
       "unidade": "unidade exata do documento",
       "preco_unitario": 0.00,
@@ -41,12 +56,10 @@ Retorne EXCLUSIVAMENTE este JSON (sem texto fora do JSON):
   "summary": "resumo em 1 frase"
 }`;
 
-const SYSTEM_INSTRUCTION_RECIPE = `
-Você é um extrator de fichas técnicas de receitas gastronômicas.
-Leia o documento fornecido e extraia TODOS os dados da receita.
-Preserve nomes originais dos ingredientes, unidades de medida reais e formatações dos documentos.
+const PROMPT_RECIPE = `Você é um extrator de fichas técnicas gastronômicas.
+Leia o documento e extraia os dados da receita. Preserve nomes originais e unidades reais.
 
-Retorne EXCLUSIVAMENTE este JSON:
+Retorne SOMENTE este JSON (nenhum texto fora do JSON):
 {
   "recipeName": "nome da receita",
   "preparationMethod": "modo de preparo completo",
@@ -56,12 +69,12 @@ Retorne EXCLUSIVAMENTE este JSON:
   "energy_cost": 0.00,
   "other_costs": 0.00,
   "markup": 0.00,
-  "praca": "local de preparo ou null",
+  "praca": "local ou null",
   "ingredients": [
     {
-      "nome": "nome exato como no documento",
+      "nome": "nome exato",
       "quantidade": 1.0,
-      "unidade": "unidade exata do documento",
+      "unidade": "unidade exata",
       "preco_unitario": 0.00,
       "categoria": "categoria aqui"
     }
@@ -69,84 +82,95 @@ Retorne EXCLUSIVAMENTE este JSON:
   "summary": "resumo em 1 frase"
 }`;
 
-// ─── RETRY WITH BACKOFF + MODEL FALLBACK ─────────────────────────────────────
-async function callGeminiWithRetry(
-  apiKey: string,
-  geminiBody: any
-): Promise<any> {
+// ══════════════════════════════════════════════════════════════════
+// 4. GEMINI — chamada com retry automático + fallback de modelo
+// ══════════════════════════════════════════════════════════════════
+async function callGemini(apiKey: string, body: unknown): Promise<any> {
   const models = ["gemini-2.0-flash", "gemini-1.5-flash"];
-  const maxAttempts = 2;
 
   for (const model of models) {
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(geminiBody),
+          body: JSON.stringify(body),
         }
       );
 
       if (res.ok) {
-        const data = await res.json();
-        return { data, model };
+        const json = await res.json();
+        console.log(`[Gemini OK] model=${model} attempt=${attempt}`);
+        return json;
       }
 
       if (res.status === 429) {
-        let waitMs = (attempt + 1) * 15000; // 15s, 30s
+        let waitMs = (attempt + 1) * 15000;
         try {
           const errJson = await res.clone().json();
           const delay = errJson?.error?.details?.find((d: any) => d.retryDelay)?.retryDelay;
-          if (delay) {
-            const secs = parseInt(delay.replace("s", ""), 10);
-            if (!isNaN(secs)) waitMs = (secs + 3) * 1000;
-          }
+          if (delay) waitMs = (parseInt(delay) + 3) * 1000;
         } catch (_) {}
-        console.warn(`[${model}] 429 - aguardando ${waitMs}ms (tentativa ${attempt + 1})`);
+        console.warn(`[Gemini 429] model=${model} aguardando ${waitMs}ms`);
         await new Promise((r) => setTimeout(r, waitMs));
         continue;
       }
 
-      // Non-retryable: proceed to next model
-      console.warn(`[${model}] Erro ${res.status} — tentando próximo modelo`);
+      // Any other error on this model → try next model
+      const errText = await res.text();
+      console.warn(`[Gemini ${res.status}] model=${model}: ${errText.slice(0, 200)}`);
       break;
     }
   }
 
-  throw new Error("Todos os modelos Gemini falharam. Tente novamente em 1 minuto.");
+  throw new Error("API do Gemini indisponível. Tente novamente em 1 minuto.");
 }
 
-// ─── MAIN ─────────────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+// 5. MAIN — padrão à prova de falhas
+// ══════════════════════════════════════════════════════════════════
 Deno.serve(async (req: any) => {
+
+  // ── 2. Preflight CORS ──────────────────────────────────────────
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders });
   }
 
-  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-  const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
+  // ── 3. Try/Catch Global ────────────────────────────────────────
   try {
+
+    // ── Validar variáveis de ambiente ──────────────────────────────
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     if (!GEMINI_API_KEY) {
-      throw new Error("GEMINI_API_KEY não configurada.");
+      return jsonError("GEMINI_API_KEY não configurada no servidor.", 500);
     }
 
-    const body = await req.json();
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    // ── Ler body ───────────────────────────────────────────────────
+    let body: any;
+    try {
+      body = await req.json();
+    } catch (_) {
+      return jsonError("Body inválido: esperado JSON.");
+    }
+
     const {
       content,
       fileType,
       extractRecipe = false,
       mimeType: customMimeType,
       userId,
-      saveToDb = false, // set true to persist directly from the function
-    } = body;
+      saveToDb = false,
+    } = body ?? {};
 
     if (!content) {
-      throw new Error("Campo 'content' ausente no body.");
+      return jsonError("Campo 'content' ausente no body.");
     }
 
-    // ── Determine MIME type ──────────────────────────────────────────────────
+    // ── Determinar MIME type ───────────────────────────────────────
     let mimeType = customMimeType;
     if (!mimeType) {
       if (fileType === "pdf") mimeType = "application/pdf";
@@ -155,13 +179,10 @@ Deno.serve(async (req: any) => {
     }
     const isBase64 = mimeType !== "text/plain";
 
-    // ── Build Gemini request ─────────────────────────────────────────────────
-    // NOTE: systemInstruction at root-level does NOT work reliably with inlineData.
-    // We put the instruction as the FIRST text part inside contents instead.
-    const systemInstruction = extractRecipe
-      ? SYSTEM_INSTRUCTION_RECIPE
-      : SYSTEM_INSTRUCTION_INGREDIENT;
-
+    // ── Montar requisição Gemini ───────────────────────────────────
+    // Instrução entra como primeiro part dentro de contents
+    // (systemInstruction no nível raiz não funciona com inlineData)
+    const prompt = extractRecipe ? PROMPT_RECIPE : PROMPT_INGREDIENT;
     const filePart = isBase64
       ? { inlineData: { mimeType, data: content } }
       : { text: content };
@@ -170,72 +191,70 @@ Deno.serve(async (req: any) => {
       contents: [
         {
           parts: [
-            { text: systemInstruction },  // instruction first
-            filePart,                      // then the document
-            { text: "Retorne apenas o JSON conforme especificado acima. Nenhum texto fora do JSON." },
+            { text: prompt },
+            filePart,
+            { text: "Retorne apenas o JSON. Nenhum texto fora do JSON." },
           ],
         },
       ],
       generationConfig: {
         temperature: 0.1,
-        // JSON MODE — Gemini will ONLY return valid JSON
         responseMimeType: "application/json",
       },
     };
 
-    // ── Call Gemini with retry ───────────────────────────────────────────────
-    const { data: aiData, model: usedModel } = await callGeminiWithRetry(
-      GEMINI_API_KEY,
-      geminiBody
-    );
+    // ── Chamar Gemini ──────────────────────────────────────────────
+    const aiData = await callGemini(GEMINI_API_KEY, geminiBody);
 
-    const rawText = aiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const rawText: string = aiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    const finishReason: string = aiData?.candidates?.[0]?.finishReason ?? "UNKNOWN";
+
+    console.log(`[Gemini] finishReason=${finishReason} rawText.length=${rawText.length}`);
+
     if (!rawText) {
-      const reason = aiData.candidates?.[0]?.finishReason || "UNKNOWN";
-      throw new Error(`Gemini não retornou dados (finishReason: ${reason}).`);
+      return jsonError(`Gemini não retornou dados (finishReason: ${finishReason}).`, 500);
     }
 
-    // ── Parse JSON — no regex cleaning, preserve original values ─────────────
+    // ── Parse JSON ─────────────────────────────────────────────────
     let parsed: any;
     try {
-      parsed = JSON.parse(rawText);
+      parsed = JSON.parse(rawText.trim());
     } catch (_) {
-      // Last resort: find first JSON block (should rarely happen in JSON mode)
       const match = rawText.match(/\{[\s\S]*\}/);
       if (match) {
-        parsed = JSON.parse(match[0]);
+        try { parsed = JSON.parse(match[0]); } catch (_2) {
+          return jsonError("Resposta do Gemini não é JSON válido.", 500);
+        }
       } else {
-        throw new Error("Resposta do Gemini não é um JSON válido.");
+        return jsonError("Resposta do Gemini não é JSON válido.", 500);
       }
     }
 
-    // ── Normalise ingredient keys (support both 'nome' and 'name') ──────────
-    const rawIngredients: any[] = Array.isArray(parsed.ingredients)
-      ? parsed.ingredients
-      : Array.isArray(parsed)
-      ? parsed
-      : [];
+    // ── Normalizar ingredientes ────────────────────────────────────
+    const rawIngredients: any[] = Array.isArray(parsed.ingredients) ? parsed.ingredients
+      : Array.isArray(parsed) ? parsed : [];
 
-    const ingredients = rawIngredients.map((ing: any) => ({
-      name: ing.nome ?? ing.name ?? "",
-      codigo: ing.codigo ?? ing.code ?? null,
-      quantity: typeof ing.quantidade === "number" ? ing.quantidade : parseFloat(String(ing.quantidade ?? ing.quantity ?? 1).replace(",", ".")) || 1,
-      unit: ing.unidade ?? ing.unit ?? "unidade",
-      price: ing.preco_unitario ?? ing.price ?? ing.preco ?? null,
-      price_total: ing.preco_total ?? ing.total ?? null,
-      category: ing.categoria ?? ing.category ?? "outros",
-      supplier: parsed.fornecedor ?? null,
-    })).filter((i: any) => i.name);
+    const ingredients = rawIngredients
+      .map((ing: any) => ({
+        name: String(ing.nome ?? ing.name ?? "").trim(),
+        codigo: ing.codigo ?? null,
+        quantity: parseFloat(String(ing.quantidade ?? ing.quantity ?? 1).replace(",", ".")) || 1,
+        unit: ing.unidade ?? ing.unit ?? "unidade",
+        price: ing.preco_unitario ?? ing.price ?? null,
+        price_total: ing.preco_total ?? null,
+        category: ing.categoria ?? ing.category ?? "outros",
+        supplier: parsed.fornecedor ?? null,
+      }))
+      .filter((i: any) => i.name);
 
-    // ── Build final result ───────────────────────────────────────────────────
+    // ── Montar resultado final ─────────────────────────────────────
     const result: any = {
       ingredients,
-      summary: parsed.summary ?? `${ingredients.length} item(s) extraído(s) com ${usedModel}.`,
+      summary: parsed.summary ?? `${ingredients.length} item(s) extraído(s).`,
       fornecedor: parsed.fornecedor ?? null,
       numero_nota: parsed.numero_nota ?? null,
       data_emissao: parsed.data_emissao ?? null,
       valor_total: parsed.valor_total ?? null,
-      usedModel,
       ...(extractRecipe && {
         recipeName: parsed.recipeName ?? null,
         preparationMethod: parsed.preparationMethod ?? null,
@@ -249,14 +268,11 @@ Deno.serve(async (req: any) => {
       }),
     };
 
-    // ── Optional: Save directly to Supabase ──────────────────────────────────
-    // When saveToDb=true and userId is provided, the validated data is persisted
-    // directly from the Edge Function without relying on the frontend to do it.
+    // ── Salvar no Supabase (opcional) ───────────────────────────────
     if (saveToDb && userId && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-      // 1. Record the invoice import
-      const { data: importRecord, error: importError } = await supabase
+      const { data: importRow, error: importErr } = await supabase
         .from("invoice_imports")
         .insert({
           user_id: userId,
@@ -265,19 +281,17 @@ Deno.serve(async (req: any) => {
           emission_date: result.data_emissao,
           total_value: result.valor_total,
           items_count: ingredients.length,
-          raw_data: parsed, // preserve full original JSON from Gemini
+          raw_data: parsed,
         })
         .select("id")
         .single();
 
-      if (importError) {
-        console.error("Erro ao salvar invoice_imports:", importError.message);
-        // Don't fail the whole request — still return the extracted data
-        result.dbError = importError.message;
+      if (importErr) {
+        console.error("[Supabase] invoice_imports insert error:", importErr.message);
+        result.dbError = importErr.message;
       } else {
-        result.importId = importRecord?.id;
+        result.importId = importRow?.id;
 
-        // 2. Upsert each ingredient into stock_items
         for (const ing of ingredients) {
           const { error: stockErr } = await supabase
             .from("stock_items")
@@ -291,28 +305,23 @@ Deno.serve(async (req: any) => {
                 cost_price: ing.price,
                 supplier: ing.supplier,
               },
-              { onConflict: "user_id,name", ignoreDuplicates: false }
+              { onConflict: "user_id,name" }
             );
-
-          if (stockErr) {
-            console.warn(`Erro ao inserir item '${ing.name}':`, stockErr.message);
-          }
+          if (stockErr) console.warn(`[Supabase] upsert '${ing.name}':`, stockErr.message);
         }
 
         result.savedToDb = true;
       }
     }
 
-    console.log(`[extract-ingredients] ${ingredients.length} itens extraídos via ${usedModel}. saveToDb=${saveToDb}`);
+    console.log(`[extract-ingredients] OK: ${ingredients.length} itens. saveToDb=${saveToDb}`);
 
-    return new Response(JSON.stringify(result), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  } catch (err: any) {
-    console.error("[extract-ingredients] Erro:", err?.message ?? err);
-    return new Response(
-      JSON.stringify({ error: err?.message ?? "Erro interno.", ingredients: [] }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    // ── 5. Retorno de Sucesso com corsHeaders ──────────────────────
+    return jsonOk(result);
+
+  } catch (error: any) {
+    // ── 4. Retorno de Erro Seguro com corsHeaders ──────────────────
+    console.error("[extract-ingredients] CATCH:", error?.message ?? error);
+    return jsonError(error?.message ?? "Erro interno no servidor.", 500);
   }
 });
