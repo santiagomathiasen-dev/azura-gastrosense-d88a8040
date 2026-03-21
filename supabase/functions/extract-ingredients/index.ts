@@ -1,6 +1,3 @@
-// @ts-ignore
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
 declare const Deno: any;
 
 // ══════════════════════════════════════════════════════════════════
@@ -281,6 +278,9 @@ Deno.serve(async (req: any) => {
 
     // ── Salvar no Supabase (opcional) ───────────────────────────────
     if (saveToDb && userId && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+      // Lazy import: avoid top-level esm.sh import that can crash during cold start
+      // @ts-ignore
+      const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
       const { data: importRow, error: importErr } = await supabase
