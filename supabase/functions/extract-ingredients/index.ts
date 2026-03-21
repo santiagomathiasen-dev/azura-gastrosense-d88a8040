@@ -19,9 +19,11 @@ function jsonOk(data: unknown): Response {
   });
 }
 
-function jsonError(message: string, status = 400): Response {
+// IMPORTANT: Always return 200 so supabase.functions.invoke puts the body in `data`
+// not in `error`. Non-2xx responses become opaque FunctionsHttpError with no message.
+function jsonError(message: string, _status = 200): Response {
   return new Response(JSON.stringify({ error: message, ingredients: [] }), {
-    status,
+    status: 200,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
@@ -331,8 +333,8 @@ Deno.serve(async (req: any) => {
     return jsonOk(result);
 
   } catch (error: any) {
-    // ── 4. Retorno de Erro Seguro com corsHeaders ──────────────────
-    // Exibe o erro completo nos logs do Supabase (painel → Functions → Logs)
+    // Sempre retorna 200 para que supabase.functions.invoke leia o body em `data`
+    // status 500 vira FunctionsHttpError opaco sem mensagem legível no frontend
     console.error("ERRO REAL DO GEMINI:", error?.message ?? error);
     if (error?.details) console.error("DETALHES:", error.details);
 
@@ -343,7 +345,7 @@ Deno.serve(async (req: any) => {
         ingredients: [],
       }),
       {
-        status: 500,
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
