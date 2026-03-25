@@ -74,7 +74,7 @@ import { useEvents, CalendarEvent } from '@/hooks/useEvents';
 // ---- Forecast Input Tab ----
 
 function ForecastInputTab() {
-    const [targetDate, setTargetDate] = useState<Date>(addDays(getNow(), 1));
+    const [targetDate, setTargetDate] = useState<Date>(getNow());
     const [showDialog, setShowDialog] = useState(false);
     const [showSuggestDialog, setShowSuggestDialog] = useState(false);
     const [showAIDialog, setShowAIDialog] = useState(false);
@@ -195,11 +195,11 @@ function ForecastInputTab() {
                     </PopoverContent>
                 </Popover>
 
-                <Button size="sm" variant="outline" onClick={() => setTargetDate(addDays(getNow(), 1))}>
-                    Amanhã
+                <Button size="sm" variant={dateStr === formatInBrasilia(getNow(), 'yyyy-MM-dd') ? 'default' : 'outline'} onClick={() => setTargetDate(getNow())}>
+                    Hoje
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => setTargetDate(addDays(getNow(), 2))}>
-                    Depois de amanhã
+                <Button size="sm" variant={dateStr === formatInBrasilia(addDays(getNow(), 1), 'yyyy-MM-dd') ? 'default' : 'outline'} onClick={() => setTargetDate(addDays(getNow(), 1))}>
+                    Amanhã
                 </Button>
 
                 {activeEvents.length > 0 && (
@@ -613,7 +613,7 @@ function ProductionOrdersTab() {
 function HistoryAnalysisTab() {
     const [baseDate, setBaseDate] = useState<Date>(getNow());
     const [days, setDays] = useState('7');
-    const [targetDate, setTargetDate] = useState<Date>(addDays(getNow(), 1));
+    const [targetDate, setTargetDate] = useState<Date>(getNow());
 
     const { data: history = [], isLoading } = useSalesProductionHistory(baseDate, parseInt(days, 10));
     const queryClient = useQueryClient();
@@ -865,7 +865,8 @@ function EventsTab() {
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Agendar Evento</DialogTitle>
-                    </DialogHeader>
+                    <DialogDescription className="sr-only">Detalhes do diálogo</DialogDescription>
+</DialogHeader>
                     <div className="space-y-4 py-4">
                         <div className="space-y-2">
                             <Label>Nome do Evento (ex: Carnaval, Feriado)</Label>

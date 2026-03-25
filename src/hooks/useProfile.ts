@@ -12,12 +12,48 @@ export function useProfile() {
             if (!user?.id) return null;
             console.log("useProfile: fetching profile via fetch for", user.id);
             try {
-                // First get basic profile
-                const profile = await supabaseFetch(`profiles?id=eq.${user.id}&select=*`, {
-                    headers: {
-                        'Accept': 'application/vnd.pgrst.object+json'
+                // First get basic profile (array format to behave like maybeSingle)
+                let profiles: any = null;
+                try {
+                    profiles = await supabaseFetch(`profiles?id=eq.${user.id}&select=*`);
+                } catch (fetchErr: any) {
+                    if (fetchErr.status === 406 || fetchErr.message?.includes('PGRST116')) {
+                        console.warn("useProfile: 406/PGRST116 Profile not found, proceeding to fallback creation...");
+                        profiles = null;
+                    } else {
+                        throw fetchErr;
                     }
-                });
+                }
+
+                let profile = Array.isArray(profiles) ? profiles[0] : profiles;
+
+                // Fallback: Create profile automatically if it doesn't exist
+                if (!profile) {
+                    console.log("useProfile: Profile not found. Creating fallback profile...");
+                    const newProfileData = {
+                        id: user.id,
+                        email: user.email,
+                        full_name: user.user_metadata?.name || user.email?.split('@')[0] || 'Usuário',
+                        role: 'admin',
+                        status: 'ativo'
+                    };
+                    
+                    try {
+                        const { data: newProfile, error: insertError } = await supabase
+                            .from('profiles')
+                            .insert([newProfileData])
+                            .select()
+                            .maybeSingle();
+                            
+                        if (insertError) {
+                            console.error("useProfile: Error creating fallback profile", insertError);
+                        } else if (newProfile) {
+                            profile = newProfile;
+                        }
+                    } catch (e) {
+                         console.error("useProfile: Exception creating fallback profile", e);
+                    }
+                }
 
                 if (profile && profile.role === 'colaborador') {
                     // Fetch collaborator specific data (permissions)

@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from '@/components/ui/dialog';
+, DialogDescription} from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { parseSafeDate } from '@/hooks/useExpiryDates';
 
@@ -91,7 +91,8 @@ export function ProductionPreviewDialog({
             </div>
             <div>
               <DialogTitle className="text-xl">{receita.nome}</DialogTitle>
-              <p className="text-sm text-muted-foreground mt-0.5">
+              <DialogDescription className="sr-only">Detalhes do diálogo</DialogDescription>
+<p className="text-sm text-muted-foreground mt-0.5">
                 Ficha Técnica para Produção
               </p>
             </div>

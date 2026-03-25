@@ -35,6 +35,7 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { useProfile } from '@/hooks/useProfile';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useQueryClient } from '@tanstack/react-query';
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Painel', permission: 'can_access_dashboard' },
@@ -65,6 +66,7 @@ export function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
   const { collaborator, isCollaboratorMode, clearCollaboratorSession } = useCollaboratorContext();
   const { isAdmin, isGestor } = useUserRole();
   const { profile } = useProfile();
+  const queryClient = useQueryClient();
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
@@ -73,6 +75,7 @@ export function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
     if (isCollaboratorMode) {
       clearCollaboratorSession();
     }
+    queryClient.clear();
     await logout();
     // Use full page reload after a short delay to avoid React unmount issues
     setTimeout(() => {

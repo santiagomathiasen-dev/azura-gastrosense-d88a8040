@@ -19,7 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from '@/components/ui/dialog';
+, DialogDescription} from '@/components/ui/dialog';
 import { CATEGORY_LABELS, UNIT_LABELS, type StockItem, type StockCategory, type StockUnit } from '@/hooks/useStockItems';
 import { useSuppliers } from '@/hooks/useSuppliers';
 import { AlertTriangle, Plus, Trash2 } from 'lucide-react';
@@ -151,7 +151,8 @@ export function StockItemForm({
           <DialogTitle>
             {initialData ? 'Editar Item' : 'Novo Item de Estoque'}
           </DialogTitle>
-        </DialogHeader>
+        <DialogDescription className="sr-only">Detalhes do diálogo</DialogDescription>
+</DialogHeader>
         <form onSubmit={handleSubmit(handleFormSubmit, onInvalid)} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Nome *</Label>

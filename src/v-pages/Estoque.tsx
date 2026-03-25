@@ -252,6 +252,9 @@ export default function Estoque() {
 
     createItem.mutate({ ...data, name: formattedName }, {
       onSuccess: () => setFormOpen(false),
+      onError: (error: any) => {
+        toast.error(error?.message?.includes('42501') ? "Erro de permissão: Falha ao salvar (RLS)." : "Erro ao salvar. Tente novamente.");
+      }
     });
   };
 
@@ -275,6 +278,9 @@ export default function Estoque() {
         setFormOpen(false);
         setSelectedItem(null);
       },
+      onError: (error: any) => {
+        toast.error(error?.message?.includes('42501') ? "Erro de permissão: Falha ao salvar (RLS)." : "Erro ao salvar. Tente novamente.");
+      }
     });
   };
 

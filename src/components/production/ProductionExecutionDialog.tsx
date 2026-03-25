@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from '@/components/ui/dialog';
+, DialogDescription} from '@/components/ui/dialog';
 import {
   Collapsible,
   CollapsibleContent,
@@ -106,7 +106,8 @@ export function ProductionExecutionDialog({
         <DialogHeader>
           <div className="space-y-2">
             <DialogTitle className="text-xl">{production.name}</DialogTitle>
-            <div className="flex items-center justify-between">
+            <DialogDescription className="sr-only">Detalhes do diálogo</DialogDescription>
+<div className="flex items-center justify-between">
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
                 <span className="font-medium text-foreground">
                   {production.planned_quantity} {production.technical_sheet.yield_unit}

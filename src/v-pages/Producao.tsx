@@ -897,7 +897,8 @@ function ProductionPreviewSheet({
       <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-xl">{producao.name}</DialogTitle>
-        </DialogHeader>
+        <DialogDescription className="sr-only">Detalhes do diálogo</DialogDescription>
+</DialogHeader>
 
         <div className="space-y-4 py-2 flex-1 overflow-y-auto">
           {/* Summary Cards */}

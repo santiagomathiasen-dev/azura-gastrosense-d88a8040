@@ -20,6 +20,20 @@ const nextConfig = {
             },
         ];
     },
+    async redirects() {
+        return [
+            {
+                source: '/fichas-tecnicas',
+                destination: '/fichas',
+                permanent: true,
+            },
+            {
+                source: '/producoes',
+                destination: '/producao',
+                permanent: true,
+            },
+        ];
+    },
 
 };
 

@@ -5,7 +5,7 @@ import {
     DialogHeader,
     DialogTitle,
     DialogFooter
-} from '@/components/ui/dialog';
+, DialogDescription} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -57,7 +57,8 @@ export function BatchManagementDialog({
                     <DialogTitle className="flex items-center gap-2">
                         Gerenciar Lotes: {stockItemName}
                     </DialogTitle>
-                </DialogHeader>
+                <DialogDescription className="sr-only">Detalhes do diálogo</DialogDescription>
+</DialogHeader>
 
                 <div className="flex-1 overflow-y-auto space-y-4 py-4 pr-2">
                     {/* Add New Batch Form - Compact Horizontal */}

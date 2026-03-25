@@ -3,7 +3,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter , DialogDescription} from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -156,7 +156,8 @@ export default function EstoqueFinalizados() {
           <DialogContent className="max-w-sm">
             <DialogHeader>
               <DialogTitle className="text-base">Adicionar Produção</DialogTitle>
-            </DialogHeader>
+            <DialogDescription className="sr-only">Detalhes do diálogo</DialogDescription>
+</DialogHeader>
             <div className="space-y-3 py-2">
               {/* Image Upload */}
               <div className="flex items-start gap-3">
@@ -259,7 +260,8 @@ export default function EstoqueFinalizados() {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-base">Editar Quantidade</DialogTitle>
-          </DialogHeader>
+          <DialogDescription className="sr-only">Detalhes do diálogo</DialogDescription>
+</DialogHeader>
           <div className="space-y-3 py-2">
             {/* Image Upload */}
             <div className="flex items-start gap-3">
@@ -341,7 +343,8 @@ export default function EstoqueFinalizados() {
               <AlertTriangle className="h-4 w-4 text-destructive" />
               Registrar Perda
             </DialogTitle>
-          </DialogHeader>
+          <DialogDescription className="sr-only">Detalhes do diálogo</DialogDescription>
+</DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1">
               <Label className="text-xs">Produto</Label>

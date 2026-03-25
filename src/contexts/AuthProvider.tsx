@@ -32,8 +32,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     setSession(session);
                     setUser(session.user);
                 }
-            } catch (error) {
-                console.error("AuthInit Error:", error);
+            } catch (error: any) {
+                if (error?.name === 'AbortError' || error?.message?.includes('signal is aborted') || error?.message?.includes('AbortError')) {
+                    // Suppress: This is normal in React StrictMode when the hook unmounts quickly
+                    console.log("AuthInit: session fetch aborted (React StrictMode effect cleanup).");
+                } else {
+                    console.error("AuthInit Error:", error);
+                }
             } finally {
                 if (mounted) {
                     setIsLoading(false);
@@ -105,11 +110,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return { error: error.message };
         }
 
-        if (data.session) {
-            return { error: undefined };
+        if (data.session || data.user) {
+            // Profile fallback creation right after signup
+            if (data.user) {
+                console.log("AuthProvider: Check/Create profile for new user", data.user.id);
+                const { error: profileError } = await supabase.from('profiles').upsert({
+                    id: data.user.id,
+                    email: email.trim(),
+                    full_name: name.trim(),
+                    role: 'admin',
+                    status: 'ativo'
+                });
+                if (profileError) {
+                    console.error("AuthProvider: Profile creation error:", profileError.message);
+                }
+            }
+            if (data.session) return { error: undefined };
         }
 
-        return { error: 'Conta criada com sucesso! Verifique seu email para confirmar o cadastro (se necessário).' };
+        return { error: 'Conta criada com sucesso! Verifique seu email para confirmar o cadastro.' };
     };
 
     const loginWithGoogle = async (redirectTo?: string): Promise<{ error?: string }> => {

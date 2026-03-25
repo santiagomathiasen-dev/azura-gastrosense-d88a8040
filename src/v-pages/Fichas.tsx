@@ -400,9 +400,9 @@ export default function Fichas() {
       toast.success(editingSheet ? 'Ficha técnica atualizada!' : 'Ficha técnica criada!');
       setFormDialogOpen(false);
       resetForm();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving recipe:', error);
-      toast.error('Erro ao salvar ficha técnica. Verifique se todos os ingredientes são válidos.');
+      toast.error(error?.message?.includes('42501') ? "Erro de permissão: Falha ao salvar (RLS)." : "Erro ao salvar ficha técnica. Tente novamente.");
     } finally {
       setIsSaving(false);
     }
@@ -591,7 +591,8 @@ export default function Fichas() {
           <DialogHeader>
             <div className="flex items-center justify-between">
               <DialogTitle>{selectedSheet?.name}</DialogTitle>
-              <div className="flex gap-2">
+              <DialogDescription className="sr-only">Detalhes do diálogo</DialogDescription>
+<div className="flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"

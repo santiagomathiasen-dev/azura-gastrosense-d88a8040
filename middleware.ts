@@ -45,16 +45,16 @@ export async function middleware(request: NextRequest) {
     );
 
     const {
-        data: { session },
-    } = await supabase.auth.getSession();
+        data: { user },
+    } = await supabase.auth.getUser();
 
     // Protected routes: dashboard
-    if (request.nextUrl.pathname.startsWith('/dashboard') && !session) {
+    if (request.nextUrl.pathname.startsWith('/dashboard') && !user) {
         return NextResponse.redirect(new URL('/auth', request.url));
     }
 
     // Redirect to dashboard if logged in and trying to access auth
-    if (request.nextUrl.pathname.startsWith('/auth') && session) {
+    if (request.nextUrl.pathname.startsWith('/auth') && user) {
         return NextResponse.redirect(new URL('/dashboard', request.url));
     }
 

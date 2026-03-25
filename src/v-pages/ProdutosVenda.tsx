@@ -3,7 +3,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter , DialogDescription} from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -734,7 +734,8 @@ export default function ProdutosVenda() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Criar Produto para Venda</DialogTitle>
-          </DialogHeader>
+          <DialogDescription className="sr-only">Detalhes do diálogo</DialogDescription>
+</DialogHeader>
           {renderProductForm()}
           <DialogFooter>
             <Button variant="outline" onClick={() => { setIsAddDialogOpen(false); resetForm(); }}>
@@ -755,7 +756,8 @@ export default function ProdutosVenda() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Editar Produto</DialogTitle>
-          </DialogHeader>
+          <DialogDescription className="sr-only">Detalhes do diálogo</DialogDescription>
+</DialogHeader>
           {renderProductForm()}
           <DialogFooter>
             <Button variant="outline" onClick={() => { setEditingProduct(null); resetForm(); }}>

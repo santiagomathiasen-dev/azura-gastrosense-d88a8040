@@ -67,12 +67,32 @@ export function SupplierManagement() {
 
     const handleFormSubmit = (data: Partial<Supplier>) => {
         if (editingSupplier) {
-            updateSupplier.mutate({ ...data, id: editingSupplier.id, updated_at: getNow().toISOString() } as any);
+            updateSupplier.mutate(
+                { ...data, id: editingSupplier.id, updated_at: getNow().toISOString() } as any,
+                {
+                    onSuccess: () => {
+                        setFormOpen(false);
+                        setEditingSupplier(null);
+                    },
+                    onError: (error: any) => {
+                        toast.error(error?.message?.includes('42501') ? "Erro de permissão: Falha ao salvar (RLS)." : "Erro ao salvar. Tente novamente.");
+                    }
+                }
+            );
         } else {
-            createSupplier.mutate(data as any);
+            createSupplier.mutate(
+                data as any,
+                {
+                    onSuccess: () => {
+                        setFormOpen(false);
+                        setEditingSupplier(null);
+                    },
+                    onError: (error: any) => {
+                        toast.error(error?.message?.includes('42501') ? "Erro de permissão: Falha ao salvar (RLS)." : "Erro ao salvar. Tente novamente.");
+                    }
+                }
+            );
         }
-        setFormOpen(false);
-        setEditingSupplier(null);
     };
 
     const handleFormOpenChange = (open: boolean) => {

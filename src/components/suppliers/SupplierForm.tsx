@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from '@/components/ui/dialog';
+, DialogDescription} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -113,7 +113,8 @@ export function SupplierForm({
           <DialogTitle>
             {initialData ? 'Editar Fornecedor' : 'Novo Fornecedor'}
           </DialogTitle>
-        </DialogHeader>
+        <DialogDescription className="sr-only">Detalhes do diálogo</DialogDescription>
+</DialogHeader>
 
         <div className="space-y-4 py-4">
           {/* Dados Básicos */}

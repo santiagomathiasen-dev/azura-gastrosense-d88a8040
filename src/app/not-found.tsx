@@ -1,6 +1,6 @@
 'use client';
 
-import { NavigationLink } from '@/components/NavigationLink';
+import Link from 'next/link';
 import { ChefHat } from 'lucide-react';
 
 export default function NotFound() {
@@ -12,14 +12,14 @@ export default function NotFound() {
             <h1 className="text-4xl font-bold mb-2">404</h1>
             <h2 className="text-xl font-semibold mb-4">Página não encontrada</h2>
             <p className="text-muted-foreground max-w-md mb-8">
-                Parece que esta receita não existe ou foi removida do cardápio.
+                A página que você está procurando não existe ou foi movida.
             </p>
-            <NavigationLink
-                to="/dashboard"
+            <Link
+                href="/dashboard"
                 className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
                 Voltar para o Painel
-            </NavigationLink>
+            </Link>
         </div>
     );
 }

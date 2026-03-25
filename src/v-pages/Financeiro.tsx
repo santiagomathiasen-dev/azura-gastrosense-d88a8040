@@ -649,7 +649,8 @@ export default function Financeiro() {
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Novo Lançamento de Gasto</DialogTitle>
-                    </DialogHeader>
+                    <DialogDescription className="sr-only">Detalhes do diálogo</DialogDescription>
+</DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div className="space-y-2">
                             <Label>Descrição</Label>
@@ -730,7 +731,8 @@ export default function Financeiro() {
                 <DialogContent className="sm:max-w-[500px]">
                     <DialogHeader>
                         <DialogTitle>Lançar Vencimento / Contracheque</DialogTitle>
-                    </DialogHeader>
+                    <DialogDescription className="sr-only">Detalhes do diálogo</DialogDescription>
+</DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div className="space-y-2">
                             <Label>Colaborador</Label>

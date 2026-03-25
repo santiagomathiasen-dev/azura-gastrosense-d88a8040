@@ -249,16 +249,14 @@ export default function Auth() {
                   size="sm"
                   className="w-full text-[10px] h-7 gap-2 opacity-50 hover:opacity-100"
                   onClick={() => {
-                    setName('Test user');
-                    setEmail(`test_${Math.floor(Math.random() * 1000)}@azura.com`);
+                    setEmail('test_44@azura.com');
                     setPassword('password123');
-                    setConfirmPassword('password123');
-                    setIsLogin(false);
+                    setIsLogin(true);
                     setError('');
                   }}
                 >
                   <KeyRound className="h-3 w-3" />
-                  Preencher Dados de Teste (Dev Only)
+                  Preencher Dados de Login (Dev Only)
                 </Button>
               </div>
             )}
