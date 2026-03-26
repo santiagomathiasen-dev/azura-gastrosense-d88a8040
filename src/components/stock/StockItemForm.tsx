@@ -19,7 +19,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-, DialogDescription} from '@/components/ui/dialog';
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { CATEGORY_LABELS, UNIT_LABELS, type StockItem, type StockCategory, type StockUnit } from '@/hooks/useStockItems';
 import { useSuppliers } from '@/hooks/useSuppliers';
 import { AlertTriangle, Plus, Trash2 } from 'lucide-react';
