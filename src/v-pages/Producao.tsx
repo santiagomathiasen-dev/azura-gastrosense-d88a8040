@@ -406,7 +406,7 @@ export default function Producao() {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <PageHeader
-        title="Produção"
+        title="Produções"
         description="Gerencie produções"
         action={{ label: 'Nova', onClick: openNewDialog }}
       />

@@ -196,10 +196,13 @@ function ForecastInputTab() {
                 </Popover>
 
                 <Button size="sm" variant={dateStr === formatInBrasilia(getNow(), 'yyyy-MM-dd') ? 'default' : 'outline'} onClick={() => setTargetDate(getNow())}>
-                    Hoje
+                    Hoje ({formatInBrasilia(getNow(), 'dd/MM')})
                 </Button>
                 <Button size="sm" variant={dateStr === formatInBrasilia(addDays(getNow(), 1), 'yyyy-MM-dd') ? 'default' : 'outline'} onClick={() => setTargetDate(addDays(getNow(), 1))}>
-                    Amanhã
+                    Amanhã ({formatInBrasilia(addDays(getNow(), 1), 'dd/MM')})
+                </Button>
+                <Button size="sm" variant={dateStr === formatInBrasilia(addDays(getNow(), 2), 'yyyy-MM-dd') ? 'default' : 'outline'} onClick={() => setTargetDate(addDays(getNow(), 2))}>
+                    Depois de amanhã ({formatInBrasilia(addDays(getNow(), 2), 'dd/MM')})
                 </Button>
 
                 {activeEvents.length > 0 && (
@@ -447,14 +450,21 @@ function ProductionOrdersTab() {
                     variant={dateStr === formatInBrasilia(getNow(), 'yyyy-MM-dd') ? 'default' : 'outline'}
                     onClick={() => setSelectedDate(getNow())}
                 >
-                    Hoje
+                    Hoje ({formatInBrasilia(getNow(), 'dd/MM')})
                 </Button>
                 <Button
                     size="sm"
                     variant={dateStr === formatInBrasilia(addDays(getNow(), 1), 'yyyy-MM-dd') ? 'default' : 'outline'}
                     onClick={() => setSelectedDate(addDays(getNow(), 1))}
                 >
-                    Amanhã
+                    Amanhã ({formatInBrasilia(addDays(getNow(), 1), 'dd/MM')})
+                </Button>
+                <Button
+                    size="sm"
+                    variant={dateStr === formatInBrasilia(addDays(getNow(), 2), 'yyyy-MM-dd') ? 'default' : 'outline'}
+                    onClick={() => setSelectedDate(addDays(getNow(), 2))}
+                >
+                    Depois de amanhã ({formatInBrasilia(addDays(getNow(), 2), 'dd/MM')})
                 </Button>
                 <Popover>
                     <PopoverTrigger asChild>

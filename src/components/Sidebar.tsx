@@ -46,7 +46,7 @@ const navItems = [
   { to: '/previsao-vendas', icon: CalendarClock, label: 'Previsão Vendas', permission: 'can_access_producao' },
   { to: '/compras', icon: ShoppingCart, label: 'Compras', permission: 'can_access_compras' },
   { to: '/estoque-insumos-produzidos', icon: UtensilsCrossed, label: 'Insumos Produzidos', permission: 'can_access_estoque_producao' },
-  { to: '/estoque-finalizados', icon: PackageCheck, label: 'Prod. Finalizadas', permission: 'can_access_finalizados' },
+  { to: '/estoque-finalizados', icon: PackageCheck, label: 'Produções Finalizadas', permission: 'can_access_finalizados' },
   { to: '/perdas', icon: TrendingDown, label: 'Perdas', permission: 'can_access_estoque' },
   { to: '/praca-quente', icon: Zap, label: 'Praça Quente (PDV)', permission: 'can_access_produtos_venda' },
   { to: '/produtos-venda', icon: ShoppingBag, label: 'Produtos p/ Venda', permission: 'can_access_produtos_venda' },
@@ -113,7 +113,7 @@ export function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
     <aside
       className={cn(
         "hidden md:flex flex-col bg-sidebar text-sidebar-foreground h-screen fixed left-0 top-0 z-50 transition-all duration-300",
-        collapsed ? "w-16" : "w-56"
+        collapsed ? "w-16" : "w-64"
       )}
     >
       {/* Logo Azura - Fixed at top */}
@@ -151,7 +151,7 @@ export function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
             }
           >
             <item.icon className="h-5 w-5 flex-shrink-0" />
-            {!collapsed && <span className="animate-fade-in truncate">{item.label}</span>}
+            {!collapsed && <span className="animate-fade-in truncate" title={item.label}>{item.label}</span>}
           </NavigationLink>
         ))}
       </nav>

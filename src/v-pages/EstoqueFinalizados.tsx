@@ -118,7 +118,7 @@ export default function EstoqueFinalizados() {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <PageHeader
-        title="Estoque Finalizados"
+        title="Produções Finalizadas"
         description="Produções prontas para venda"
       />
 
