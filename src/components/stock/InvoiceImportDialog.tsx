@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { FileText, Upload, Loader2, Check, AlertTriangle, Plus, Search } from 'lucide-react';
+import { FileText, Upload, Loader2, Check, AlertTriangle, Plus, Search, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -25,6 +25,7 @@ interface InvoiceImportDialogProps {
 }
 
 type Step = 'upload' | 'ai_processing' | 'mapping' | 'saving';
+type ProcessingStage = 'reading' | 'sending' | 'processing' | null;
 
 interface ExtractionItem {
   id?: string;
@@ -40,25 +41,68 @@ interface MappedItem extends ExtractionItem {
   category?: StockCategory;
 }
 
+// ── helpers ────────────────────────────────────────────────────────────────
+
+async function extractTextFromPDF(file: File): Promise<string> {
+  const pdfjsLib = await import('pdfjs-dist');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+  const buffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  let text = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    text += content.items.map((item: any) => item.str).join(' ') + '\n';
+  }
+  return text.trim();
+}
+
+async function compressImage(file: File, maxWidth = 1200, quality = 0.7): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const scale = Math.min(1, maxWidth / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { reject(new Error('Canvas não suportado')); return; }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', quality);
+      resolve(dataUrl.split(',')[1]);
+    };
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Falha ao ler imagem')); };
+    img.src = objectUrl;
+  });
+}
+
+// ── component ──────────────────────────────────────────────────────────────
+
 export function InvoiceImportDialog({
   open,
   onOpenChange,
 }: InvoiceImportDialogProps) {
   const { items: existingItems, processInvoiceImport } = useStockItems();
   const [step, setStep] = useState<Step>('upload');
+  const [processingStage, setProcessingStage] = useState<ProcessingStage>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [importId, setImportId] = useState<string | null>(null);
   const [nfeData, setNfeData] = useState<any>(null);
   const [mappedItems, setMappedItems] = useState<MappedItem[]>([]);
-  
+  const [lastFile, setLastFile] = useState<File | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const resetState = useCallback(() => {
     setStep('upload');
+    setProcessingStage(null);
     setNfeData(null);
     setMappedItems([]);
     setImportId(null);
     setIsProcessing(false);
+    setLastFile(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, []);
 
@@ -82,7 +126,7 @@ export function InvoiceImportDialog({
     toast.success('Nota Fiscal processada pela IA!');
   }, [existingItems]);
 
-  // Realtime Subscription
+  // Realtime Subscription (legacy fallback — not used in the direct Edge Function flow)
   useEffect(() => {
     if (!importId || step !== 'ai_processing') return;
 
@@ -119,29 +163,112 @@ export function InvoiceImportDialog({
     };
   }, [importId, step, handleComplete, resetState]);
 
+  const processFile = useCallback(async (file: File) => {
+    setLastFile(file);
+    setIsProcessing(true);
+    setStep('ai_processing');
+
+    // Timeout de 30s com AbortController
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+
+    try {
+      let content: string;
+      let fileType: string;
+      let mimeType: string;
+
+      const isPdf = file.type === 'application/pdf';
+      const isImage = file.type.startsWith('image/');
+
+      if (isPdf) {
+        // 1. Extrai texto do PDF no browser — payload < 5KB em vez de ~320KB
+        setProcessingStage('reading');
+        const text = await extractTextFromPDF(file);
+        content = text;
+        fileType = 'text';
+        mimeType = 'text/plain';
+      } else if (isImage) {
+        // 2. Comprime imagem — reduz payload em ~70%
+        setProcessingStage('reading');
+        content = await compressImage(file);
+        fileType = 'image';
+        mimeType = 'image/jpeg';
+      } else {
+        throw new Error('Tipo de arquivo não suportado. Use PDF ou imagem.');
+      }
+
+      // 3. Envia para Edge Function
+      setProcessingStage('sending');
+      const { data: extractedData, error: extractError } = await supabase.functions.invoke(
+        'extract-ingredients',
+        {
+          body: { content, fileType, mimeType, extractRecipe: false },
+        }
+      );
+
+      clearTimeout(timeout);
+
+      if (extractError) throw new Error(`Erro na extração: ${extractError.message}`);
+      if (extractedData?.error) throw new Error(extractedData.error);
+
+      // 4. Processa resultado
+      setProcessingStage('processing');
+
+      // Salva registro no banco
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const { data: importRecord } = await supabase
+          .from('invoice_imports')
+          .insert({
+            user_id: session.user.id,
+            status: 'completed',
+            supplier_name: extractedData.fornecedor ?? null,
+            invoice_number: extractedData.numero_nota ?? null,
+            emission_date: extractedData.data_emissao ?? null,
+            total_value: extractedData.valor_total ?? null,
+            items_count: extractedData.ingredients?.length ?? 0,
+            extracted_data: extractedData,
+          })
+          .select('id')
+          .single();
+        if (importRecord?.id) setImportId(importRecord.id);
+      }
+
+      // Normaliza campos para o formato interno
+      const normalized = {
+        supplierName: extractedData.fornecedor ?? 'Fornecedor não identificado',
+        supplierCnpj: null,
+        invoiceNumber: extractedData.numero_nota ?? '-',
+        totalValue: extractedData.valor_total ?? 0,
+        items: (extractedData.ingredients ?? []).map((ing: any) => ({
+          name: ing.name,
+          quantity: ing.quantity,
+          unit: ing.unit,
+          unitPrice: ing.price ?? 0,
+          category: ing.category,
+        })),
+      };
+
+      setProcessingStage(null);
+      handleComplete(normalized);
+    } catch (err: any) {
+      clearTimeout(timeout);
+      const isTimeout = err?.name === 'AbortError';
+      toast.error(
+        isTimeout
+          ? 'Tempo limite excedido (30s). Verifique sua conexão e tente novamente.'
+          : `Erro ao processar nota: ${err.message}`
+      );
+      setStep('upload');
+      setProcessingStage(null);
+      setIsProcessing(false);
+    }
+  }, [handleComplete]);
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    setIsProcessing(true);
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const resp = await fetch('/api/invoices/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const result = await resp.json();
-      if (!resp.ok) throw new Error(result.error);
-
-      setImportId(result.importId);
-      setStep('ai_processing');
-    } catch (err: any) {
-      toast.error(`Erro no upload: ${err.message}`);
-      setIsProcessing(false);
-    }
+    await processFile(file);
   };
 
   const handleConfirmImport = async () => {
@@ -226,9 +353,25 @@ export function InvoiceImportDialog({
               <Loader2 className="h-12 w-12 animate-spin text-primary" />
               <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-primary">AI</div>
             </div>
-            <div className="text-center">
-              <p className="font-medium">O Gemini Flash está analisando sua nota...</p>
-              <p className="text-xs text-muted-foreground">Isso geralmente leva menos de 10 segundos.</p>
+            <div className="text-center space-y-1">
+              {processingStage === 'reading' && (
+                <>
+                  <p className="font-medium">Lendo arquivo...</p>
+                  <p className="text-xs text-muted-foreground">Extraindo texto localmente</p>
+                </>
+              )}
+              {processingStage === 'sending' && (
+                <>
+                  <p className="font-medium">Enviando para IA...</p>
+                  <p className="text-xs text-muted-foreground">Payload otimizado — menos de 10KB</p>
+                </>
+              )}
+              {(processingStage === 'processing' || !processingStage) && (
+                <>
+                  <p className="font-medium">Processando com IA...</p>
+                  <p className="text-xs text-muted-foreground">Gemini está analisando sua nota</p>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -320,6 +463,12 @@ export function InvoiceImportDialog({
         )}
 
         <DialogFooter className="gap-2 sm:gap-0">
+          {step === 'upload' && lastFile && (
+            <Button variant="outline" onClick={() => processFile(lastFile)} disabled={isProcessing}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Tentar novamente
+            </Button>
+          )}
           {step === 'mapping' && (
             <>
               <Button variant="outline" onClick={() => setStep('upload')} disabled={isProcessing}>

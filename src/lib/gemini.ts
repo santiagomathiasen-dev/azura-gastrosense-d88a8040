@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+// gemini-2.0-flash is stable → use v1 (v1beta returns 404 for this model)
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "", { apiVersion: "v1" });
 
 export const nfeSchema = {
   description: "Extracted data from a Brazilian NF-e invoice",

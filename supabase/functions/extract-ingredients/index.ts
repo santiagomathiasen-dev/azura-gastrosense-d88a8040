@@ -84,16 +84,25 @@ Retorne SOMENTE este JSON (nenhum texto fora do JSON):
 // ══════════════════════════════════════════════════════════════════
 // 4. GEMINI — chamada com retry automático + fallback de modelo
 // ══════════════════════════════════════════════════════════════════
+// Each entry: [modelName, apiVersion]
+// gemini-2.0-flash and newer are stable → v1
+// v1beta kept as fallback in case the key only has beta access
+const GEMINI_MODELS: [string, string][] = [
+  ["gemini-2.0-flash", "v1"],
+  ["gemini-2.0-flash-lite", "v1"],
+  ["gemini-2.0-flash", "v1beta"],
+  ["gemini-1.5-flash-latest", "v1beta"],
+];
+
 async function callGemini(apiKey: string, geminiBody: unknown): Promise<any> {
-  const models = ["gemini-2.0-flash", "gemini-1.5-flash"];
   let lastErrorDetails = "";
 
-  for (const model of models) {
+  for (const [model, apiVersion] of GEMINI_MODELS) {
     for (let attempt = 0; attempt < 3; attempt++) {
-      console.log(`[Gemini] Tentando model=${model} attempt=${attempt}`);
+      console.log(`[Gemini] Tentando model=${model} api=${apiVersion} attempt=${attempt}`);
 
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent?key=${apiKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -113,7 +122,7 @@ async function callGemini(apiKey: string, geminiBody: unknown): Promise<any> {
         try { errBody = { raw: await res.text() }; } catch (_2) { }
       }
       const errMsg = errBody?.error?.message ?? JSON.stringify(errBody);
-      lastErrorDetails = `[${model}] HTTP ${res.status}: ${errMsg}`;
+      lastErrorDetails = `[${model}/${apiVersion}] HTTP ${res.status}: ${errMsg}`;
       // ESTE log aparece no painel do Supabase → Functions → Logs
       console.error("ERRO REAL DO GEMINI:", lastErrorDetails);
       console.error("GEMINI PAYLOAD COMPLETO:", JSON.stringify(errBody));
@@ -127,7 +136,8 @@ async function callGemini(apiKey: string, geminiBody: unknown): Promise<any> {
         continue;
       }
 
-      // Erro não-retryável neste modelo → tenta próximo
+      // 404 = modelo não encontrado nesta versão da API → tenta próxima entrada
+      // Outros erros não-retryáveis → tenta próxima entrada também
       break;
     }
   }
