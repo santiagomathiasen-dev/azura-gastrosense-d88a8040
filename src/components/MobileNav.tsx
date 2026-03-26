@@ -70,10 +70,10 @@ export function MobileNav() {
   const visibleNavItems = [
     ...navItems.filter(item => {
       // adminOnly é exclusivo para admins
-      if ((item as any).adminOnly) return isAdmin || isGestor || !isAdmin; // Temporarily permissive
+      if ((item as any).adminOnly) return isAdmin;
       if (item.managementOnly) {
         if (isCollaboratorMode) return false;
-        return isAdmin || isGestor || true; // Force show management for testing
+        return isAdmin || isGestor;
       }
       if (isCollaboratorMode && item.permission) {
         return hasAccess(item.to);

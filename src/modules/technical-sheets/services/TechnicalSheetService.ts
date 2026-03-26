@@ -19,6 +19,7 @@ export class TechnicalSheetService {
      * Calculates total cost based on ingredients.
      */
     static calculateTotalCost(ingredients: TechnicalSheetIngredient[]): number {
+        if (!ingredients?.length) return 0;
         return ingredients.reduce((total, ing) => {
             const price = ing.stock_item?.unit_price || 0;
             return total + (ing.quantity * price);

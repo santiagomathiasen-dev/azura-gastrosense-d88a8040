@@ -238,7 +238,8 @@ export function VoiceImportDialog({
       processVoiceInput();
       hasSpokenRef.current = false;
     }
-  }, [isListening]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isListening, finalTranscript, transcript]);
 
   // Auto-start listening when dialog opens
   useEffect(() => {

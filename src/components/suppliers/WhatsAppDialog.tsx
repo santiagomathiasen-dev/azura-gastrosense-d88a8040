@@ -42,6 +42,10 @@ export function WhatsAppDialog({
 
     const handleOpenWhatsApp = () => {
         const cleanNumber = phoneNumber.replace(/\D/g, '');
+        if (cleanNumber.length < 10) {
+            toast.error('Número de telefone inválido. Verifique o cadastro do fornecedor.');
+            return;
+        }
         const encodedMessage = encodeURIComponent(message);
         window.open(`https://wa.me/55${cleanNumber}?text=${encodedMessage}`, '_blank');
         onOpenChange(false);

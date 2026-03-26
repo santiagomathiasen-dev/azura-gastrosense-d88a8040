@@ -51,5 +51,10 @@ export const extractInvoiceData = async (content: string) => {
 
   const result = await model.generateContent(prompt);
   const response = await result.response;
-  return JSON.parse(response.text());
+  const text = response.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`Gemini retornou resposta inválida: ${text.slice(0, 200)}`);
+  }
 };

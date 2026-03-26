@@ -121,25 +121,16 @@ export function PurchasePeriodSelector({ productions, onPeriodChange }: Purchase
     setReferenceDate(newDate);
   };
 
-  // Track if this is the first render to set initial state
+  // Track if this is the first render to avoid calling before productions load
   const isInitialMount = useRef(true);
 
-  // Notify parent of changes - use useEffect, not useMemo (side effects!)
+  // Notify parent of period/filter changes once productions are ready
   useEffect(() => {
-    // Only call if productions data is ready
     if (productions.length > 0 || !isInitialMount.current) {
       onPeriodChange(startDate, endDate, filteredProductions);
     }
     isInitialMount.current = false;
   }, [startDate, endDate, filteredProductions]);
-
-  // Initial call when productions first load
-  useEffect(() => {
-    if (productions.length > 0 && isInitialMount.current) {
-      onPeriodChange(startDate, endDate, filteredProductions);
-      isInitialMount.current = false;
-    }
-  }, [productions]);
 
   const goToToday = () => {
     setReferenceDate(getNow());

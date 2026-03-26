@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -10,8 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Trash2, Plus, Calendar, Package, Hash, Save } from 'lucide-react';
+import { Trash2, Plus, Calendar, Package, Hash } from 'lucide-react';
 import { useExpiryDates, parseSafeDate } from '@/hooks/useExpiryDates';
 import { toast } from 'sonner';
 
@@ -39,16 +38,20 @@ export function BatchManagementDialog({
             return;
         }
 
-        await addExpiryDate.mutateAsync({
-            stock_item_id: stockItemId,
-            expiry_date: newDate,
-            batch_name: newBatch || undefined,
-            quantity: newQty ? parseFloat(newQty) : 0,
-        });
+        try {
+            await addExpiryDate.mutateAsync({
+                stock_item_id: stockItemId,
+                expiry_date: newDate,
+                batch_name: newBatch || undefined,
+                quantity: newQty ? parseFloat(newQty) : 0,
+            });
 
-        setNewDate('');
-        setNewBatch('');
-        setNewQty('');
+            setNewDate('');
+            setNewBatch('');
+            setNewQty('');
+        } catch (error: any) {
+            toast.error(`Erro ao adicionar lote: ${error?.message ?? 'Tente novamente'}`);
+        }
     };
 
     return (

@@ -98,8 +98,10 @@ export class ProductionService {
      * Logic to determine batch codes for produced inputs.
      */
     static generateBatchCode(sheetName: string): string {
-        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const now = new Date();
+        const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+        const msStr = now.getTime().toString(36).slice(-3).toUpperCase();
         const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-        return `${sheetName.substring(0, 3).toUpperCase()}-${dateStr}-${random}`;
+        return `${sheetName.substring(0, 3).toUpperCase()}-${dateStr}-${msStr}${random}`;
     }
 }

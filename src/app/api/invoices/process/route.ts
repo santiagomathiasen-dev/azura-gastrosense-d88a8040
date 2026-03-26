@@ -5,8 +5,9 @@ import { extractInvoiceData } from '@/lib/gemini';
 export const maxDuration = 60; // Vercel timeout adjustment
 
 export async function POST(req: NextRequest) {
+  let importId: string | undefined;
   try {
-    const { importId } = await req.json();
+    ({ importId } = await req.json());
     if (!importId) throw new Error('Missing importId');
 
     const supabase = await createClient();
@@ -59,15 +60,17 @@ export async function POST(req: NextRequest) {
     
     // Attempt to mark as error in database
     try {
-      const supabase = await createClient();
-      await supabase
-        .from('invoice_imports')
-        .update({ 
-          status: 'error', 
-          error_message: error.message,
-          updated_at: new Date().toISOString()
-        })
-        .filter('id', 'eq', (req.json() as any).importId);
+      if (importId) {
+        const supabase = await createClient();
+        await supabase
+          .from('invoice_imports')
+          .update({
+            status: 'error',
+            error_message: error.message,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', importId);
+      }
     } catch (e) {
       console.error('Failed to log error to DB:', e);
     }

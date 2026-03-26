@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Image, Video, X, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -24,6 +24,19 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 export function MediaUpload({ media, onMediaChange, maxItems = 5 }: MediaUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const mediaRef = useRef(media);
+  mediaRef.current = media;
+
+  // Revoke all blob URLs on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      mediaRef.current.forEach(item => {
+        if (item.url.startsWith('blob:')) {
+          URL.revokeObjectURL(item.url);
+        }
+      });
+    };
+  }, []);
 
   const validateFile = (file: File): boolean => {
     const isImage = ACCEPTED_IMAGE_TYPES.includes(file.type);

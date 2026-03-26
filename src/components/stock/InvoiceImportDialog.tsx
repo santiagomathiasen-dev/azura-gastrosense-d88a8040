@@ -86,8 +86,10 @@ export function InvoiceImportDialog({
   useEffect(() => {
     if (!importId || step !== 'ai_processing') return;
 
+    let mounted = true;
+
     const channel = supabase
-      .channel('invoice_import_status')
+      .channel(`invoice_import_status_${importId}`)
       .on(
         'postgres_changes',
         {
@@ -97,9 +99,10 @@ export function InvoiceImportDialog({
           filter: `id=eq.${importId}`,
         },
         (payload) => {
+          if (!mounted) return;
           const newRecord = payload.new as any;
           console.log('Realtime Status Update:', newRecord.status);
-          
+
           if (newRecord.status === 'completed' && newRecord.extracted_data) {
             handleComplete(newRecord.extracted_data);
           } else if (newRecord.status === 'error') {
@@ -111,6 +114,7 @@ export function InvoiceImportDialog({
       .subscribe();
 
     return () => {
+      mounted = false;
       supabase.removeChannel(channel);
     };
   }, [importId, step, handleComplete, resetState]);
