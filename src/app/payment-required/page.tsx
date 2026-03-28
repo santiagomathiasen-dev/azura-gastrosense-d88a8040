@@ -7,11 +7,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
-export default function PaymentRequiredPage() {
+function PaymentRequiredContent() {
     const { logout } = useAuth();
     const { profile, refetch } = useProfile();
     const router = useRouter();
@@ -341,5 +341,20 @@ export default function PaymentRequiredPage() {
                 </div>
             </Card>
         </div>
+    );
+}
+
+export default function PaymentRequiredPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4 font-sans">
+                <Card className="max-w-2xl w-full border-border/50 shadow-2xl overflow-hidden bg-card p-12 flex flex-col items-center justify-center gap-4">
+                    <RefreshCw className="h-10 w-10 animate-spin text-primary" />
+                    <p className="text-lg font-semibold">Carregando opções de pagamento...</p>
+                </Card>
+            </div>
+        }>
+            <PaymentRequiredContent />
+        </Suspense>
     );
 }
