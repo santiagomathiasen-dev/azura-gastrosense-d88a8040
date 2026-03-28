@@ -46,7 +46,7 @@ serve(async (req: any) => {
     };
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -75,7 +75,15 @@ serve(async (req: any) => {
     }
 
     const aiResponse = await response.json();
-    const assistantMessage = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+    const finishReason = aiResponse.candidates?.[0]?.finishReason ?? "UNKNOWN";
+    const assistantMessage = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    if (!assistantMessage) {
+      console.error(`[process-voice-text] Gemini candidates vazios. finishReason=${finishReason}`);
+      return new Response(
+        JSON.stringify({ error: `IA não retornou dados (finishReason: ${finishReason}).`, ingredients: [] }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Extract JSON array from the response with cleaning and recovery
     let ingredients: any[] = [];

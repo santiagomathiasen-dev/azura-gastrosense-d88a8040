@@ -113,10 +113,14 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   // Check payment/active status — runs for ALL authenticated users who have a loaded profile
   // isAdmin (role='admin') = restaurant owner; they must also pay, except site-level owners (role='owner')
   const isOwner = (profile?.role as string) === 'owner';
-  const isBlocked = profile?.status === 'inativo';
   const isPaymentPending =
     profile?.status_pagamento === false ||
     (profile?.subscription_end_date && new Date(profile.subscription_end_date) < new Date());
+  // hasPaid: active subscription overrides any block
+  const hasPaid = profile?.status_pagamento === true &&
+    (!profile?.subscription_end_date || new Date(profile.subscription_end_date) > new Date());
+  // Only show "Conta Bloqueada" if admin-deactivated AND no valid payment
+  const isBlocked = profile?.status === 'inativo' && !hasPaid;
 
   if (user && !isOwner && profile) {
     if (isBlocked) {

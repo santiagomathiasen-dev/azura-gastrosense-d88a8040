@@ -79,6 +79,7 @@ Deno.serve(async (req) => {
         .from('profiles')
         .update({
           plan: planId,
+          status: 'ativo',
           status_pagamento: true,
           subscription_end_date: newExpiryDate.toISOString()
         })

@@ -97,7 +97,7 @@ JSON apenas.`;
     };
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -126,7 +126,15 @@ JSON apenas.`;
     }
 
     const aiResponse = await response.json();
-    const assistantMessage = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+    const finishReason = aiResponse.candidates?.[0]?.finishReason ?? "UNKNOWN";
+    const assistantMessage = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    if (!assistantMessage) {
+      console.error(`[process-stock-input] Gemini candidates vazios. finishReason=${finishReason}`);
+      return new Response(
+        JSON.stringify({ error: `IA não retornou dados (finishReason: ${finishReason}).` }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Extract JSON from the response with cleaning and recovery
     let result;
