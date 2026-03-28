@@ -118,8 +118,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     id: data.user.id,
                     email: email.trim(),
                     full_name: name.trim(),
-                    role: 'admin',
-                    status: 'ativo'
+                    role: 'user',
+                    status: 'ativo',
+                    status_pagamento: false
                 });
                 if (profileError) {
                     console.error("AuthProvider: Profile creation error:", profileError.message);

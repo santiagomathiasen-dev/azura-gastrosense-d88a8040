@@ -34,8 +34,9 @@ export function useProfile() {
                         id: user.id,
                         email: user.email,
                         full_name: user.user_metadata?.name || user.email?.split('@')[0] || 'Usuário',
-                        role: 'admin',
-                        status: 'ativo'
+                        role: 'user',
+                        status: 'ativo',
+                        status_pagamento: false
                     };
                     
                     try {
