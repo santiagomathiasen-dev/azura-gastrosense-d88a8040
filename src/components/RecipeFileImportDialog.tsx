@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { FileText, Upload, Camera, X, Loader2, Image, RefreshCw } from 'lucide-react';
+import { FileText, Upload, Camera, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -121,7 +121,7 @@ export function RecipeFileImportDialog({
         if (file.type.startsWith('image/')) {
           setProcessingStage('reading');
           fileType = 'image';
-          content = await compressImage(file, 1200, 0.8);
+          content = await compressImage(file, 800, 0.6);
         } else if (file.type === 'application/pdf') {
           setProcessingStage('reading');
           fileType = 'text';

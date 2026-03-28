@@ -136,7 +136,7 @@ export function IngredientFileImportDialog({
 
         if (file.type.startsWith('image/')) {
           fileType = 'image';
-          content = await compressImage(file, 1200, 0.8);
+          content = await compressImage(file, 800, 0.6);
           mimeType = 'image/jpeg';
         } else if (file.type === 'application/pdf') {
           // Extrai texto no browser: envia < 5KB em vez de ~320KB base64

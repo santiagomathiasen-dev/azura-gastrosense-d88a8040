@@ -98,30 +98,28 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <Navigate to={`/auth?from=${pathname}`} replace />;
   }
 
-  // If we are logged in but profile is still loading,
-  // ONLY block if there is truly no user session at all.
-  // Never block an authenticated user on background profile/role loading.
-  if (isSecondaryLoading && !profile && !isAdmin && !user) {
+  // If logged in but profile is still loading, wait — never let payment check run on null profile
+  if (user && (profileLoading || roleLoading) && !profile) {
     return (
       <div className="flex items-center justify-center min-h-[60vh] w-full">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-muted-foreground text-sm">Carregando permissões...</p>
+          <p className="text-muted-foreground text-sm">Verificando permissões...</p>
         </div>
       </div>
     );
   }
 
-  // Check payment/active status for non-admin profiles
-  const isSantiago = isAdmin; // Admins bypass payment restriction; removed hardcoded emails
+  // Check payment/active status — runs for ALL authenticated users who have a loaded profile
+  // isAdmin (role='admin') = restaurant owner; they must also pay, except site-level owners (role='owner')
+  const isOwner = (profile?.role as string) === 'owner';
   const isBlocked = profile?.status === 'inativo';
-  // If status_pagamento is false OR subscription_end_date is in the past
-  const isPaymentPending = profile?.status_pagamento === false || (profile?.subscription_end_date && new Date(profile.subscription_end_date) < new Date());
+  const isPaymentPending =
+    profile?.status_pagamento === false ||
+    (profile?.subscription_end_date && new Date(profile.subscription_end_date) < new Date());
 
-  // Admins and Santiago are never blocked/payment-restricted here for management purposes
-  if (user && !isAdmin && !isSantiago && profile) {
+  if (user && !isOwner && profile) {
     if (isBlocked) {
-      console.log("ProtectedRoute: User is blocked (inativo)");
       return (
         <div className="flex items-center justify-center min-h-[60vh] w-full p-4 text-center">
           <div className="max-w-md space-y-4">
@@ -135,9 +133,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
       );
     }
 
-    // Block expired Grátis trial users
     if ((isTrialExpired || isPaymentPending) && pathname !== '/payment-required') {
-      console.log("ProtectedRoute: Trial/payment expired → /payment-required");
       return <Navigate to="/payment-required" replace />;
     }
   }

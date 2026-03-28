@@ -52,7 +52,7 @@ export async function supabaseFetch(
     }
 
     // Abort controller: use caller's signal if provided, else create one with timeout
-    const { timeoutMs = 30_000, signal: callerSignal, ...fetchOptions } = options;
+    const { timeoutMs = 60_000, signal: callerSignal, ...fetchOptions } = options;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
