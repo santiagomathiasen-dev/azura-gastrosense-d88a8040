@@ -59,6 +59,12 @@ function PaymentRequiredContent() {
         const payerId = searchParams.get('PayerID');
         if (!token || !payerId || !profile?.id || capturingPaypal) return;
 
+        // If already paid, just redirect — no need to capture again
+        if (profile.status_pagamento === true) {
+            router.push('/dashboard');
+            return;
+        }
+
         const capturePaypal = async () => {
             setCapturingPaypal(true);
             toast.loading("Finalizando pagamento PayPal...", { id: 'paypal-capture' });
@@ -70,7 +76,8 @@ function PaymentRequiredContent() {
                 toast.success("Pagamento confirmado! Liberando acesso...", { id: 'paypal-capture' });
                 router.push('/dashboard');
             } catch (err: any) {
-                toast.error(err.message || "Erro ao finalizar pagamento PayPal", { id: 'paypal-capture' });
+                toast.dismiss('paypal-capture');
+                toast.error("Pagamento PayPal recebido mas confirmação automática falhou. Clique em 'Verificar Agora'.");
                 setCapturingPaypal(false);
             }
         };

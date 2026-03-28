@@ -76,9 +76,9 @@ export function useProfile() {
             }
         },
         enabled: !!user?.id,
-        retry: false,
-        staleTime: 5 * 60 * 1000, // Keep profile fresh for 5 minutes
-        gcTime: 30 * 60 * 1000,   // Keep in cache for 30 minutes
+        retry: 1,
+        staleTime: 30_000,        // Profile re-fetches after 30s (catches admin DB updates quickly)
+        gcTime: 5 * 60 * 1000,
     });
 
 
