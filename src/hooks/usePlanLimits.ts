@@ -37,6 +37,8 @@ export function usePlanLimits() {
   const limits = PLAN_LIMITS[plan];
 
   const isTrialExpired = () => {
+    // Paid users never have an expired trial — status_pagamento overrides plan field
+    if (profile?.status_pagamento === true) return false;
     if (plan !== 'gratis') return false;
     if (!profile?.created_at) return false;
     const created = new Date(profile.created_at);
