@@ -12,7 +12,6 @@ export function useUserRole() {
   const { data: profile, isLoading } = useQuery({
     queryKey: ['user_profile_role', user?.id],
     queryFn: async () => {
-      console.log("useUserRole: Querying profile for user:", user?.id);
       const { data, error } = await supabase
         .from('profiles')
         .select('role')
@@ -24,7 +23,6 @@ export function useUserRole() {
         console.error('useUserRole: ERROR fetching profile:', error);
         throw error;
       }
-      console.log("useUserRole: Profile fetched successfully:", data);
       return data;
     },
     enabled: !!user?.id,

@@ -145,7 +145,6 @@ export function InvoiceImportDialog({
         (payload) => {
           if (!mounted) return;
           const newRecord = payload.new as any;
-          console.log('Realtime Status Update:', newRecord.status);
 
           if (newRecord.status === 'completed' && newRecord.extracted_data) {
             handleComplete(newRecord.extracted_data);

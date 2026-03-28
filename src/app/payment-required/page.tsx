@@ -83,7 +83,7 @@ function PaymentRequiredContent() {
         };
 
         capturePaypal();
-    }, [searchParams, profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [searchParams, profile?.id, profile?.status_pagamento, router]);
 
     const handleLogout = async () => {
         await logout();

@@ -113,7 +113,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (data.session || data.user) {
             // Profile fallback creation right after signup
             if (data.user) {
-                console.log("AuthProvider: Check/Create profile for new user", data.user.id);
                 const { error: profileError } = await supabase.from('profiles').upsert({
                     id: data.user.id,
                     email: email.trim(),
@@ -137,8 +136,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const nextPath = redirectTo || '/dashboard';
         // Use the same /auth/v1/callback route which handles cookie exchange
         const callbackUrl = `${origin}/auth/v1/callback?next=${encodeURIComponent(nextPath)}`;
-        
-        console.log("AuthProvider: Google Login redirect:", callbackUrl);
 
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',

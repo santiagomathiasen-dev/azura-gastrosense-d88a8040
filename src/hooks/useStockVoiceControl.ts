@@ -319,8 +319,6 @@ Retorne JSON: {"ingredients": [{"name": string, "quantity": number, "expiration_
 
           const data = await AIApi.processVoiceText(cleanFinal, systemPrompt);
 
-          console.log("Voice process output:", data);
-
           if (data && data.error) {
             console.error('Voice process logic error:', data.error);
             throw new Error(`Erro na IA: ${data.error}`);
@@ -346,7 +344,6 @@ Retorne JSON: {"ingredients": [{"name": string, "quantity": number, "expiration_
             : findItemByVoice(extracted.name);
 
           if (item) {
-            console.log("Matched item:", item.name);
             const pending: PendingVoiceUpdate = {
               itemId: item.id,
               itemName: item.name,

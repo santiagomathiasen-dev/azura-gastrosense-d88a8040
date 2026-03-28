@@ -150,7 +150,6 @@ export function IngredientFileImportDialog({
         }
 
         setProcessingStage('sending');
-        console.log(`Processing ${fileType} (${(content.length / 1024).toFixed(1)}KB) via supabase.functions.invoke`);
 
         const { data, error: funcError } = await supabase.functions.invoke('extract-ingredients', {
           body: { fileType, content, extractRecipe: false, mimeType },

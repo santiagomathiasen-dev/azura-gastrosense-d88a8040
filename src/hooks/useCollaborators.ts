@@ -59,11 +59,9 @@ export function useCollaborators() {
       if (!user?.id) return [];
 
       try {
-        console.log('useCollaborators: fetching profile via fetch');
         const profile = await supabaseFetch(`profiles?id=eq.${user.id}&select=role`);
         const userRole = Array.isArray(profile) ? profile[0]?.role : profile?.role;
 
-        console.log('useCollaborators: fetching collaborators via fetch');
         let path = 'collaborators?select=*';
 
         // If not admin, filter by gestor_id

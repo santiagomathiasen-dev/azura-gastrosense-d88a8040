@@ -35,9 +35,7 @@ export function useOwnerId() {
       if (!user?.id) return null;
 
       try {
-        console.log("useOwnerId: calling get_owner_id via fetch");
         const data = await supabaseFetch('rpc/get_owner_id', { method: 'POST' });
-        console.log("useOwnerId: SUCCESS via fetch", data);
         return data as string;
       } catch (error) {
         console.error('Error getting owner_id via fetch:', error);

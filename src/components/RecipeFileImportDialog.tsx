@@ -135,8 +135,6 @@ export function RecipeFileImportDialog({
           throw new Error('Tipo de arquivo não suportado');
         }
 
-        console.log(`[RecipeImport] ${fileType} (${(content.length / 1024).toFixed(1)}KB) → Gemini`);
-
         setProcessingStage('sending');
         const { data, error: funcError } = await supabase.functions.invoke('extract-ingredients', {
           body: { fileType, content, extractRecipe: true, mimeType },
@@ -144,7 +142,6 @@ export function RecipeFileImportDialog({
 
         setProcessingStage('processing');
         if (funcError) throw new Error(funcError.message);
-        console.log('[RecipeImport] Extraction output:', data);
         return data;
       };
 

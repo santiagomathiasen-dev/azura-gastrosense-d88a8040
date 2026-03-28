@@ -10,7 +10,6 @@ export function useProfile() {
         queryKey: ['profile', user?.id],
         queryFn: async () => {
             if (!user?.id) return null;
-            console.log("useProfile: fetching profile via fetch for", user.id);
             try {
                 // First get basic profile (array format to behave like maybeSingle)
                 let profiles: any = null;

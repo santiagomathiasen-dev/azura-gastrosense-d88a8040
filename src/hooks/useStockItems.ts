@@ -119,8 +119,6 @@ export function useStockItems() {
       if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
       if (!ownerId) throw new Error('Usuário não autenticado');
 
-      console.log("Processing Invoice Import:", { nfeData, mappedItems });
-
       // 1. Create Financial Expense
       const expense = {
         user_id: ownerId,
