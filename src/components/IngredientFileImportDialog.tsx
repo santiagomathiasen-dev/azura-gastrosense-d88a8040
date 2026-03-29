@@ -124,7 +124,7 @@ export function IngredientFileImportDialog({
 
     try {
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Tempo limite excedido (30s). Verifique sua conexão e tente novamente.')), 30_000);
+        setTimeout(() => reject(new Error('Tempo limite excedido (90s). Verifique sua conexão e tente novamente.')), 90_000);
       });
 
       const processTask = async () => {
@@ -139,10 +139,11 @@ export function IngredientFileImportDialog({
           content = await compressImage(file, 800, 0.6);
           mimeType = 'image/jpeg';
         } else if (file.type === 'application/pdf') {
-          // Extrai texto no browser: envia < 5KB em vez de ~320KB base64
-          fileType = 'text';
-          content = await extractTextFromPDF(file);
-          mimeType = 'text/plain';
+          // Envia PDF como base64 — Gemini lê nativo, funciona para PDFs
+          // digitais E escaneados. extractTextFromPDF falha em PDFs de imagem.
+          fileType = 'pdf';
+          content = await fileToBase64(file);
+          mimeType = 'application/pdf';
         } else {
           fileType = 'text';
           content = await file.text();

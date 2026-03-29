@@ -110,7 +110,7 @@ export function RecipeFileImportDialog({
 
     try {
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Processamento demorou mais que 30 segundos. Tente novamente.')), 30000);
+        setTimeout(() => reject(new Error('Processamento demorou mais que 90 segundos. Tente novamente.')), 90000);
       });
 
       const processTask = async () => {
@@ -124,9 +124,9 @@ export function RecipeFileImportDialog({
           content = await compressImage(file, 800, 0.6);
         } else if (file.type === 'application/pdf') {
           setProcessingStage('reading');
-          fileType = 'text';
-          content = await extractTextFromPDF(file);
-          mimeType = 'text/plain';
+          fileType = 'pdf';
+          content = await fileToBase64(file);
+          mimeType = 'application/pdf';
         } else if (file.type === 'text/plain') {
           setProcessingStage('reading');
           fileType = 'text';
