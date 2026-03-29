@@ -43,18 +43,19 @@ interface MappedItem extends ExtractionItem {
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
-async function extractTextFromPDF(file: File): Promise<string> {
-  const pdfjsLib = await import('pdfjs-dist');
-  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
-  const buffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-  let text = '';
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    text += content.items.map((item: any) => item.str).join(' ') + '\n';
-  }
-  return text.trim();
+// Converts any file to a raw base64 string (no data: prefix).
+// Gemini supports application/pdf natively, so we send the full binary — works
+// for both digital and scanned/image-based PDFs, unlike text extraction.
+function pdfToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      resolve(result.split(',')[1]);
+    };
+    reader.onerror = () => reject(new Error('Falha ao ler PDF'));
+    reader.readAsDataURL(file);
+  });
 }
 
 async function compressImage(file: File, maxWidth = 800, quality = 0.6): Promise<string> {
@@ -167,9 +168,9 @@ export function InvoiceImportDialog({
     setIsProcessing(true);
     setStep('ai_processing');
 
-    // Timeout de 30s com AbortController
+    // Timeout de 90s — Gemini pode ter até 3 retries com 15-45s de espera
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30_000);
+    const timeout = setTimeout(() => controller.abort(), 90_000);
 
     try {
       let content: string;
@@ -180,14 +181,14 @@ export function InvoiceImportDialog({
       const isImage = file.type.startsWith('image/');
 
       if (isPdf) {
-        // 1. Extrai texto do PDF no browser — payload < 5KB em vez de ~320KB
+        // Envia PDF como base64 — Gemini lê nativamente, funciona para PDFs
+        // escaneados e digitais. Extração de texto (pdfjs) falha em PDFs de imagem.
         setProcessingStage('reading');
-        const text = await extractTextFromPDF(file);
-        content = text;
-        fileType = 'text';
-        mimeType = 'text/plain';
+        content = await pdfToBase64(file);
+        fileType = 'pdf';
+        mimeType = 'application/pdf';
       } else if (isImage) {
-        // 2. Comprime imagem — reduz payload em ~70%
+        // Comprime imagem — reduz payload em ~70%
         setProcessingStage('reading');
         content = await compressImage(file);
         fileType = 'image';
@@ -255,7 +256,7 @@ export function InvoiceImportDialog({
       const isTimeout = err?.name === 'AbortError';
       toast.error(
         isTimeout
-          ? 'Tempo limite excedido (30s). Verifique sua conexão e tente novamente.'
+          ? 'Tempo limite excedido (90s). Verifique sua conexão e tente novamente.'
           : `Erro ao processar nota: ${err.message}`
       );
       setStep('upload');
