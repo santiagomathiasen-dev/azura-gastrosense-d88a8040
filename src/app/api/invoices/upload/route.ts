@@ -87,7 +87,8 @@ export async function POST(req: NextRequest) {
     const prompt = extractRecipe ? PROMPT_RECIPE : PROMPT_INGREDIENT;
 
     // Text files: send as plain text part. Binary (PDF/image): use inlineData.
-    const contentPart = mimeType === 'text/plain'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const contentPart: any = mimeType === 'text/plain'
       ? { text: `Conteúdo do documento:\n${Buffer.from(arrayBuffer).toString('utf-8')}` }
       : { inlineData: { mimeType, data: Buffer.from(arrayBuffer).toString('base64') } };
 
