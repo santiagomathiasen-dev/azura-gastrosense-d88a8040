@@ -85,12 +85,12 @@ Retorne SOMENTE este JSON (nenhum texto fora do JSON):
 // 4. GEMINI — chamada com retry automático + fallback de modelo
 // ══════════════════════════════════════════════════════════════════
 // Each entry: [modelName, apiVersion]
-// gemini-2.0-flash and newer are stable → v1
+// gemini-1.5-flash is stable → v1
 // v1beta kept as fallback in case the key only has beta access
 const GEMINI_MODELS: [string, string][] = [
-  ["gemini-2.0-flash", "v1"],
-  ["gemini-2.0-flash-lite", "v1"],
-  ["gemini-2.0-flash", "v1beta"],
+  ["gemini-1.5-flash", "v1"],
+  ["gemini-1.5-flash", "v1"],
+  ["gemini-1.5-flash", "v1beta"],
   ["gemini-1.5-flash-latest", "v1beta"],
 ];
 
