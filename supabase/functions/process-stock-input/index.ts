@@ -38,7 +38,6 @@ serve(async (req: any) => {
     );
 
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
-
     if (userError || !user) {
       return new Response(
         JSON.stringify({ error: "Token inválido ou expirado" }),
@@ -46,14 +45,13 @@ serve(async (req: any) => {
       );
     }
 
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) {
-      throw new Error("GEMINI_API_KEY is not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured");
     }
 
     const { type, content, stockItems }: StockInputRequest = await req.json();
 
-    // Validate input
     if (!type || !content) {
       return new Response(
         JSON.stringify({ error: "Tipo e conteúdo são obrigatórios" }),
@@ -66,7 +64,7 @@ serve(async (req: any) => {
       .join("\n");
 
     const promptText = `IA de Estoque Profissional.
-Extração direta de JSON. 
+Extração direta de JSON.
 Ação: entry, exit, adjustment.
 
 ITENS:
@@ -74,77 +72,61 @@ ${stockItemsList || "Nenhum"}
 
 JSON apenas.`;
 
-    const parts: any[] = [{ text: promptText }];
-
+    // Build message content depending on input type
+    let messageContent: any;
     if (type === "voice") {
-      parts.push({ text: `Voz: "${content}"` });
+      messageContent = `${promptText}\nVoz: "${content}"`;
     } else {
-      parts.push({
-        inlineData: {
-          mimeType: "image/jpeg",
-          data: content.includes(",") ? content.split(",")[1] : content,
-        },
-      });
-      parts.push({ text: "Analise imagem." });
+      // Image — use vision
+      const base64 = content.includes(",") ? content.split(",")[1] : content;
+      messageContent = [
+        { type: "text", text: `${promptText}\nAnalise a imagem.` },
+        { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64}` } },
+      ];
     }
 
-    const geminiBody = {
-      contents: [{ parts }],
-      generationConfig: {
-        temperature: 0.1,
-        responseMimeType: "application/json",
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
       },
-    };
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(geminiBody),
-      }
-    );
+      body: JSON.stringify({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: messageContent }],
+        response_format: { type: "json_object" },
+        temperature: 0.1,
+      }),
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Gemini error:", response.status, errorText);
-
-      let errorMessage = "Erro ao processar com Gemini";
-      try {
-        const errorJson = JSON.parse(errorText);
-        errorMessage = errorJson.error?.message || errorMessage;
-      } catch (e) { }
-
+      console.error("OpenAI error:", response.status, errorText);
       return new Response(
-        JSON.stringify({
-          error: errorMessage,
-          status: response.status,
-          details: errorText
-        }),
+        JSON.stringify({ error: "Erro ao processar com OpenAI", details: errorText }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const aiResponse = await response.json();
-    const finishReason = aiResponse.candidates?.[0]?.finishReason ?? "UNKNOWN";
-    const assistantMessage = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const assistantMessage = aiResponse.choices?.[0]?.message?.content || "";
+
     if (!assistantMessage) {
-      console.error(`[process-stock-input] Gemini candidates vazios. finishReason=${finishReason}`);
+      console.error("[process-stock-input] OpenAI retornou vazio.");
       return new Response(
-        JSON.stringify({ error: `IA não retornou dados (finishReason: ${finishReason}).` }),
+        JSON.stringify({ error: "IA não retornou dados." }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Extract JSON from the response with cleaning and recovery
+    // Parse JSON with cleaning and recovery
     let result;
     try {
-      let cleanedMessage = assistantMessage.trim();
-      if (cleanedMessage.startsWith("```")) {
-        cleanedMessage = cleanedMessage.replace(/^```[a-z]*\n/i, "").replace(/\n```$/i, "").trim();
+      let cleaned = assistantMessage.trim();
+      if (cleaned.startsWith("```")) {
+        cleaned = cleaned.replace(/^```[a-z]*\n/i, "").replace(/\n```$/i, "").trim();
       }
-
-      result = JSON.parse(cleanedMessage);
+      result = JSON.parse(cleaned);
     } catch (parseError) {
       console.error("Parse error, trying regex recovery:", parseError);
       try {
@@ -166,6 +148,7 @@ JSON apenas.`;
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+
   } catch (error) {
     console.error("process-stock-input error:", error);
     return new Response(

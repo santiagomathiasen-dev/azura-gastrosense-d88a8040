@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     // Convert Blob to text/base64
     const contentText = await fileData.text();
 
-    // 4. Call Gemini 1.5 Flash (Structured Outputs)
+    // 4. Call OpenAI gpt-4o (Structured Outputs)
     const extractedData = await extractInvoiceData(contentText);
 
     // 5. Update Record with extracted data and status 'completed'

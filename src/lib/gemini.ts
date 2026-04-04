@@ -1,67 +1,50 @@
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import OpenAI from "openai";
 
-// gemini-2.0-flash-lite requires v1beta endpoint
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+// Kept at src/lib/gemini.ts to avoid breaking existing imports
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
 
-export const nfeSchema = {
-  description: "Extracted data from a Brazilian NF-e invoice",
-  type: SchemaType.OBJECT,
-  properties: {
-    invoiceNumber: { type: SchemaType.STRING },
-    emissionDate: { type: SchemaType.STRING },
-    supplierName: { type: SchemaType.STRING },
-    supplierCnpj: { type: SchemaType.STRING },
-    totalValue: { type: SchemaType.NUMBER },
-    items: {
-      type: SchemaType.ARRAY,
-      items: {
-        type: SchemaType.OBJECT,
-        properties: {
-          name: { type: SchemaType.STRING },
-          quantity: { type: SchemaType.NUMBER },
-          unit: { type: SchemaType.STRING },
-          unitPrice: { type: SchemaType.NUMBER },
-          totalPrice: { type: SchemaType.NUMBER },
-          category: { type: SchemaType.STRING }
-        },
-        required: ["name", "quantity", "unit", "unitPrice"]
-      }
+const PROMPT = `Extração de NF-e (Brasil).
+Retorne apenas JSON com esta estrutura exata:
+{
+  "invoiceNumber": "string ou null",
+  "emissionDate": "YYYY-MM-DD ou null",
+  "supplierName": "string ou null",
+  "supplierCnpj": "string ou null",
+  "totalValue": 0.00,
+  "items": [
+    {
+      "name": "string",
+      "quantity": 1.0,
+      "unit": "kg|g|L|ml|unidade|caixa|dz",
+      "unitPrice": 0.00,
+      "totalPrice": 0.00,
+      "category": "laticinios|carnes|hortifruti|secos_e_graos|embalagens|limpeza|bebidas|outros"
     }
-  },
-  required: ["invoiceNumber", "supplierName", "totalValue", "items"]
-};
+  ]
+}`;
 
 export const extractInvoiceData = async (content: string) => {
-  const model = genAI.getGenerativeModel(
-    {
-      model: "gemini-2.0-flash-lite",
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: nfeSchema as any,
-      },
-    },
-    { apiVersion: "v1beta" }
-  );
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
 
-  const prompt = `
-    Extração de NF-e (Brasil).
-    Retorne apenas JSON.
-    Unidades: kg, g, L, ml, unidade, caixa, dz.
-    Categorias: laticinios, carnes, hortifruti, secos_e_graos, embalagens, limpeza, bebidas, outros.
-
-    Conteúdo:
-    ${content}
-  `;
-
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error('Gemini timeout: resposta não recebida em 30s')), 30_000)
-  );
-  const result = await Promise.race([model.generateContent(prompt), timeoutPromise]);
-  const response = await result.response;
-  const text = response.text();
   try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error(`Gemini retornou resposta inválida: ${text.slice(0, 200)}`);
+    const completion = await openai.chat.completions.create(
+      {
+        model: "gpt-4o",
+        messages: [{ role: "user", content: `${PROMPT}\n\nConteúdo:\n${content}` }],
+        response_format: { type: "json_object" },
+        temperature: 0.1,
+      },
+      { signal: controller.signal }
+    );
+
+    const text = completion.choices[0].message.content ?? "";
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(`OpenAI retornou resposta inválida: ${text.slice(0, 200)}`);
+    }
+  } finally {
+    clearTimeout(timeout);
   }
 };

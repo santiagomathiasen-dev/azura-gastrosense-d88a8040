@@ -32,69 +32,48 @@ Retorne SOMENTE este JSON (nenhum texto fora do JSON):
   ]
 }`;
 
-// ── Gemini com retry e fallback ────────────────────────────────────────────────
-async function callGemini(apiKey: string, prompt: string): Promise<any> {
-  const models = ["gemini-2.0-flash-lite"];
+// ── OpenAI Chat Completions ───────────────────────────────────────────────────
+async function callOpenAI(apiKey: string, prompt: string): Promise<string> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
 
-  for (const model of models) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+        temperature: 0.2,
+      }),
+      signal: controller.signal,
+    });
 
-      try {
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { temperature: 0.2, responseMimeType: "application/json" },
-            }),
-            signal: controller.signal,
-          }
-        );
-
-        clearTimeout(timeout);
-
-        if (res.ok) {
-          const json = await res.json();
-          console.log(`[process-recipe-video] OK model=${model}`);
-          return json;
-        }
-
-        let errJson: any = {};
-        try { errJson = await res.clone().json(); } catch (_) {}
-        console.error(`ERRO REAL DO GEMINI [${model}] HTTP ${res.status}:`, JSON.stringify(errJson));
-
-        if (res.status === 429 && attempt === 0) {
-          const delay = errJson?.error?.details?.find((d: any) => d.retryDelay)?.retryDelay;
-          const waitMs = Math.min(delay ? parseInt(delay) * 1000 : 8000, 8000);
-          console.warn(`[429] aguardando ${waitMs}ms`);
-          await new Promise((r) => setTimeout(r, waitMs));
-          continue;
-        }
-
-        break; // outro erro → tenta próximo modelo
-      } catch (e: any) {
-        clearTimeout(timeout);
-        if (e?.name === "AbortError") throw new Error("Timeout: Gemini não respondeu em 30s.");
-        throw e;
-      }
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`OpenAI error HTTP ${res.status}: ${err}`);
     }
-  }
 
-  throw new Error("Todos os modelos Gemini falharam. Tente novamente em 1 minuto.");
+    const data = await res.json();
+    const text = data?.choices?.[0]?.message?.content ?? "";
+    if (!text) throw new Error("OpenAI não retornou texto.");
+    return text;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 Deno.serve(async (req: any) => {
-  // Preflight
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) return jsonError("GEMINI_API_KEY não configurada.", 500);
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) return jsonError("OPENAI_API_KEY não configurada.", 500);
 
     let body: any;
     try { body = await req.json(); } catch (_) { return jsonError("Body JSON inválido."); }
@@ -103,18 +82,18 @@ Deno.serve(async (req: any) => {
     if (!videoUrl) return jsonError("Campo 'videoUrl' ausente.");
 
     const fullPrompt = `${PROMPT}\n\nURL/Descrição do vídeo: ${videoUrl}`;
-    const aiData = await callGemini(GEMINI_API_KEY, fullPrompt);
-
-    const rawText: string = aiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-    if (!rawText) return jsonError("Gemini não retornou dados.", 500);
+    const rawText = await callOpenAI(OPENAI_API_KEY, fullPrompt);
 
     let result: any;
     try {
       result = JSON.parse(rawText.trim());
     } catch (_) {
       const match = rawText.match(/\{[\s\S]*\}/);
-      if (match) { try { result = JSON.parse(match[0]); } catch (_2) { return jsonError("Resposta do Gemini não é JSON válido.", 500); } }
-      else return jsonError("Resposta do Gemini não é JSON válido.", 500);
+      if (match) {
+        try { result = JSON.parse(match[0]); } catch (_2) { return jsonError("Resposta da OpenAI não é JSON válido.", 500); }
+      } else {
+        return jsonError("Resposta da OpenAI não é JSON válido.", 500);
+      }
     }
 
     // Sanitize estimated_time

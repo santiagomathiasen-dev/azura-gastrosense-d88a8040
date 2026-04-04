@@ -17,39 +17,30 @@ function jsonOk(data: unknown): Response {
     });
 }
 
-const GEMINI_MODELS: [string, string][] = [
-    ["gemini-2.0-flash-lite", "v1beta"],
-];
+async function callOpenAI(apiKey: string, prompt: string): Promise<string> {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+            model: "gpt-4o",
+            messages: [{ role: "user", content: prompt }],
+            response_format: { type: "json_object" },
+            temperature: 0.1,
+        }),
+    });
 
-async function callGemini(apiKey: string, body: unknown): Promise<string> {
-    for (const [model, apiVersion] of GEMINI_MODELS) {
-        const res = await fetch(
-            `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent?key=${apiKey}`,
-            { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
-        );
-
-        if (res.ok) {
-            const json = await res.json();
-            const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) return text;
-            // finishReason empty — try next model
-            const reason = json?.candidates?.[0]?.finishReason ?? "UNKNOWN";
-            console.warn(`[GlobalAI] model=${model} finishReason=${reason} — sem texto`);
-            continue;
-        }
-
-        let errBody: any = {};
-        try { errBody = await res.json(); } catch (_) { }
-        const errMsg = errBody?.error?.message ?? `HTTP ${res.status}`;
-        console.error(`[GlobalAI] model=${model} api=${apiVersion} ERRO: ${errMsg}`);
-
-        if (res.status === 429) {
-            await new Promise(r => setTimeout(r, 15_000));
-            continue;
-        }
-        // 404 or other non-retryable → try next model
+    if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`OpenAI error HTTP ${res.status}: ${err}`);
     }
-    throw new Error("Todos os modelos Gemini falharam.");
+
+    const data = await res.json();
+    const text = data?.choices?.[0]?.message?.content;
+    if (!text) throw new Error("OpenAI não retornou texto.");
+    return text;
 }
 
 serve(async (req: any) => {
@@ -58,9 +49,9 @@ serve(async (req: any) => {
     }
 
     try {
-        const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-        if (!GEMINI_API_KEY) {
-            return jsonOk({ action: "toast", message: "IA não configurada no servidor (GEMINI_API_KEY ausente)." });
+        const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+        if (!OPENAI_API_KEY) {
+            return jsonOk({ action: "toast", message: "IA não configurada no servidor (OPENAI_API_KEY ausente)." });
         }
 
         const { text, path, context } = await req.json();
@@ -82,14 +73,8 @@ Rotas válidas: /dashboard, /estoque, /fichas, /producao, /financeiro, /compras,
 
 Retorne SOMENTE JSON válido, sem texto fora do JSON.`;
 
-        const geminiBody = {
-            contents: [{ parts: [{ text: `${systemPrompt}\n\nComando do usuário: "${text}"` }] }],
-            generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
-        };
+        const rawText = await callOpenAI(OPENAI_API_KEY, `${systemPrompt}\n\nComando do usuário: "${text}"`);
 
-        const rawText = await callGemini(GEMINI_API_KEY, geminiBody);
-
-        // Parse and return
         let parsed: any;
         try {
             parsed = JSON.parse(rawText.trim());

@@ -14,10 +14,10 @@ serve(async (req: any) => {
   }
 
   try {
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) {
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
       return new Response(
-        JSON.stringify({ error: "Erro de configuração: Chave da IA (GEMINI_API_KEY) não encontrada no servidor." }),
+        JSON.stringify({ error: "OPENAI_API_KEY não encontrada no servidor." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -31,61 +31,44 @@ serve(async (req: any) => {
       );
     }
 
-    const geminiBody = {
-      contents: [
-        {
-          parts: [
-            { text: `Extração direta (JSON). Apenas palavras/dados. Sem conversa.\n\nInstrução: ${systemPrompt}\n\nTexto: ${text}` },
-          ],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.1,
-        responseMimeType: "application/json",
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
       },
-    };
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(geminiBody),
-      }
-    );
+      body: JSON.stringify({
+        model: "gpt-4o",
+        messages: [{
+          role: "user",
+          content: `Extração direta (JSON). Apenas palavras/dados. Sem conversa.\n\nInstrução: ${systemPrompt}\n\nTexto: ${text}`,
+        }],
+        response_format: { type: "json_object" },
+        temperature: 0.1,
+      }),
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Gemini error:", response.status, errorText);
-
-      let errorMessage = "Erro ao processar com Gemini";
-      try {
-        const errorJson = JSON.parse(errorText);
-        errorMessage = errorJson.error?.message || errorMessage;
-      } catch (e) { }
-
+      console.error("OpenAI error:", response.status, errorText);
       return new Response(
-        JSON.stringify({
-          error: errorMessage,
-          status: response.status,
-          details: errorText
-        }),
+        JSON.stringify({ error: "Erro ao processar com OpenAI", details: errorText }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const aiResponse = await response.json();
-    const finishReason = aiResponse.candidates?.[0]?.finishReason ?? "UNKNOWN";
-    const assistantMessage = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const assistantMessage = aiResponse.choices?.[0]?.message?.content || "";
+
     if (!assistantMessage) {
-      console.error(`[process-voice-text] Gemini candidates vazios. finishReason=${finishReason}`);
+      console.error("[process-voice-text] OpenAI retornou vazio.");
       return new Response(
-        JSON.stringify({ error: `IA não retornou dados (finishReason: ${finishReason}).`, ingredients: [] }),
+        JSON.stringify({ error: "IA não retornou dados.", ingredients: [] }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Extract JSON array from the response with cleaning and recovery
+    // Extract JSON with cleaning and recovery
     let ingredients: any[] = [];
     let recipeName: string | null = null;
     let preparationMethod: string | null = null;
@@ -96,16 +79,23 @@ serve(async (req: any) => {
     let other_costs: number | null = null;
     let markup: number | null = null;
     let praca: string | null = null;
+
     try {
       let cleanedMessage = assistantMessage.trim();
       if (cleanedMessage.startsWith("```")) {
         cleanedMessage = cleanedMessage.replace(/^```[a-z]*\n/i, "").replace(/\n```$/i, "").trim();
       }
-
       const parsed = JSON.parse(cleanedMessage);
       ingredients = Array.isArray(parsed) ? parsed : (parsed.ingredients || []);
       recipeName = parsed.recipeName || null;
       preparationMethod = parsed.preparationMethod || null;
+      preparationTime = parsed.preparationTime || null;
+      yieldQuantity = parsed.yieldQuantity || null;
+      labor_cost = parsed.labor_cost || null;
+      energy_cost = parsed.energy_cost || null;
+      other_costs = parsed.other_costs || null;
+      markup = parsed.markup || null;
+      praca = parsed.praca || null;
     } catch (parseError) {
       console.error("Parse error, trying regex recovery:", parseError);
       try {
@@ -130,26 +120,15 @@ serve(async (req: any) => {
 
     // Normalize and validate
     const validUnits = ["kg", "g", "L", "ml", "unidade", "caixa", "dz"];
-    const validCategories = [
-      "laticinios",
-      "secos_e_graos",
-      "hortifruti",
-      "carnes_e_peixes",
-      "embalagens",
-      "limpeza",
-      "outros",
-    ];
+    const validCategories = ["laticinios", "secos_e_graos", "hortifruti", "carnes_e_peixes", "embalagens", "limpeza", "outros"];
 
     const normalizedIngredients = ingredients
       .map((ing: any) => {
         const name = String(ing.name || ing.nome || "").trim();
         if (!name) return null;
-
         let unitRaw = String(ing.unit || ing.unidade || "unidade").toLowerCase().trim();
         const categoryRaw = String(ing.category || ing.categoria || "outros").toLowerCase().trim();
-
         if (unitRaw === "l") unitRaw = "L";
-
         return {
           name,
           quantity: Number(ing.quantity ?? ing.quantidade) || 1,
@@ -165,24 +144,25 @@ serve(async (req: any) => {
     return new Response(
       JSON.stringify({
         ingredients: normalizedIngredients,
-        recipeName: recipeName,
-        preparationMethod: preparationMethod,
+        recipeName,
+        preparationMethod,
         preparationTime,
         yieldQuantity,
         labor_cost,
         energy_cost,
         other_costs,
         markup,
-        praca
+        praca,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+
   } catch (error) {
     console.error("process-voice-text error:", error);
     return new Response(
       JSON.stringify({
-        error: "Erro no processamento de voz. Verifique se a chave da API (GEMINI_API_KEY) está configurada corretamente.",
-        details: error instanceof Error ? error.message : String(error)
+        error: "Erro no processamento de voz.",
+        details: error instanceof Error ? error.message : String(error),
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
