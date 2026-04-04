@@ -82,65 +82,90 @@ Retorne SOMENTE este JSON (nenhum texto fora do JSON):
 }`;
 
 // ══════════════════════════════════════════════════════════════════
-// 4. GEMINI — chamada com retry automático + fallback de modelo
+// 4. OPENAI — upload de arquivo + Responses API
 // ══════════════════════════════════════════════════════════════════
-// Each entry: [modelName, apiVersion]
-// gemini-2.0-flash-lite requires v1beta endpoint
-const GEMINI_MODELS: [string, string][] = [
-  ["gemini-2.0-flash-lite", "v1beta"],
-];
+async function callOpenAI(apiKey: string, prompt: string, content: string, mimeType: string): Promise<string> {
+  const headers = { "Authorization": `Bearer ${apiKey}` };
 
-async function callGemini(apiKey: string, geminiBody: unknown): Promise<any> {
-  let lastErrorDetails = "";
-
-  for (const [model, apiVersion] of GEMINI_MODELS) {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      console.log(`[Gemini] Tentando model=${model} api=${apiVersion} attempt=${attempt}`);
-
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(geminiBody),
-        }
-      );
-
-      if (res.ok) {
-        const json = await res.json();
-        console.log(`[Gemini OK] model=${model} attempt=${attempt}`);
-        return json;
-      }
-
-      // ── Capturar e logar o erro REAL da API do Google ──────────
-      let errBody: any = {};
-      try { errBody = await res.clone().json(); } catch (_) {
-        try { errBody = { raw: await res.text() }; } catch (_2) { }
-      }
-      const errMsg = errBody?.error?.message ?? JSON.stringify(errBody);
-      lastErrorDetails = `[${model}/${apiVersion}] HTTP ${res.status}: ${errMsg}`;
-      // ESTE log aparece no painel do Supabase → Functions → Logs
-      console.error("ERRO REAL DO GEMINI:", lastErrorDetails);
-      console.error("GEMINI PAYLOAD COMPLETO:", JSON.stringify(errBody));
-
-      if (res.status === 429) {
-        let waitMs = (attempt + 1) * 15000;
-        const delay = errBody?.error?.details?.find((d: any) => d.retryDelay)?.retryDelay;
-        if (delay) waitMs = (parseInt(delay) + 3) * 1000;
-        console.warn(`[Gemini 429] model=${model} aguardando ${waitMs}ms (tentativa ${attempt + 1})`);
-        await new Promise((r) => setTimeout(r, waitMs));
-        continue;
-      }
-
-      // 404 = modelo não encontrado nesta versão da API → tenta próxima entrada
-      // Outros erros não-retryáveis → tenta próxima entrada também
-      break;
+  if (mimeType === "text/plain") {
+    // Plain text — use Chat Completions directly
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        messages: [{
+          role: "user",
+          content: `${prompt}\n\nConteúdo do documento:\n${content}\n\nRetorne apenas o JSON.`,
+        }],
+        response_format: { type: "json_object" },
+        temperature: 0.1,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`OpenAI chat completions falhou: ${err}`);
     }
+    const data = await res.json();
+    return data?.choices?.[0]?.message?.content ?? "";
   }
 
-  const finalErr: any = new Error("Todos os modelos Gemini falharam.");
-  finalErr.details = lastErrorDetails;
-  throw finalErr;
+  // Binary (PDF / image) — upload to Files API then call Responses API
+  const binaryStr = atob(content);
+  const bytes = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+
+  const ext = mimeType === "application/pdf" ? "pdf" : (mimeType.split("/")[1] || "bin");
+  const formData = new FormData();
+  formData.append("file", new Blob([bytes], { type: mimeType }), `document.${ext}`);
+  formData.append("purpose", "user_data");
+
+  console.log(`[OpenAI] Uploading file ext=${ext} size=${bytes.length}`);
+  const uploadRes = await fetch("https://api.openai.com/v1/files", {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+  if (!uploadRes.ok) {
+    const err = await uploadRes.text();
+    throw new Error(`OpenAI file upload falhou: ${err}`);
+  }
+  const { id: fileId } = await uploadRes.json();
+  console.log(`[OpenAI] File uploaded fileId=${fileId}`);
+
+  try {
+    const inputContent = [
+      { type: "input_text", text: prompt },
+      mimeType.startsWith("image/")
+        ? { type: "input_image", file_id: fileId }
+        : { type: "input_file", file_id: fileId },
+      { type: "input_text", text: "Retorne apenas o JSON. Nenhum texto fora do JSON." },
+    ];
+
+    const responseRes = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        input: inputContent,
+        text: { format: { type: "json_object" } },
+      }),
+    });
+
+    if (!responseRes.ok) {
+      const err = await responseRes.text();
+      throw new Error(`OpenAI responses API falhou: ${err}`);
+    }
+
+    const data = await responseRes.json();
+    console.log(`[OpenAI] Resposta recebida`);
+    return data?.output_text ?? "";
+  } finally {
+    fetch(`https://api.openai.com/v1/files/${fileId}`, {
+      method: "DELETE",
+      headers,
+    }).catch(() => {});
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -157,9 +182,9 @@ Deno.serve(async (req: any) => {
   try {
 
     // ── Validar variáveis de ambiente ──────────────────────────────
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) {
-      return jsonError("GEMINI_API_KEY não configurada no servidor.", 500);
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      return jsonError("OPENAI_API_KEY não configurada no servidor.", 500);
     }
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
@@ -231,40 +256,14 @@ Deno.serve(async (req: any) => {
     }
     const isBase64 = mimeType !== "text/plain";
 
-    // ── Montar requisição Gemini ───────────────────────────────────
-    // Instrução entra como primeiro part dentro de contents
-    // (systemInstruction no nível raiz não funciona com inlineData)
+    // ── Chamar OpenAI ──────────────────────────────────────────────
     const prompt = extractRecipe ? PROMPT_RECIPE : PROMPT_INGREDIENT;
-    const filePart = isBase64
-      ? { inlineData: { mimeType, data: content } }
-      : { text: content };
+    const rawText = await callOpenAI(OPENAI_API_KEY, prompt, content, mimeType);
 
-    const geminiBody = {
-      contents: [
-        {
-          parts: [
-            { text: prompt },
-            filePart,
-            { text: "Retorne apenas o JSON. Nenhum texto fora do JSON." },
-          ],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.1,
-        responseMimeType: "application/json",
-      },
-    };
-
-    // ── Chamar Gemini ──────────────────────────────────────────────
-    const aiData = await callGemini(GEMINI_API_KEY, geminiBody);
-
-    const rawText: string = aiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-    const finishReason: string = aiData?.candidates?.[0]?.finishReason ?? "UNKNOWN";
-
-    console.log(`[Gemini] finishReason=${finishReason} rawText.length=${rawText.length}`);
+    console.log(`[OpenAI] rawText.length=${rawText.length}`);
 
     if (!rawText) {
-      return jsonError(`Gemini não retornou dados (finishReason: ${finishReason}).`, 500);
+      return jsonError("OpenAI não retornou dados.", 500);
     }
 
     // ── Parse JSON ─────────────────────────────────────────────────
@@ -275,10 +274,10 @@ Deno.serve(async (req: any) => {
       const match = rawText.match(/\{[\s\S]*\}/);
       if (match) {
         try { parsed = JSON.parse(match[0]); } catch (_2) {
-          return jsonError("Resposta do Gemini não é JSON válido.", 500);
+          return jsonError("Resposta da OpenAI não é JSON válido.", 500);
         }
       } else {
-        return jsonError("Resposta do Gemini não é JSON válido.", 500);
+        return jsonError("Resposta da OpenAI não é JSON válido.", 500);
       }
     }
 
@@ -377,7 +376,7 @@ Deno.serve(async (req: any) => {
   } catch (error: any) {
     // Sempre retorna 200 para que supabase.functions.invoke leia o body em `data`
     // status 500 vira FunctionsHttpError opaco sem mensagem legível no frontend
-    console.error("ERRO REAL DO GEMINI:", error?.message ?? error);
+    console.error("ERRO OPENAI:", error?.message ?? error);
     if (error?.details) console.error("DETALHES:", error.details);
 
     return new Response(

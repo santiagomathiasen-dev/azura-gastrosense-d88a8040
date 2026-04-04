@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 
 export const maxDuration = 90;
 
@@ -61,9 +61,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: 'GEMINI_API_KEY não configurada no servidor.' }, { status: 500 });
+      return NextResponse.json({ error: 'OPENAI_API_KEY não configurada no servidor.' }, { status: 500 });
     }
 
     const formData = await req.formData();
@@ -77,30 +77,54 @@ export async function POST(req: NextRequest) {
 
     const mimeType = file.type || 'application/octet-stream';
     const arrayBuffer = await file.arrayBuffer();
-
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel(
-      { model: 'gemini-2.0-flash-lite', generationConfig: { temperature: 0.1 } },
-      { apiVersion: 'v1beta' }
-    );
-
+    const buffer = Buffer.from(arrayBuffer);
+    const openai = new OpenAI({ apiKey });
     const prompt = extractRecipe ? PROMPT_RECIPE : PROMPT_INGREDIENT;
 
-    // Text files: send as plain text part. Binary (PDF/image): use inlineData.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const contentPart: any = mimeType === 'text/plain'
-      ? { text: `Conteúdo do documento:\n${Buffer.from(arrayBuffer).toString('utf-8')}` }
-      : { inlineData: { mimeType, data: Buffer.from(arrayBuffer).toString('base64') } };
+    let rawText: string;
 
-    const result = await model.generateContent([
-      { text: prompt },
-      contentPart,
-      { text: 'Retorne apenas o JSON. Nenhum texto fora do JSON.' },
-    ]);
+    if (mimeType === 'text/plain') {
+      // Plain text — send directly in the message
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [{
+          role: 'user',
+          content: `${prompt}\n\nConteúdo do documento:\n${buffer.toString('utf-8')}\n\nRetorne apenas o JSON.`,
+        }],
+        response_format: { type: 'json_object' },
+        temperature: 0.1,
+      });
+      rawText = completion.choices[0].message.content ?? '';
+    } else {
+      // PDF or image — upload to Files API then call Responses API
+      const ext = mimeType === 'application/pdf' ? 'pdf' : (mimeType.split('/')[1] || 'bin');
+      const uploaded = await openai.files.create({
+        file: new File([buffer], `document.${ext}`, { type: mimeType }),
+        purpose: 'user_data',
+      });
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const inputContent: any[] = [
+          { type: 'input_text', text: prompt },
+          mimeType.startsWith('image/')
+            ? { type: 'input_image', file_id: uploaded.id }
+            : { type: 'input_file', file_id: uploaded.id },
+          { type: 'input_text', text: 'Retorne apenas o JSON. Nenhum texto fora do JSON.' },
+        ];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const response = await (openai as any).responses.create({
+          model: 'gpt-4o',
+          input: inputContent,
+          text: { format: { type: 'json_object' } },
+        });
+        rawText = response.output_text ?? '';
+      } finally {
+        openai.files.del(uploaded.id).catch(() => {});
+      }
+    }
 
-    const rawText = result.response.text();
     if (!rawText) {
-      return NextResponse.json({ error: 'Gemini não retornou dados.' }, { status: 422 });
+      return NextResponse.json({ error: 'OpenAI não retornou dados.' }, { status: 422 });
     }
 
     let parsed: any;
@@ -110,10 +134,10 @@ export async function POST(req: NextRequest) {
       const match = rawText.match(/\{[\s\S]*\}/);
       if (match) {
         try { parsed = JSON.parse(match[0]); } catch {
-          return NextResponse.json({ error: 'Resposta do Gemini não é JSON válido.' }, { status: 422 });
+          return NextResponse.json({ error: 'Resposta da OpenAI não é JSON válido.' }, { status: 422 });
         }
       } else {
-        return NextResponse.json({ error: 'Resposta do Gemini não é JSON válido.' }, { status: 422 });
+        return NextResponse.json({ error: 'Resposta da OpenAI não é JSON válido.' }, { status: 422 });
       }
     }
 
