@@ -34,7 +34,7 @@ Retorne SOMENTE este JSON (nenhum texto fora do JSON):
 
 // ── Gemini com retry e fallback ────────────────────────────────────────────────
 async function callGemini(apiKey: string, prompt: string): Promise<any> {
-  const models = ["gemini-1.5-flash", "gemini-1.5-flash"];
+  const models = ["gemini-1.5-flash-latest"];
 
   for (const model of models) {
     for (let attempt = 0; attempt < 2; attempt++) {

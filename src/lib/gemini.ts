@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 
-// gemini-1.5-flash is stable → use v1 (v1beta returns 404 for this model)
+// gemini-1.5-flash-latest requires v1beta endpoint
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export const nfeSchema = {
@@ -34,13 +34,13 @@ export const nfeSchema = {
 export const extractInvoiceData = async (content: string) => {
   const model = genAI.getGenerativeModel(
     {
-      model: "gemini-1.5-flash",
+      model: "gemini-1.5-flash-latest",
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: nfeSchema as any,
       },
     },
-    { apiVersion: "v1" }
+    { apiVersion: "v1beta" }
   );
 
   const prompt = `
