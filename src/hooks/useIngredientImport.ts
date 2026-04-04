@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { StockCategory, StockUnit } from './useStockItems';
 
@@ -45,9 +44,6 @@ export function useIngredientImport() {
     setRecipeData(null);
 
     try {
-      let fileType: 'image' | 'pdf' | 'excel';
-      let content: string;
-
       // Check file size - max 5MB
       const MAX_SIZE = 5 * 1024 * 1024;
       if (file.size > MAX_SIZE) {
@@ -57,33 +53,39 @@ export function useIngredientImport() {
         return null;
       }
 
-
-      if (file.type.startsWith('image/')) {
-        fileType = 'image';
-        content = await fileToBase64(file);
-      } else if (file.type === 'application/pdf') {
-        fileType = 'pdf';
-        content = await fileToBase64(file);
-      } else if (
-        file.type === 'application/vnd.ms-excel' ||
-        file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      ) {
-        fileType = 'excel';
-        content = await fileToBase64(file);
-      } else {
+      const validTypes = [
+        'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+        'application/pdf',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ];
+      if (!validTypes.includes(file.type)) {
         toast.error('Tipo de arquivo não suportado');
         return null;
       }
 
-      const mimeType = file.type;
+      // Compress images >1MB before sending
+      let fileToSend = file;
+      if (file.type.startsWith('image/') && file.size > 1024 * 1024) {
+        fileToSend = await compressImageToFile(file, 1200, 0.75);
+      }
 
-      const { data, error: funcError } = await supabase.functions.invoke('extract-ingredients', {
-        body: { fileType, content, extractRecipe, mimeType },
+      const formData = new FormData();
+      formData.append('file', fileToSend, fileToSend.name);
+      formData.append('extractRecipe', String(extractRecipe));
+      formData.append('saveToDb', 'false');
+
+      const res = await fetch('/api/invoices/upload', {
+        method: 'POST',
+        body: formData,
       });
 
-      if (funcError) {
-        throw new Error(`Falha na nuvem (Edge Function): ${funcError.message}`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Erro HTTP ${res.status}`);
       }
+
+      const data = await res.json();
 
       if (data.error) {
         toast.error(data.error);
@@ -98,7 +100,6 @@ export function useIngredientImport() {
       setExtractedIngredients(ingredients);
       setSummary(data.summary || '');
 
-      // Extract recipe data if available
       const extractedRecipeData: RecipeData | undefined = (data.recipeName || data.preparationMethod) ? {
         recipeName: data.recipeName,
         preparationMethod: data.preparationMethod,
@@ -169,76 +170,26 @@ export function useIngredientImport() {
   };
 }
 
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const skipResize = file.size < 1024 * 1024; // Less than 1MB
-    const isHeic = file.type.toLowerCase().includes('heic') || file.name.toLowerCase().endsWith('.heic');
-
-    if (!skipResize && !isHeic && file.type.startsWith('image/')) {
-      const img = new window.Image();
-      const objectUrl = URL.createObjectURL(file);
-      let isResolved = false;
-
-      const resolveFallback = () => {
-        if (isResolved) return;
-        isResolved = true;
-        URL.revokeObjectURL(objectUrl);
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result as string;
-          resolve(result.includes(',') ? result.split(',')[1] : result);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      };
-
-      const fallbackTimer = setTimeout(resolveFallback, 3000);
-
-      img.onload = () => {
-        if (isResolved) return;
-        clearTimeout(fallbackTimer);
-        isResolved = true;
-        URL.revokeObjectURL(objectUrl);
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        const MAX_SIZE = 1200;
-
-        if (width > height && width > MAX_SIZE) {
-          height *= MAX_SIZE / width;
-          width = MAX_SIZE;
-        } else if (height > MAX_SIZE) {
-          width *= MAX_SIZE / height;
-          height = MAX_SIZE;
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-          resolve(dataUrl.split(',')[1]);
-        } else {
-          resolveFallback();
-        }
-      };
-
-      img.onerror = () => {
-        if (isResolved) return;
-        clearTimeout(fallbackTimer);
-        resolveFallback();
-      };
-
-      img.src = objectUrl;
-    } else {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        resolve(result.includes(',') ? result.split(',')[1] : result);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    }
+function compressImageToFile(file: File, maxPx = 1200, quality = 0.75): Promise<File> {
+  return new Promise((resolve) => {
+    const img = new window.Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > maxPx || height > maxPx) {
+        if (width > height) { height = Math.round(height * maxPx / width); width = maxPx; }
+        else { width = Math.round(width * maxPx / height); height = maxPx; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => resolve(new File([blob!], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' })),
+        'image/jpeg', quality
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
   });
 }
