@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 
-// gemini-1.5-flash-latest requires v1beta endpoint
+// gemini-2.0-flash-lite requires v1beta endpoint
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export const nfeSchema = {
@@ -34,7 +34,7 @@ export const nfeSchema = {
 export const extractInvoiceData = async (content: string) => {
   const model = genAI.getGenerativeModel(
     {
-      model: "gemini-1.5-flash-latest",
+      model: "gemini-2.0-flash-lite",
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: nfeSchema as any,

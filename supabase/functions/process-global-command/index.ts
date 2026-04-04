@@ -18,7 +18,7 @@ function jsonOk(data: unknown): Response {
 }
 
 const GEMINI_MODELS: [string, string][] = [
-    ["gemini-1.5-flash-latest", "v1beta"],
+    ["gemini-2.0-flash-lite", "v1beta"],
 ];
 
 async function callGemini(apiKey: string, body: unknown): Promise<string> {

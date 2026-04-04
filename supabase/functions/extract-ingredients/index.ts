@@ -85,9 +85,9 @@ Retorne SOMENTE este JSON (nenhum texto fora do JSON):
 // 4. GEMINI — chamada com retry automático + fallback de modelo
 // ══════════════════════════════════════════════════════════════════
 // Each entry: [modelName, apiVersion]
-// gemini-1.5-flash-latest requires v1beta endpoint
+// gemini-2.0-flash-lite requires v1beta endpoint
 const GEMINI_MODELS: [string, string][] = [
-  ["gemini-1.5-flash-latest", "v1beta"],
+  ["gemini-2.0-flash-lite", "v1beta"],
 ];
 
 async function callGemini(apiKey: string, geminiBody: unknown): Promise<any> {
