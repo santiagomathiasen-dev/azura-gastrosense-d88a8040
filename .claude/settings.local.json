@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Bash(node -e \"const p = require\\(''./node_modules/@google/generative-ai/package.json''\\); console.log\\(p.version\\)\")",
-      "Bash(node -e \"const {GoogleGenerativeAI} = require\\(''@google/generative-ai''\\); const g = new GoogleGenerativeAI\\(''test'', {apiVersion:''v1''}\\); console.log\\(''apiVersion ok''\\)\")"
+      "Bash(node -e \"const {GoogleGenerativeAI} = require\\(''@google/generative-ai''\\); const g = new GoogleGenerativeAI\\(''test'', {apiVersion:''v1''}\\); console.log\\(''apiVersion ok''\\)\")",
+      "Bash(gh pr:*)",
+      "Bash(where gh:*)",
+      "Bash(find /d/azura-gastrosense/competent-goodall/supabase/functions -type f -name *.ts)",
+      "Bash(find /d/azura-gastrosense/competent-goodall/src/app/api -type f -name *.ts)",
+      "Bash(grep -l \"GEMINI\\\\|OpenAI\\\\|generative\\\\|OPENAI\" /d/azura-gastrosense/competent-goodall/supabase/functions/*/index.ts)",
+      "Bash(grep -l \"GEMINI\\\\|OpenAI\\\\|generative\\\\|OPENAI\" /d/azura-gastrosense/competent-goodall/src/app/api/*/route.ts)"
     ]
   }
 }
