@@ -37,84 +37,67 @@ export function usePurchaseCalculationByPeriod({ productions }: UsePurchaseCalcu
   const { saleProducts, isLoading: saleProductsLoading } = useSaleProducts();
   const { sheets, isLoading: sheetsLoading } = useTechnicalSheets();
 
-  // Calculate projected consumption for productions AND sale product stock gaps
-  const getTotalProjectedDemand = useMemo(() => {
-    // Helper to explode technical sheet ingredients
-    const getSheetIngredientNeed = (sheetId: string, multiplier: number, targetStockItemId: string): number => {
-      const sheet = sheets.find(s => s.id === sheetId);
-      if (!sheet) return 0;
+  // Pre-compute a stockItemId → totalDemand map in a single O(productions + saleProducts) pass.
+  // Previously this was called once per stock item, making it O(stockItems × productions) = very slow.
+  const demandByStockItem = useMemo(() => {
+    const demand: Record<string, number> = {};
 
-      let total = 0;
-      const sheetYield = Number(sheet.yield_quantity || 1);
-      const finalMultiplier = multiplier / sheetYield;
-
-      if (!sheet.ingredients) return 0;
-
-      for (const ingredient of sheet.ingredients) {
-        if (ingredient.stock_item_id === targetStockItemId) {
-          total += Number(ingredient.quantity) * finalMultiplier;
-        }
-      }
-      return total;
+    const addDemand = (stockItemId: string, qty: number) => {
+      demand[stockItemId] = (demand[stockItemId] || 0) + qty;
     };
 
-    // Recursive helper to explode sale product components into base ingredients
-    const getSaleProductIngredientNeed = (productId: string, multiplier: number, targetStockItemId: string, depth = 0): number => {
-      // Prevent infinite recursion on circular dependencies
-      if (depth > 10) {
-        console.warn('Circular dependency detected in sale products for component:', productId);
-        return 0;
+    // Build sheet lookup map
+    const sheetMap = new Map(sheets.map(s => [s.id, s]));
+
+    // Explode a technical sheet's ingredients into the demand map
+    const explodeSheet = (sheetId: string, multiplier: number) => {
+      const sheet = sheetMap.get(sheetId);
+      if (!sheet?.ingredients) return;
+      const finalMultiplier = multiplier / Number(sheet.yield_quantity || 1);
+      for (const ing of sheet.ingredients) {
+        addDemand(ing.stock_item_id, Number(ing.quantity) * finalMultiplier);
       }
+    };
 
-      const product = saleProducts.find(p => p.id === productId);
-      if (!product || !product.components) return 0;
+    // Build sale product lookup map
+    const productMap = new Map(saleProducts.map(p => [p.id, p]));
 
-      let total = 0;
+    // Recursively explode a sale product's components into the demand map
+    const explodeProduct = (productId: string, multiplier: number, depth = 0) => {
+      if (depth > 10) return; // guard circular deps
+      const product = productMap.get(productId);
+      if (!product?.components) return;
       for (const component of product.components) {
         const compQty = Number(component.quantity) * multiplier;
-
         if (component.component_type === 'stock_item') {
-          if (component.component_id === targetStockItemId) {
-            total += compQty;
-          }
+          addDemand(component.component_id, compQty);
         } else if (component.component_type === 'finished_production') {
-          total += getSheetIngredientNeed(component.component_id, compQty, targetStockItemId);
+          explodeSheet(component.component_id, compQty);
         } else if (component.component_type === 'sale_product') {
-          total += getSaleProductIngredientNeed(component.component_id, compQty, targetStockItemId, depth + 1);
+          explodeProduct(component.component_id, compQty, depth + 1);
         }
       }
-      return total;
     };
 
-    return (stockItemId: string): number => {
-      let totalDemand = 0;
-
-      // 1. Demand from Planned Productions
-      for (const production of productions) {
-        if (!production.technical_sheet || production.status !== 'planned') continue;
-
-        const yieldQty = Number(production.technical_sheet.yield_quantity || 1);
-        const plannedQty = Number(production.planned_quantity);
-        const multiplier = plannedQty / yieldQty;
-
-        const ingredients = production.technical_sheet.ingredients || [];
-        for (const ingredient of ingredients) {
-          if (ingredient.stock_item_id === stockItemId) {
-            totalDemand += Number(ingredient.quantity) * multiplier;
-          }
-        }
+    // 1. Demand from Planned Productions
+    for (const production of productions) {
+      if (!production.technical_sheet || production.status !== 'planned') continue;
+      const yieldQty = Number(production.technical_sheet.yield_quantity || 1);
+      const multiplier = Number(production.planned_quantity) / yieldQty;
+      for (const ing of (production.technical_sheet.ingredients || [])) {
+        addDemand(ing.stock_item_id, Number(ing.quantity) * multiplier);
       }
+    }
 
-      // 2. Demand from Sale Products below minimum stock
-      for (const product of saleProducts) {
-        const gap = Math.max(0, (product.minimum_stock || 0) - (product.ready_quantity || 0));
-        if (gap > 0) {
-          totalDemand += getSaleProductIngredientNeed(product.id, gap, stockItemId);
-        }
+    // 2. Demand from Sale Products below minimum stock
+    for (const product of saleProducts) {
+      const gap = Math.max(0, (product.minimum_stock || 0) - (product.ready_quantity || 0));
+      if (gap > 0) {
+        explodeProduct(product.id, gap);
       }
+    }
 
-      return totalDemand;
-    };
+    return demand;
   }, [productions, saleProducts, sheets]);
 
   const purchaseNeeds = useMemo(() => {
@@ -135,7 +118,7 @@ export function usePurchaseCalculationByPeriod({ productions }: UsePurchaseCalcu
       const totalAvailable = currentQty + productionStockQty;
 
       // Get production need (includes productions + sale products gap)
-      const baseDemand = getTotalProjectedDemand(item.id);
+      const baseDemand = demandByStockItem[item.id] || 0;
       const totalProjectedNeed = baseDemand * (1 + wasteFactor);
 
       // Formula: Need = (Total Projected Need + Minimum Stock) - Total Available
@@ -177,7 +160,7 @@ export function usePurchaseCalculationByPeriod({ productions }: UsePurchaseCalcu
       if (a.isUrgent !== b.isUrgent) return a.isUrgent ? -1 : 1;
       return a.name.localeCompare(b.name);
     });
-  }, [stockItems, suppliers, getTotalProjectedDemand, productionStock]);
+  }, [stockItems, suppliers, demandByStockItem, productionStock]);
 
   const urgentCount = purchaseNeeds.filter(item => item.isUrgent).length;
   const totalEstimatedCost = purchaseNeeds.reduce((sum, item) => sum + item.estimatedCost, 0);
