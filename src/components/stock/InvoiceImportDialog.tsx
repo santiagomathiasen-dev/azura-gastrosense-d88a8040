@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { FileText, Upload, Loader2, Check, AlertTriangle, Plus, Search, RefreshCw } from 'lucide-react';
+import { FileText, Upload, Loader2, Check, AlertTriangle, Plus, Search, RefreshCw, Camera, AlignLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -18,6 +18,9 @@ import { toast } from 'sonner';
 import { useStockItems, type StockCategory, type StockUnit } from '@/hooks/useStockItems';
 import { formatQuantity, cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { parseNfeXml } from '@/lib/xml-parser';
+import { scanQrCode } from '@/lib/qr-reader';
+import { convertPdfToImage, extractTextFromPdf } from '@/lib/pdf-handler';
 
 interface InvoiceImportDialogProps {
   open: boolean;
@@ -26,6 +29,7 @@ interface InvoiceImportDialogProps {
 
 type Step = 'upload' | 'ai_processing' | 'mapping' | 'saving';
 type ProcessingStage = 'reading' | 'sending' | 'processing' | null;
+type ExtractMode = 'nfe' | 'visual_list' | 'text_data';
 
 interface ExtractionItem {
   id?: string;
@@ -82,6 +86,7 @@ export function InvoiceImportDialog({
   const [nfeData, setNfeData] = useState<any>(null);
   const [mappedItems, setMappedItems] = useState<MappedItem[]>([]);
   const [lastFile, setLastFile] = useState<File | null>(null);
+  const [extractMode, setExtractMode] = useState<ExtractMode>('nfe');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -164,9 +169,54 @@ export function InvoiceImportDialog({
       setProcessingStage('reading');
       let fileToSend: File = file;
 
-      // Compress images client-side to reduce upload bandwidth
-      if (file.type.startsWith('image/')) {
-        fileToSend = await compressImageToFile(file, 1200, 0.75);
+      // RULE 2: Force XML for NFe
+      if (extractMode === 'nfe') {
+        if (file.name.toLowerCase().endsWith('.xml')) {
+           setProcessingStage('processing');
+           const text = await file.text();
+           const parsed = parseNfeXml(text);
+           setProcessingStage(null);
+           handleComplete(parsed);
+           return;
+        }
+
+        // RULE 1: QR Code
+        if (file.type.startsWith('image/')) {
+           const qr = await scanQrCode(file);
+           if (qr) {
+             toast.success('Capturei a chave de acesso via QR Code!');
+             toast.info(`O sistema irá baixar o XML oficial da chave: ${qr}. (Simulação Ativa)`, { duration: 8000 });
+             setStep('upload'); 
+             setIsProcessing(false);
+             setProcessingStage(null);
+             return;
+           } else {
+             throw new Error('Não encontrei um QR code nesta foto. Por favor, envie o arquivo XML oficial para registrar a nota com precisão.');
+           }
+        }
+
+        // Reject PDF for NFe
+        if (file.type === 'application/pdf') {
+          throw new Error('Rejeitado: Envie o XML. A leitura de PDF de DANFE com IA foi desativada para evitar erros. Use o XML (100% preciso) ou foto do QR Code.');
+        }
+      }
+
+      // RULE 3: visual_list -> Convert PDF to JPG Image natively
+      if (extractMode === 'visual_list' && fileToSend.type === 'application/pdf') {
+        toast.info('Construindo imagem de alta resolução do PDF...');
+        fileToSend = await convertPdfToImage(fileToSend);
+      }
+
+      // RULE 4: text_data -> Extract raw text from PDF deterministically
+      if (extractMode === 'text_data' && fileToSend.type === 'application/pdf') {
+        toast.info('Extraindo texto bruto do PDF via OCR Clássico...');
+        const rawText = await extractTextFromPdf(fileToSend);
+        fileToSend = new File([rawText], fileToSend.name.replace('.pdf', '.txt'), { type: 'text/plain' });
+      }
+
+      // Compress images client-side to reduce upload bandwidth (skips if it became text. applies to images/PDF-Images)
+      if (fileToSend.type.startsWith('image/')) {
+        fileToSend = await compressImageToFile(fileToSend, 1200, 0.75);
       }
 
       setProcessingStage('sending');
@@ -174,6 +224,7 @@ export function InvoiceImportDialog({
       formData.append('file', fileToSend, fileToSend.name);
       formData.append('extractRecipe', 'false');
       formData.append('saveToDb', 'true');
+      formData.append('extractMode', extractMode); // Send the mode to Backend for processing rules
 
       const res = await fetch('/api/invoices/upload', {
         method: 'POST',
@@ -223,7 +274,7 @@ export function InvoiceImportDialog({
       setProcessingStage(null);
       setIsProcessing(false);
     }
-  }, [handleComplete]);
+  }, [handleComplete, extractMode]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -286,24 +337,53 @@ export function InvoiceImportDialog({
         </DialogHeader>
 
         {step === 'upload' && (
-          <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
-               onClick={() => !isProcessing && fileInputRef.current?.click()}>
-            {isProcessing ? (
-              <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
-            ) : (
-              <Upload className="h-10 w-10 text-muted-foreground mb-4" />
-            )}
-            <p className="text-sm font-medium">
-              {isProcessing ? 'Enviando arquivo...' : 'Clique para selecionar o arquivo (XML, PDF ou Foto)'}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">Sua nota será processada em background</p>
-            <input
-              ref={fileInputRef}
-              type="file"
-              onChange={handleFileChange}
-              className="hidden"
-              disabled={isProcessing}
-            />
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <Button 
+                variant={extractMode === 'nfe' ? 'default' : 'outline'} 
+                onClick={() => setExtractMode('nfe')}
+                className="h-auto py-3 px-2 flex flex-col gap-1 items-center justify-center text-xs"
+              >
+                <FileText className="h-4 w-4" />
+                <span className="text-center font-bold">Nota Fiscal<br/><span className="font-normal opacity-80">(XML/QR Code)</span></span>
+              </Button>
+              <Button 
+                variant={extractMode === 'visual_list' ? 'default' : 'outline'} 
+                onClick={() => setExtractMode('visual_list')}
+                className="h-auto py-3 px-2 flex flex-col gap-1 items-center justify-center text-xs"
+              >
+                <Camera className="h-4 w-4" />
+                <span className="text-center font-bold">Listas/Tabelas<br/><span className="font-normal opacity-80">(IA Visual)</span></span>
+              </Button>
+              <Button 
+                variant={extractMode === 'text_data' ? 'default' : 'outline'} 
+                onClick={() => setExtractMode('text_data')}
+                className="h-auto py-3 px-2 flex flex-col gap-1 items-center justify-center text-xs"
+              >
+                <AlignLeft className="h-4 w-4" />
+                <span className="text-center font-bold">Fichas Longas<br/><span className="font-normal opacity-80">(IA Texto)</span></span>
+              </Button>
+            </div>
+
+            <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                 onClick={() => !isProcessing && fileInputRef.current?.click()}>
+              {isProcessing ? (
+                <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
+              ) : (
+                <Upload className="h-10 w-10 text-muted-foreground mb-4" />
+              )}
+              <p className="text-sm font-medium">
+                {isProcessing ? 'Enviando arquivo...' : 'Clique para selecionar o arquivo (XML, PDF ou Foto)'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">Sua nota será processada em background</p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                onChange={handleFileChange}
+                className="hidden"
+                disabled={isProcessing}
+              />
+            </div>
           </div>
         )}
 

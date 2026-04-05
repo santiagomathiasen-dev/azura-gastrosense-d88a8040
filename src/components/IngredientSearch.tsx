@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -26,11 +26,13 @@ export function IngredientSearch({ ingredientes, onSelect, placeholder = "Digite
   const listRef = useRef<HTMLDivElement>(null);
 
   // Filter ingredients - requires at least 3 characters
-  const filteredIngredientes = search.length >= 3
-    ? ingredientes.filter(ing =>
-        ing.nome.toLowerCase().includes(search.toLowerCase())
-      )
-    : [];
+  const filteredIngredientes = useMemo(() => {
+    return search.length >= 3
+      ? ingredientes.filter(ing =>
+          ing.nome.toLowerCase().includes(search.toLowerCase())
+        )
+      : [];
+  }, [search, ingredientes]);
 
   const showDropdown = search.length >= 3 && filteredIngredientes.length > 0;
 

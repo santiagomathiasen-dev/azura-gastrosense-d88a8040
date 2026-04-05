@@ -14,7 +14,7 @@ export const SupplierSchema = z.object({
     notes: z.string().nullable().optional(),
     // Added extended columns
     cnpj_cpf: z.string().nullable().optional(),
-    average_delivery_days: z.number().nullable().optional(),
+    delivery_time_days: z.number().nullable().optional(),
     quality_rating: z.number().nullable().optional(),
     payment_method: z.string().nullable().optional(),
     zip_code: z.string().nullable().optional(),
@@ -22,6 +22,17 @@ export const SupplierSchema = z.object({
     state: z.string().nullable().optional(),
     created_at: z.string().optional(),
     updated_at: z.string().optional(),
+});
+
+export const SupplierMessageSchema = z.object({
+    id: z.string().uuid(),
+    user_id: z.string().uuid(),
+    supplier_id: z.string().uuid(),
+    purchase_list_id: z.string().uuid().nullable().optional(),
+    message_text: z.string(),
+    whatsapp_status: z.enum(['pending', 'sent', 'delivered', 'failed']).default('pending'),
+    sent_at: z.string().nullable().optional(),
+    created_at: z.string().optional(),
 });
 
 export const SupplierInsertSchema = SupplierSchema.omit({
@@ -33,3 +44,4 @@ export const SupplierInsertSchema = SupplierSchema.omit({
 export type Supplier = z.infer<typeof SupplierSchema>;
 export type SupplierInsert = z.infer<typeof SupplierInsertSchema>;
 export type SupplierUpdate = Partial<SupplierInsert>;
+export type SupplierMessage = z.infer<typeof SupplierMessageSchema>;

@@ -201,10 +201,10 @@ export function SupplierManagement() {
                                 </div>
                             )}
 
-                            {supplier.average_delivery_days && (
+                            {supplier.delivery_time_days && (
                                 <div className="flex items-center text-muted-foreground">
                                     <Truck className="h-4 w-4 mr-2" />
-                                    <span>Entrega em média {supplier.average_delivery_days} dias</span>
+                                    <span>Entrega em média {supplier.delivery_time_days} {supplier.delivery_time_days === 1 ? 'dia' : 'dias'}</span>
                                 </div>
                             )}
                         </CardContent>

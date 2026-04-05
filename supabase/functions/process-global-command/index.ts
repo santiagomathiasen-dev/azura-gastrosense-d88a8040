@@ -18,41 +18,57 @@ function jsonOk(data: unknown): Response {
 }
 
 const GEMINI_MODELS: [string, string][] = [
-    ["gemini-2.0-flash", "v1"],
-    ["gemini-2.0-flash-lite", "v1"],
-    ["gemini-2.0-flash", "v1beta"],
-    ["gemini-1.5-flash-latest", "v1beta"],
+    ["gemini-1.5-flash", "v1"],
+    ["gemini-2.5-flash", "v1"],
+    ["gemini-flash-latest", "v1"],
 ];
 
-async function callGemini(apiKey: string, body: unknown): Promise<string> {
+async function callGemini(apiKey: string, geminiBody: unknown): Promise<string> {
+    let lastErrorDetails = "";
+
     for (const [model, apiVersion] of GEMINI_MODELS) {
-        const res = await fetch(
-            `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent?key=${apiKey}`,
-            { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
-        );
+        for (let attempt = 0; attempt < 3; attempt++) {
+            console.log(`[Gemini] Tentando model=${model} api=${apiVersion} attempt=${attempt}`);
 
-        if (res.ok) {
-            const json = await res.json();
-            const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) return text;
-            // finishReason empty — try next model
-            const reason = json?.candidates?.[0]?.finishReason ?? "UNKNOWN";
-            console.warn(`[GlobalAI] model=${model} finishReason=${reason} — sem texto`);
-            continue;
+            const res = await fetch(
+                `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent?key=${apiKey}`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(geminiBody),
+                }
+            );
+
+            if (res.ok) {
+                const json = await res.json();
+                console.log(`[Gemini OK] model=${model} attempt=${attempt}`);
+                const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (text) return text;
+                continue;
+            }
+
+            let errBody: any = {};
+            try { errBody = await res.clone().json(); } catch (_) {
+                try { errBody = { raw: await res.text() }; } catch (_2) { }
+            }
+            const errMsg = errBody?.error?.message ?? JSON.stringify(errBody);
+            lastErrorDetails = `[${model}/${apiVersion}] HTTP ${res.status}: ${errMsg}`;
+            console.error("ERRO REAL DO GEMINI:", lastErrorDetails);
+
+            if (res.status === 429) {
+                let waitMs = (attempt + 1) * 15000;
+                const delay = errBody?.error?.details?.find((d: any) => d.retryDelay)?.retryDelay;
+                if (delay) waitMs = (parseInt(delay) + 3) * 1000;
+                await new Promise((r) => setTimeout(r, waitMs));
+                continue;
+            }
+            break;
         }
-
-        let errBody: any = {};
-        try { errBody = await res.json(); } catch (_) { }
-        const errMsg = errBody?.error?.message ?? `HTTP ${res.status}`;
-        console.error(`[GlobalAI] model=${model} api=${apiVersion} ERRO: ${errMsg}`);
-
-        if (res.status === 429) {
-            await new Promise(r => setTimeout(r, 15_000));
-            continue;
-        }
-        // 404 or other non-retryable → try next model
     }
-    throw new Error("Todos os modelos Gemini falharam.");
+
+    const finalErr: any = new Error("Todos os modelos Gemini falharam.");
+    finalErr.details = lastErrorDetails;
+    throw finalErr;
 }
 
 serve(async (req: any) => {

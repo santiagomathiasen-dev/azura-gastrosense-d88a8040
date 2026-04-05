@@ -55,74 +55,101 @@ Retorne SOMENTE este JSON (nenhum texto fora do JSON):
 
 export async function POST(req: NextRequest) {
   try {
+    // 1. Verificação de Autenticação
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+      return NextResponse.json({ error: 'Sessão expirada ou não autorizado.' }, { status: 401 });
     }
 
+    // 2. Chave de API Blindada
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: 'GEMINI_API_KEY não configurada no servidor.' }, { status: 500 });
+      console.error('ERRO CRÍTICO: GEMINI_API_KEY ausente.');
+      return NextResponse.json({ error: 'Configuração da IA ausente no servidor.' }, { status: 502 });
     }
 
-    const formData = await req.formData();
+    // 3. Parsing do Arquivo (Blindado contra limites e tipos)
+    let formData: FormData;
+    try {
+      formData = await req.formData();
+    } catch (e: any) {
+      return NextResponse.json({ error: 'Falha ao processar formulário: ' + e.message }, { status: 400 });
+    }
+
     const file = formData.get('file') as File;
     const extractRecipe = formData.get('extractRecipe') === 'true';
-    const saveToDb = formData.get('saveToDb') !== 'false'; // default true for invoices
+    const saveToDb = formData.get('saveToDb') !== 'false';
 
     if (!file) {
-      return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 });
+      return NextResponse.json({ error: 'Nenhum arquivo enviado.' }, { status: 400 });
+    }
+
+    // Limite preventivo de 10MB (Vercel pode barrar antes em 4.5MB)
+    if (file.size > 10 * 1024 * 1024) {
+      return NextResponse.json({ error: 'Arquivo muito grande (máx 10MB).' }, { status: 413 });
     }
 
     const mimeType = file.type || 'application/octet-stream';
     const arrayBuffer = await file.arrayBuffer();
+    const base64Data = Buffer.from(arrayBuffer).toString('base64');
 
+    // 4. Inicialização da IA Única (Arquitetura Universal de Visão)
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel(
-      { model: 'gemini-2.0-flash', generationConfig: { temperature: 0.1 } },
-      { apiVersion: 'v1beta' }
-    );
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-1.5-flash',
+      generationConfig: { 
+        temperature: 0.1,
+        responseMimeType: "application/json",
+      }
+    });
 
+    // Prompt Universal e Visionário
     const prompt = extractRecipe ? PROMPT_RECIPE : PROMPT_INGREDIENT;
 
-    // Text files: send as plain text part. Binary (PDF/image): use inlineData.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const contentPart: any = mimeType === 'text/plain'
-      ? { text: `Conteúdo do documento:\n${Buffer.from(arrayBuffer).toString('utf-8')}` }
-      : { inlineData: { mimeType, data: Buffer.from(arrayBuffer).toString('base64') } };
-
-    const result = await model.generateContent([
-      { text: prompt },
-      contentPart,
-      { text: 'Retorne apenas o JSON. Nenhum texto fora do JSON.' },
-    ]);
+    // 5. Execução com Diagnóstico de Veracidade
+    let result;
+    try {
+      result = await model.generateContent([
+        { text: prompt },
+        { inlineData: { mimeType, data: base64Data } }
+      ]);
+    } catch (aiErr: any) {
+      console.error('FALHA NA API DO GOOGLE:', aiErr);
+      return NextResponse.json({ 
+        error: 'Falha na IA: ' + (aiErr.message?.includes('Quota') ? 'Limite de uso excedido' : aiErr.message),
+        details: aiErr.stack
+      }, { status: 502 });
+    }
 
     const rawText = result.response.text();
     if (!rawText) {
-      return NextResponse.json({ error: 'Gemini não retornou dados.' }, { status: 422 });
+      return NextResponse.json({ error: 'A IA não conseguiu ler o documento (resposta vazia).' }, { status: 422 });
     }
 
+    // 6. Parsing de JSON Blindado
     let parsed: any;
     try {
       parsed = JSON.parse(rawText.trim());
-    } catch {
+    } catch (pj: any) {
+      // Tentativa de recuperação de JSON quebrado
       const match = rawText.match(/\{[\s\S]*\}/);
       if (match) {
         try { parsed = JSON.parse(match[0]); } catch {
-          return NextResponse.json({ error: 'Resposta do Gemini não é JSON válido.' }, { status: 422 });
+          return NextResponse.json({ error: 'IA retornou formato inválido.', raw: rawText }, { status: 422 });
         }
       } else {
-        return NextResponse.json({ error: 'Resposta do Gemini não é JSON válido.' }, { status: 422 });
+        return NextResponse.json({ error: 'IA falhou ao estruturar dados.', raw: rawText }, { status: 422 });
       }
     }
 
+    // 7. Normalização Universal de Dados
     const rawIngredients: any[] = Array.isArray(parsed.ingredients) ? parsed.ingredients : [];
     const ingredients = rawIngredients
       .map((ing: any) => ({
         name: String(ing.nome ?? ing.name ?? '').trim(),
-        quantity: parseFloat(String(ing.quantidade ?? ing.quantity ?? 1).replace(',', '.')) || 1,
-        unit: ing.unidade ?? ing.unit ?? 'unidade',
+        quantity: typeof ing.quantidade === 'number' ? ing.quantidade : parseFloat(String(ing.quantidade ?? 1).replace(',', '.')) || 1,
+        unit: String(ing.unidade ?? ing.unit ?? 'unidade').toLowerCase().trim(),
         price: ing.preco_unitario ?? ing.price ?? null,
         price_total: ing.preco_total ?? null,
         category: ing.categoria ?? ing.category ?? 'outros',
@@ -150,34 +177,39 @@ export async function POST(req: NextRequest) {
       }),
     };
 
-    // Save invoice record for non-recipe extractions
+    // 8. Persistência de Dados (Opcional)
     if (saveToDb && !extractRecipe) {
-      const { data: importRecord, error: importError } = await supabase
-        .from('invoice_imports')
-        .insert({
-          user_id: user.id,
-          status: 'completed',
-          supplier_name: responseData.fornecedor,
-          invoice_number: responseData.numero_nota,
-          emission_date: responseData.data_emissao,
-          total_value: responseData.valor_total,
-          items_count: ingredients.length,
-          extracted_data: responseData,
-        })
-        .select('id')
-        .single();
+      try {
+        const { data: importRecord, error: importError } = await supabase
+          .from('invoice_imports')
+          .insert({
+            user_id: user.id,
+            status: 'completed',
+            supplier_name: responseData.fornecedor,
+            invoice_number: responseData.numero_nota,
+            emission_date: responseData.data_emissao,
+            total_value: responseData.valor_total,
+            items_count: ingredients.length,
+            extracted_data: responseData,
+          })
+          .select('id')
+          .single();
 
-      if (importError) {
-        console.error('invoice_imports insert error:', importError.message);
-      } else {
+        if (importError) throw importError;
         responseData.importId = importRecord?.id ?? null;
+      } catch (dbErr: any) {
+        console.warn('Alerta: Dados extraídos mas não salvos no histórico:', dbErr.message);
       }
     }
 
+    // 9. Retorno Final Sucesso
     return NextResponse.json(responseData);
 
   } catch (error: any) {
-    console.error('AI extract route error:', error);
-    return NextResponse.json({ error: error.message ?? 'Erro interno' }, { status: 500 });
+    console.error('ERRO NÃO TRATADO NO UPLOAD:', error);
+    return NextResponse.json({ 
+      error: 'Erro sistêmico: ' + (error.message || 'Desconhecido'),
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    }, { status: 400 }); // Retorna 400 em vez de 500 para evitar crash do listener
   }
 }

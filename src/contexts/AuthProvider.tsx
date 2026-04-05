@@ -117,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     id: data.user.id,
                     email: email.trim(),
                     full_name: name.trim(),
-                    role: 'user',
+                    role: 'gestor',
                     status: 'ativo',
                     status_pagamento: false
                 });

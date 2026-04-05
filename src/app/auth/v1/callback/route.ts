@@ -33,7 +33,11 @@ export async function GET(request: Request) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (error || !data?.session) {
-        console.error('Auth callback: code exchange failed', error?.message);
+        console.error('Auth callback: code exchange failed. Details:', {
+            errorMessage: error?.message,
+            errorCode: error?.code,
+            errorStatus: error?.status
+        });
         return NextResponse.redirect(`${origin}/auth?error=Falha na autenticação do Google`);
     }
 
@@ -51,7 +55,7 @@ export async function GET(request: Request) {
                     user.user_metadata?.name ||
                     user.email?.split('@')[0] ||
                     'Usuário',
-                role: 'user',
+                role: 'gestor',
                 status: 'ativo',
                 status_pagamento: false,
             },

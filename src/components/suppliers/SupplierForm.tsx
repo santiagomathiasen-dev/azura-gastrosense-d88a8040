@@ -53,7 +53,7 @@ export function SupplierForm({
   const [phone, setPhone] = useState((initialData as any)?.phone || '');
   const [whatsapp, setWhatsapp] = useState((initialData as any)?.whatsapp || '');
   const [email, setEmail] = useState((initialData as any)?.email || '');
-  const [deliveryDays, setDeliveryDays] = useState(String((initialData as any)?.average_delivery_days || 3));
+  const [deliveryDays, setDeliveryDays] = useState(String((initialData as any)?.delivery_time_days || 3));
   const [rating, setRating] = useState(String((initialData as any)?.quality_rating || 3));
   const [paymentMethod, setPaymentMethod] = useState((initialData as any)?.payment_method || '');
   const [zipCode, setZipCode] = useState((initialData as any)?.zip_code || '');
@@ -76,7 +76,7 @@ export function SupplierForm({
       whatsapp: whatsapp || null,
       whatsapp_number: whatsappNumber,
       email: email || null,
-      average_delivery_days: parseInt(deliveryDays) || 3,
+      delivery_time_days: parseInt(deliveryDays) || 3,
       quality_rating: parseInt(rating) || 3,
       payment_method: paymentMethod || null,
       zip_code: zipCode || null,
@@ -95,7 +95,7 @@ export function SupplierForm({
       setPhone((initialData as any)?.phone || '');
       setWhatsapp((initialData as any)?.whatsapp || '');
       setEmail((initialData as any)?.email || '');
-      setDeliveryDays(String((initialData as any)?.average_delivery_days || 3));
+      setDeliveryDays(String((initialData as any)?.delivery_time_days || 3));
       setRating(String((initialData as any)?.quality_rating || 3));
       setPaymentMethod((initialData as any)?.payment_method || '');
       setZipCode((initialData as any)?.zip_code || '');

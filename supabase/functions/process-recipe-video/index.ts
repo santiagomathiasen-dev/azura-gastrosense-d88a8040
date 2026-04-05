@@ -33,58 +33,59 @@ Retorne SOMENTE este JSON (nenhum texto fora do JSON):
 }`;
 
 // ── Gemini com retry e fallback ────────────────────────────────────────────────
+const GEMINI_MODELS: [string, string][] = [
+  ["gemini-1.5-flash", "v1"],
+  ["gemini-2.5-flash", "v1"],
+  ["gemini-flash-latest", "v1"],
+];
+
 async function callGemini(apiKey: string, prompt: string): Promise<any> {
-  const models = ["gemini-2.0-flash", "gemini-1.5-flash"];
+  let lastErrorDetails = "";
 
-  for (const model of models) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30_000);
+  for (const [model, apiVersion] of GEMINI_MODELS) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      console.log(`[Gemini] Tentando model=${model} api=${apiVersion} attempt=${attempt}`);
 
-      try {
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { temperature: 0.2, responseMimeType: "application/json" },
-            }),
-            signal: controller.signal,
-          }
-        );
-
-        clearTimeout(timeout);
-
-        if (res.ok) {
-          const json = await res.json();
-          console.log(`[process-recipe-video] OK model=${model}`);
-          return json;
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
+          }),
         }
+      );
 
-        let errJson: any = {};
-        try { errJson = await res.clone().json(); } catch (_) {}
-        console.error(`ERRO REAL DO GEMINI [${model}] HTTP ${res.status}:`, JSON.stringify(errJson));
-
-        if (res.status === 429 && attempt === 0) {
-          const delay = errJson?.error?.details?.find((d: any) => d.retryDelay)?.retryDelay;
-          const waitMs = Math.min(delay ? parseInt(delay) * 1000 : 8000, 8000);
-          console.warn(`[429] aguardando ${waitMs}ms`);
-          await new Promise((r) => setTimeout(r, waitMs));
-          continue;
-        }
-
-        break; // outro erro → tenta próximo modelo
-      } catch (e: any) {
-        clearTimeout(timeout);
-        if (e?.name === "AbortError") throw new Error("Timeout: Gemini não respondeu em 30s.");
-        throw e;
+      if (res.ok) {
+        const json = await res.json();
+        console.log(`[Gemini OK] model=${model} attempt=${attempt}`);
+        return json;
       }
+
+      let errBody: any = {};
+      try { errBody = await res.clone().json(); } catch (_) {
+        try { errBody = { raw: await res.text() }; } catch (_2) { }
+      }
+      const errMsg = errBody?.error?.message ?? JSON.stringify(errBody);
+      lastErrorDetails = `[${model}/${apiVersion}] HTTP ${res.status}: ${errMsg}`;
+      console.error("ERRO REAL DO GEMINI:", lastErrorDetails);
+
+      if (res.status === 429) {
+        let waitMs = (attempt + 1) * 15000;
+        const delay = errBody?.error?.details?.find((d: any) => d.retryDelay)?.retryDelay;
+        if (delay) waitMs = (parseInt(delay) + 3) * 1000;
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+      break;
     }
   }
 
-  throw new Error("Todos os modelos Gemini falharam. Tente novamente em 1 minuto.");
+  const finalErr: any = new Error("Todos os modelos Gemini falharam.");
+  finalErr.details = lastErrorDetails;
+  throw finalErr;
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
