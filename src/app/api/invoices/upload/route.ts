@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
         });
         rawText = response.output_text ?? '';
       } finally {
-        openai.files.del(uploaded.id).catch(() => {});
+        openai.files.delete(uploaded.id).catch(() => {});
       }
     }
 
