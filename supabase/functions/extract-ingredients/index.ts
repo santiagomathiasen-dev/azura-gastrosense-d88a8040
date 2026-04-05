@@ -82,90 +82,48 @@ Retorne SOMENTE este JSON (nenhum texto fora do JSON):
 }`;
 
 // ══════════════════════════════════════════════════════════════════
-// 4. OPENAI — upload de arquivo + Responses API
+// 4. OPENAI — Chat Completions com base64 inline (sem Files API)
 // ══════════════════════════════════════════════════════════════════
 async function callOpenAI(apiKey: string, prompt: string, content: string, mimeType: string): Promise<string> {
-  const headers = { "Authorization": `Bearer ${apiKey}` };
+  const headers = { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" };
+
+  let messageContent: any;
 
   if (mimeType === "text/plain") {
-    // Plain text — use Chat Completions directly
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [{
-          role: "user",
-          content: `${prompt}\n\nConteúdo do documento:\n${content}\n\nRetorne apenas o JSON.`,
-        }],
-        response_format: { type: "json_object" },
-        temperature: 0.1,
-      }),
-    });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`OpenAI chat completions falhou: ${err}`);
-    }
-    const data = await res.json();
-    return data?.choices?.[0]?.message?.content ?? "";
+    messageContent = `${prompt}\n\nConteúdo do documento:\n${content}\n\nRetorne apenas o JSON.`;
+  } else if (mimeType.startsWith("image/")) {
+    messageContent = [
+      { type: "text", text: prompt },
+      { type: "image_url", image_url: { url: `data:${mimeType};base64,${content}` } },
+      { type: "text", text: "Retorne apenas o JSON. Nenhum texto fora do JSON." },
+    ];
+  } else {
+    // PDF — inline base64 via file content part
+    messageContent = [
+      { type: "text", text: prompt },
+      { type: "file", file: { filename: "document.pdf", file_data: `data:${mimeType};base64,${content}` } },
+      { type: "text", text: "Retorne apenas o JSON. Nenhum texto fora do JSON." },
+    ];
   }
 
-  // Binary (PDF / image) — upload to Files API then call Responses API
-  const binaryStr = atob(content);
-  const bytes = new Uint8Array(binaryStr.length);
-  for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-
-  const ext = mimeType === "application/pdf" ? "pdf" : (mimeType.split("/")[1] || "bin");
-  const formData = new FormData();
-  formData.append("file", new Blob([bytes], { type: mimeType }), `document.${ext}`);
-  formData.append("purpose", "user_data");
-
-  console.log(`[OpenAI] Uploading file ext=${ext} size=${bytes.length}`);
-  const uploadRes = await fetch("https://api.openai.com/v1/files", {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers,
-    body: formData,
+    body: JSON.stringify({
+      model: "gpt-4o",
+      messages: [{ role: "user", content: messageContent }],
+      response_format: { type: "json_object" },
+      temperature: 0.1,
+    }),
   });
-  if (!uploadRes.ok) {
-    const err = await uploadRes.text();
-    throw new Error(`OpenAI file upload falhou: ${err}`);
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`OpenAI chat completions falhou: ${err}`);
   }
-  const { id: fileId } = await uploadRes.json();
-  console.log(`[OpenAI] File uploaded fileId=${fileId}`);
 
-  try {
-    const inputContent = [
-      { type: "input_text", text: prompt },
-      mimeType.startsWith("image/")
-        ? { type: "input_image", file_id: fileId }
-        : { type: "input_file", file_id: fileId },
-      { type: "input_text", text: "Retorne apenas o JSON. Nenhum texto fora do JSON." },
-    ];
-
-    const responseRes = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        input: inputContent,
-        text: { format: { type: "json_object" } },
-      }),
-    });
-
-    if (!responseRes.ok) {
-      const err = await responseRes.text();
-      throw new Error(`OpenAI responses API falhou: ${err}`);
-    }
-
-    const data = await responseRes.json();
-    console.log(`[OpenAI] Resposta recebida`);
-    return data?.output_text ?? "";
-  } finally {
-    fetch(`https://api.openai.com/v1/files/${fileId}`, {
-      method: "DELETE",
-      headers,
-    }).catch(() => {});
-  }
+  const data = await res.json();
+  return data?.choices?.[0]?.message?.content ?? "";
 }
 
 // ══════════════════════════════════════════════════════════════════

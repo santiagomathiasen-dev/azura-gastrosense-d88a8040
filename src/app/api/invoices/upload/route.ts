@@ -96,31 +96,21 @@ export async function POST(req: NextRequest) {
       });
       rawText = completion.choices[0].message.content ?? '';
     } else {
-      // PDF or image — upload to Files API then call Responses API
-      const ext = mimeType === 'application/pdf' ? 'pdf' : (mimeType.split('/')[1] || 'bin');
-      const uploaded = await openai.files.create({
-        file: new File([buffer], `document.${ext}`, { type: mimeType }),
-        purpose: 'user_data',
+      // PDF or image — send inline as base64 in Chat Completions (no Files API needed)
+      const base64 = buffer.toString('base64');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const filePart: any = mimeType.startsWith('image/')
+        ? { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } }
+        : { type: 'file', file: { filename: 'document.pdf', file_data: `data:${mimeType};base64,${base64}` } };
+
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, filePart, { type: 'text', text: 'Retorne apenas o JSON. Nenhum texto fora do JSON.' }] as any }],
+        response_format: { type: 'json_object' },
+        temperature: 0.1,
       });
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const inputContent: any[] = [
-          { type: 'input_text', text: prompt },
-          mimeType.startsWith('image/')
-            ? { type: 'input_image', file_id: uploaded.id }
-            : { type: 'input_file', file_id: uploaded.id },
-          { type: 'input_text', text: 'Retorne apenas o JSON. Nenhum texto fora do JSON.' },
-        ];
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const response = await (openai as any).responses.create({
-          model: 'gpt-4o',
-          input: inputContent,
-          text: { format: { type: 'json_object' } },
-        });
-        rawText = response.output_text ?? '';
-      } finally {
-        openai.files.delete(uploaded.id).catch(() => {});
-      }
+      rawText = completion.choices[0].message.content ?? '';
     }
 
     if (!rawText) {
