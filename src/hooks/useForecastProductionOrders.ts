@@ -77,7 +77,7 @@ export function useForecastProductionOrders(productionDate?: string) {
         enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
         staleTime: 60_000,
         gcTime: 10 * 60 * 1000,
-        refetchInterval: 15_000,
+        refetchInterval: 120_000,
     });
 
     // Function to subtract stock when production starts

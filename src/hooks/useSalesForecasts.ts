@@ -38,7 +38,7 @@ export function useSalesForecasts(targetDate?: string) {
         enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
         staleTime: 5 * 60 * 1000,
         gcTime: 30 * 60 * 1000,
-        refetchInterval: 30_000,
+        refetchInterval: 120_000,
     });
 
     const createForecast = useMutation({

@@ -36,8 +36,8 @@ export function useStockItems() {
       return stockApi.getAll(ownerId || user?.id || '');
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
-    refetchInterval: 30_000,
-    staleTime: 5 * 60 * 1000,
+    refetchInterval: 120_000,
+    staleTime: 60_000,
     gcTime: 30 * 60 * 1000,
   });
 

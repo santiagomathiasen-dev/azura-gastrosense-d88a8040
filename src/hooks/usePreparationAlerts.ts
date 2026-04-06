@@ -14,7 +14,7 @@ export interface PreparationAlert {
     resolved: boolean;
     created_at: string;
     sale_product?: { name: string };
-    missing_component_name?: string; // Will need to be fetched or joined
+    missing_component_name?: string;
 }
 
 export function usePreparationAlerts() {
@@ -37,47 +37,41 @@ export function usePreparationAlerts() {
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
+            if (!data?.length) return [];
 
-            // We need to fetch the names of missing components manually since they can be from different tables
-            // This is a bit inefficient but works for now. 
-            // A better approach might be a database view or function.
-            const alertsWithNames = await Promise.all(data.map(async (alert: any) => {
-                let missingName = 'Desconhecido';
+            // Batch fetch all component names in 3 queries instead of N+1
+            const ids = { stock_item: [] as string[], finished_production: [] as string[], sale_product: [] as string[] };
+            for (const a of data) {
+                const bucket = ids[a.missing_component_type as keyof typeof ids];
+                if (bucket && a.missing_component_id) bucket.push(a.missing_component_id);
+            }
 
-                if (alert.missing_component_type === 'stock_item') {
-                    const { data: item } = await (supabase as any)
-                        .from('stock_items')
-                        .select('name')
-                        .eq('id', alert.missing_component_id)
-                        .single();
-                    if (item) missingName = item.name;
-                } else if (alert.missing_component_type === 'finished_production') {
-                    const { data: sheet } = await (supabase as any)
-                        .from('technical_sheets')
-                        .select('name')
-                        .eq('id', alert.missing_component_id)
-                        .single();
-                    if (sheet) missingName = sheet.name;
-                } else if (alert.missing_component_type === 'sale_product') {
-                    const { data: product } = await (supabase as any)
-                        .from('sale_products')
-                        .select('name')
-                        .eq('id', alert.missing_component_id)
-                        .single();
-                    if (product) missingName = product.name;
-                }
+            const nameMap = new Map<string, string>();
 
-                return {
-                    ...alert,
-                    missing_component_name: missingName,
-                };
-            }));
+            const [stockRes, sheetRes, productRes] = await Promise.all([
+                ids.stock_item.length
+                    ? (supabase as any).from('stock_items').select('id, name').in('id', ids.stock_item)
+                    : { data: [] },
+                ids.finished_production.length
+                    ? (supabase as any).from('technical_sheets').select('id, name').in('id', ids.finished_production)
+                    : { data: [] },
+                ids.sale_product.length
+                    ? (supabase as any).from('sale_products').select('id, name').in('id', ids.sale_product)
+                    : { data: [] },
+            ]);
 
-            return alertsWithNames as PreparationAlert[];
+            for (const item of (stockRes.data ?? [])) nameMap.set(item.id, item.name);
+            for (const item of (sheetRes.data ?? [])) nameMap.set(item.id, item.name);
+            for (const item of (productRes.data ?? [])) nameMap.set(item.id, item.name);
+
+            return data.map((alert: any) => ({
+                ...alert,
+                missing_component_name: nameMap.get(alert.missing_component_id) || 'Desconhecido',
+            })) as PreparationAlert[];
         },
         enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
-        refetchInterval: 15_000, // Auto-refresh every 15 seconds
-        staleTime: 10_000,
+        refetchInterval: 120_000,
+        staleTime: 60_000,
     });
 
     const resolveAlert = useMutation({

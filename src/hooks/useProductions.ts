@@ -54,7 +54,7 @@ export function useProductions() {
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
     staleTime: 60_000,
     gcTime: 10 * 60 * 1000,
-    refetchInterval: 30_000,
+    refetchInterval: 120_000,
   });
 
   const createProduction = useMutation({

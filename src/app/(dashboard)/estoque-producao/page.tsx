@@ -1,7 +1,10 @@
 'use client';
-
-import EstoqueProducao from '@/v-pages/EstoqueProducao';
-
-export default function NextEstoqueProducao() {
-    return <EstoqueProducao />;
-}
+import dynamic from 'next/dynamic';
+const EstoqueProducao = dynamic(() => import('@/v-pages/EstoqueProducao'), {
+    loading: () => (
+        <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        </div>
+    ),
+});
+export default function NextEstoqueProducao() { return <EstoqueProducao />; }
