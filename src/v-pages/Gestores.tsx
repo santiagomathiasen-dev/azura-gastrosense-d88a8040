@@ -104,7 +104,7 @@ export default function Gestores() {
   }, [profiles, searchTerm]);
 
   const filteredGestors = useMemo(() => allUsers.filter(p => p.role === 'gestor'), [allUsers]);
-  const allSubscribableUsers = useMemo(() => allUsers.filter(p => p.role === 'gestor' || p.role === 'admin'), [allUsers]);
+  const allSubscribableUsers = allUsers;
 
   const isOwnerRole = (currentProfile?.role as string) === 'owner' || (currentProfile?.role as string) === 'admin';
   const hasAccessAccess = isAdmin || isOwnerRole || (!currentProfile && !profileLoading);
@@ -373,7 +373,12 @@ export default function Gestores() {
                     <div className="flex items-center gap-4">
                       {/* User info */}
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{user.full_name || 'Sem nome'}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium truncate">{user.full_name || 'Sem nome'}</p>
+                          <Badge variant="outline" className="text-[9px] shrink-0">
+                            {user.role === 'owner' ? 'Owner' : user.role === 'admin' ? 'Admin' : user.role === 'colaborador' ? 'Colab.' : 'Gestor'}
+                          </Badge>
+                        </div>
                         <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                       </div>
 
