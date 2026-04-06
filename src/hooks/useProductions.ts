@@ -1,11 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
 import { getNow } from '@/lib/utils';
-import type { Database } from '@/integrations/supabase/types';
 import { supabaseFetch } from '@/lib/supabase-fetch';
+import { useDriveData } from '@/contexts/DriveDataContext';
 
 import { productionApi } from '@/api/ProductionApi';
 import { ProductionService } from '../modules/production/services/ProductionService';
@@ -43,18 +42,26 @@ export function useProductions() {
   const { user } = useAuth();
   const { ownerId, isLoading: isOwnerLoading } = useOwnerId();
   const queryClient = useQueryClient();
+  const { isDriveConnected, data: driveData } = useDriveData();
 
-  // Query uses RLS - no need to filter by user_id client-side
+  // Hybrid query: Drive or Supabase
   const { data: productions = EMPTY_ARRAY, isLoading, error } = useQuery({
-    queryKey: ['productions', ownerId],
+    queryKey: ['productions', ownerId, isDriveConnected ? 'drive' : 'supabase'],
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
+
+      // Drive mode
+      if (isDriveConnected && driveData?.production?.productions) {
+        return driveData.production.productions as ProductionWithSheet[];
+      }
+
+      // Supabase fallback
       return productionApi.getAll(ownerId || '');
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
     staleTime: 60_000,
     gcTime: 10 * 60 * 1000,
-    refetchInterval: 120_000,
+    refetchInterval: isDriveConnected ? false : 120_000,
   });
 
   const createProduction = useMutation({
