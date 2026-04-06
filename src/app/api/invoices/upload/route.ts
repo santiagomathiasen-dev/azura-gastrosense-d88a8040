@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 
 export const maxDuration = 90;
 
@@ -62,14 +62,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Sessão expirada ou não autorizado.' }, { status: 401 });
     }
 
-    // 2. Chave de API Blindada
-    const apiKey = process.env.GEMINI_API_KEY;
+    // 2. Chave de API
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      console.error('ERRO CRÍTICO: GEMINI_API_KEY ausente.');
+      console.error('ERRO CRÍTICO: OPENAI_API_KEY ausente.');
       return NextResponse.json({ error: 'Configuração da IA ausente no servidor.' }, { status: 502 });
     }
 
-    // 3. Parsing do Arquivo (Blindado contra limites e tipos)
+    // 3. Parsing do Arquivo
     let formData: FormData;
     try {
       formData = await req.formData();
@@ -85,7 +85,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Nenhum arquivo enviado.' }, { status: 400 });
     }
 
-    // Limite preventivo de 10MB (Vercel pode barrar antes em 4.5MB)
     if (file.size > 10 * 1024 * 1024) {
       return NextResponse.json({ error: 'Arquivo muito grande (máx 10MB).' }, { status: 413 });
     }
@@ -94,45 +93,55 @@ export async function POST(req: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const base64Data = Buffer.from(arrayBuffer).toString('base64');
 
-    // 4. Inicialização da IA Única (Arquitetura Universal de Visão)
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ 
-      model: 'gemini-1.5-flash',
-      generationConfig: { 
-        temperature: 0.1,
-        responseMimeType: "application/json",
-      }
-    });
-
-    // Prompt Universal e Visionário
+    // 4. OpenAI Chat Completions
+    const openai = new OpenAI({ apiKey });
     const prompt = extractRecipe ? PROMPT_RECIPE : PROMPT_INGREDIENT;
 
-    // 5. Execução com Diagnóstico de Veracidade
+    const contentParts: OpenAI.ChatCompletionContentPart[] = [
+      { type: 'text', text: prompt },
+    ];
+
+    if (mimeType.startsWith('image/')) {
+      contentParts.push({
+        type: 'image_url',
+        image_url: { url: `data:${mimeType};base64,${base64Data}`, detail: 'high' },
+      });
+    } else if (mimeType === 'application/pdf') {
+      contentParts.push({
+        type: 'file',
+        file: { filename: file.name, file_data: `data:application/pdf;base64,${base64Data}` },
+      } as any);
+    } else {
+      // Text files (XML, CSV, TXT)
+      const textContent = Buffer.from(arrayBuffer).toString('utf-8');
+      contentParts[0] = { type: 'text', text: `${prompt}\n\n--- CONTEÚDO DO ARQUIVO ---\n${textContent}` };
+    }
+
     let result;
     try {
-      result = await model.generateContent([
-        { text: prompt },
-        { inlineData: { mimeType, data: base64Data } }
-      ]);
+      result = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        temperature: 0.1,
+        response_format: { type: 'json_object' },
+        messages: [{ role: 'user', content: contentParts }],
+      });
     } catch (aiErr: any) {
-      console.error('FALHA NA API DO GOOGLE:', aiErr);
-      return NextResponse.json({ 
-        error: 'Falha na IA: ' + (aiErr.message?.includes('Quota') ? 'Limite de uso excedido' : aiErr.message),
-        details: aiErr.stack
+      console.error('FALHA NA API OPENAI:', aiErr);
+      return NextResponse.json({
+        error: 'Falha na IA: ' + (aiErr.message?.includes('quota') ? 'Limite de uso excedido' : aiErr.message),
       }, { status: 502 });
     }
 
-    const rawText = result.response.text();
+    const rawText = result.choices[0]?.message?.content;
     if (!rawText) {
       return NextResponse.json({ error: 'A IA não conseguiu ler o documento (resposta vazia).' }, { status: 422 });
     }
 
-    // 6. Parsing de JSON Blindado
+    // 6. Parsing de JSON
     let parsed: any;
     try {
       parsed = JSON.parse(rawText.trim());
-    } catch (pj: any) {
-      // Tentativa de recuperação de JSON quebrado
+    } catch {
       const match = rawText.match(/\{[\s\S]*\}/);
       if (match) {
         try { parsed = JSON.parse(match[0]); } catch {
@@ -143,7 +152,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 7. Normalização Universal de Dados
+    // 7. Normalização
     const rawIngredients: any[] = Array.isArray(parsed.ingredients) ? parsed.ingredients : [];
     const ingredients = rawIngredients
       .map((ing: any) => ({
@@ -177,7 +186,7 @@ export async function POST(req: NextRequest) {
       }),
     };
 
-    // 8. Persistência de Dados (Opcional)
+    // 8. Persistência
     if (saveToDb && !extractRecipe) {
       try {
         const { data: importRecord, error: importError } = await supabase
@@ -202,14 +211,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 9. Retorno Final Sucesso
     return NextResponse.json(responseData);
 
   } catch (error: any) {
     console.error('ERRO NÃO TRATADO NO UPLOAD:', error);
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'Erro sistêmico: ' + (error.message || 'Desconhecido'),
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    }, { status: 400 }); // Retorna 400 em vez de 500 para evitar crash do listener
+    }, { status: 400 });
   }
 }
