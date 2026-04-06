@@ -45,7 +45,7 @@ const navItems = [
   { to: '/financeiro', icon: Calculator, label: 'Financeiro', permission: 'can_access_financeiro' },
   { to: '/assinatura', icon: CreditCard, label: 'Assinatura', permission: null },
   { to: '/colaboradores', icon: UserCog, label: 'Colab.', permission: null, managementOnly: true },
-  { to: '/gestores', icon: Store, label: 'Gestores', permission: null, managementOnly: true, adminOnly: true },
+  { to: '/admin', icon: Shield, label: 'Admin', permission: null, managementOnly: true, adminOnly: true },
 ];
 
 export function MobileNav() {

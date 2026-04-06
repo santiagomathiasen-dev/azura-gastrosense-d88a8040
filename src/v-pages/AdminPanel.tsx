@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useMemo } from 'react';
 import { useGestaoUsuarios, Gestor } from '@/hooks/useGestaoUsuarios';
 import { PageHeader } from '@/components/PageHeader';
@@ -10,7 +12,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Search, Users, ShieldAlert, Plus, Pencil, Trash2, Shield, Eye, EyeOff, CreditCard, CalendarClock, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import {
+  Loader2, Search, Users, ShieldAlert, Plus, Pencil, Trash2, Shield,
+  Eye, EyeOff, CreditCard, CheckCircle2, XCircle, UserCog, Store,
+  CalendarClock, Clock
+} from 'lucide-react';
 import { useProfile } from '@/hooks/useProfile';
 import { useUserRole } from '@/hooks/useUserRole';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
@@ -31,40 +37,18 @@ const permissionLabels: Record<string, string> = {
   can_access_relatorios: 'Relatorios',
 };
 
-function getSubscriptionStatus(gestor: Gestor): { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: typeof CheckCircle2 } {
-  if (!gestor.status_pagamento) {
-    // Check if still in trial
-    if (gestor.created_at) {
-      const created = new Date(gestor.created_at);
-      const diffDays = (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
-      if (diffDays <= 7) {
-        const remaining = Math.ceil(7 - diffDays);
-        return { label: `Trial (${remaining}d)`, variant: 'secondary', icon: Clock };
-      }
-    }
-    return { label: 'Sem Assinatura', variant: 'destructive', icon: XCircle };
-  }
+const ROLE_LABELS: Record<string, { label: string; color: string }> = {
+  owner: { label: 'Owner', color: 'bg-purple-500/15 text-purple-700 border-purple-500/30' },
+  admin: { label: 'Admin', color: 'bg-blue-500/15 text-blue-700 border-blue-500/30' },
+  gestor: { label: 'Gestor', color: 'bg-green-500/15 text-green-700 border-green-500/30' },
+  colaborador: { label: 'Colaborador', color: 'bg-orange-500/15 text-orange-700 border-orange-500/30' },
+  user: { label: 'Usuario', color: 'bg-gray-500/15 text-gray-700 border-gray-500/30' },
+};
 
-  if (gestor.subscription_end_date) {
-    const end = new Date(gestor.subscription_end_date);
-    const daysLeft = Math.ceil((end.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    if (daysLeft <= 0) {
-      return { label: 'Expirada', variant: 'destructive', icon: XCircle };
-    }
-    if (daysLeft <= 3) {
-      return { label: `Expira em ${daysLeft}d`, variant: 'outline', icon: CalendarClock };
-    }
-    return { label: `Ativo (${daysLeft}d)`, variant: 'default', icon: CheckCircle2 };
-  }
-
-  return { label: 'Ativo', variant: 'default', icon: CheckCircle2 };
-}
-
-export default function Gestores() {
+export default function AdminPanel() {
   const { profiles, isLoading, createGestor, updatePermissions, updateStatus, updateSubscription, deleteGestor } = useGestaoUsuarios();
   const { setImpersonation } = useCollaboratorContext();
   const router = useRouter();
-  const navigate = (p: string) => router.push(p);
   const { profile: currentProfile, isLoading: profileLoading } = useProfile();
   const { isAdmin } = useUserRole();
   const { canCreate, limits } = usePlanLimits();
@@ -72,7 +56,7 @@ export default function Gestores() {
   const [searchTerm, setSearchTerm] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingGestor, setEditingGestor] = useState<Gestor | null>(null);
-  const [activeTab, setActiveTab] = useState('gestores');
+  const [activeTab, setActiveTab] = useState('usuarios');
 
   // Form state
   const [name, setName] = useState('');
@@ -94,7 +78,8 @@ export default function Gestores() {
     can_access_relatorios: true,
   });
 
-  const allUsers = useMemo(() => {
+  // Filter users
+  const filteredUsers = useMemo(() => {
     return profiles.filter(p => {
       const pName = p.full_name || '';
       const pEmail = p.email || '';
@@ -103,13 +88,14 @@ export default function Gestores() {
     });
   }, [profiles, searchTerm]);
 
-  const filteredGestors = useMemo(() => allUsers.filter(p => p.role === 'gestor'), [allUsers]);
-  const allSubscribableUsers = allUsers;
+  // Stats
+  const totalUsers = profiles.length;
+  const totalGestores = profiles.filter(p => p.role === 'gestor').length;
+  const totalColabs = profiles.filter(p => p.role === 'colaborador').length;
+  const totalPaid = profiles.filter(p => p.status_pagamento).length;
+  const totalActive = profiles.filter(p => p.status === 'ativo').length;
 
   const isOwnerRole = (currentProfile?.role as string) === 'owner' || (currentProfile?.role as string) === 'admin';
-  const hasAccessAccess = isAdmin || isOwnerRole || (!currentProfile && !profileLoading);
-
-  const totalGestores = profiles.filter(p => p.role === 'gestor').length;
 
   if (isLoading || profileLoading) {
     return (
@@ -119,21 +105,17 @@ export default function Gestores() {
     );
   }
 
-  if (!hasAccessAccess) {
+  if (!isOwnerRole && !isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <ShieldAlert className="h-12 w-12 text-destructive mb-4" />
         <h2 className="text-xl font-bold">Acesso Restrito</h2>
-        <p className="text-muted-foreground">Apenas o administrador principal pode gerenciar gestores.</p>
+        <p className="text-muted-foreground">Apenas administradores podem acessar este painel.</p>
       </div>
     );
   }
 
   const handleOpenCreate = () => {
-    if (!canCreate('gestores', totalGestores)) {
-      toast.error(`Limite de gestores alcancado (${limits.gestores}). Faca upgrade do seu plano.`);
-      return;
-    }
     setEditingGestor(null);
     setName('');
     setEmail('');
@@ -141,6 +123,18 @@ export default function Gestores() {
     setConfirmPassword('');
     setShowPassword(false);
     setShowConfirmPassword(false);
+    setPermissions({
+      can_access_dashboard: true,
+      can_access_estoque: true,
+      can_access_estoque_producao: true,
+      can_access_fichas: true,
+      can_access_producao: true,
+      can_access_compras: true,
+      can_access_finalizados: true,
+      can_access_produtos_venda: true,
+      can_access_financeiro: true,
+      can_access_relatorios: true,
+    });
     setDialogOpen(true);
   };
 
@@ -186,21 +180,54 @@ export default function Gestores() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Gestao de Gestores"
-        description={`Controle gestores e assinaturas (${totalGestores}/${limits.gestores === Infinity ? '\u221E' : limits.gestores})`}
+        title="Painel Administrativo"
+        description="Gerencie todos os usuarios e assinaturas do sistema"
         action={{
           label: 'Novo Gestor',
           onClick: handleOpenCreate,
           icon: Plus,
-          disabled: !canCreate('gestores', totalGestores)
         }}
       />
 
+      {/* Stats cards */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <Card>
+          <CardContent className="pt-4 pb-3 text-center">
+            <p className="text-2xl font-bold">{totalUsers}</p>
+            <p className="text-xs text-muted-foreground">Total</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-3 text-center">
+            <p className="text-2xl font-bold text-green-600">{totalGestores}</p>
+            <p className="text-xs text-muted-foreground">Gestores</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-3 text-center">
+            <p className="text-2xl font-bold text-orange-600">{totalColabs}</p>
+            <p className="text-xs text-muted-foreground">Colaboradores</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-3 text-center">
+            <p className="text-2xl font-bold text-blue-600">{totalPaid}</p>
+            <p className="text-xs text-muted-foreground">Pagos</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-3 text-center">
+            <p className="text-2xl font-bold text-emerald-600">{totalActive}</p>
+            <p className="text-xs text-muted-foreground">Ativos</p>
+          </CardContent>
+        </Card>
+      </div>
+
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="gestores" className="flex items-center gap-2">
+          <TabsTrigger value="usuarios" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
-            Gestores
+            Todos os Usuarios
           </TabsTrigger>
           <TabsTrigger value="assinaturas" className="flex items-center gap-2">
             <CreditCard className="h-4 w-4" />
@@ -208,12 +235,12 @@ export default function Gestores() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Search bar - shared */}
+        {/* Search */}
         <div className="flex items-center gap-4 mt-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar..."
+              placeholder="Buscar por nome ou email..."
               className="pl-9"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -221,14 +248,15 @@ export default function Gestores() {
           </div>
         </div>
 
-        {/* ===== TAB: GESTORES ===== */}
-        <TabsContent value="gestores" className="mt-4">
+        {/* ===== TAB: TODOS OS USUARIOS ===== */}
+        <TabsContent value="usuarios" className="mt-4">
+          {/* Create/Edit Dialog */}
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>{editingGestor ? 'Permissoes do Gestor' : 'Novo Gestor'}</DialogTitle>
+                <DialogTitle>{editingGestor ? 'Permissoes' : 'Novo Gestor'}</DialogTitle>
                 <DialogDescription>
-                  {editingGestor ? `Ajuste o que ${editingGestor.full_name} pode acessar.` : 'Crie uma nova conta de gestor.'}
+                  {editingGestor ? `Ajuste as permissoes de ${editingGestor.full_name}.` : 'Crie uma nova conta de gestor.'}
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -288,101 +316,126 @@ export default function Gestores() {
             </DialogContent>
           </Dialog>
 
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {filteredGestors.map((gestor) => {
-              const subStatus = getSubscriptionStatus(gestor);
-              return (
-                <Card key={gestor.id} className={gestor.status !== 'ativo' ? 'opacity-60' : ''}>
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <CardTitle className="text-base">{gestor.full_name}</CardTitle>
-                        <p className="text-xs text-muted-foreground">{gestor.email}</p>
-                      </div>
-                      <Switch
-                        checked={gestor.status === 'ativo'}
-                        onCheckedChange={(checked) => updateStatus.mutate({ id: gestor.id, status: checked ? 'ativo' : 'inativo' })}
-                      />
-                    </div>
-                    <Badge variant={subStatus.variant} className="w-fit text-[10px] mt-1">
-                      <subStatus.icon className="h-3 w-3 mr-1" />
-                      {subStatus.label}
-                    </Badge>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex flex-wrap gap-1">
-                      {Object.keys(permissionLabels).map(key => gestor[key as keyof Gestor] && (
-                        <Badge key={key} variant="secondary" className="text-[10px]">
-                          {permissionLabels[key]}
-                        </Badge>
-                      ))}
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" className="flex-1" onClick={() => handleOpenEdit(gestor)}>
-                        <Pencil className="h-3 w-3 mr-1" /> Permissoes
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => {
-                          setImpersonation(gestor.id);
-                          toast.success(`Visualizando como ${gestor.full_name}`);
-                          navigate('/dashboard');
-                        }}
-                      >
-                        <Users className="h-3 w-3 mr-1" /> Ver Dados
-                      </Button>
+          <div className="grid gap-3">
+            {filteredUsers.map((user) => {
+              const role = ROLE_LABELS[user.role] || ROLE_LABELS.user;
+              const isPaid = user.status_pagamento === true;
+              const isActive = user.status === 'ativo';
+              const endDate = user.subscription_end_date
+                ? new Date(user.subscription_end_date).toLocaleDateString('pt-BR')
+                : null;
 
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="sm" className="text-destructive">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Excluir Gestor?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Isso removera a conta e todos os dados associados.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => deleteGestor.mutate(gestor.id)}>Excluir</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+              return (
+                <Card key={user.id} className={!isActive ? 'opacity-60' : ''}>
+                  <CardContent className="pt-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                      {/* User info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-medium truncate">{user.full_name || 'Sem nome'}</p>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${role.color}`}>
+                            {role.label}
+                          </span>
+                          {isPaid && (
+                            <Badge variant="default" className="text-[10px]">
+                              <CheckCircle2 className="h-3 w-3 mr-1" /> Pago
+                            </Badge>
+                          )}
+                          {!isActive && (
+                            <Badge variant="destructive" className="text-[10px]">Inativo</Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">{user.email}</p>
+                        <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
+                          <span>Cadastro: {new Date(user.created_at).toLocaleDateString('pt-BR')}</span>
+                          {endDate && <span>Expira: {endDate}</span>}
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                        {/* Active/Inactive toggle */}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-muted-foreground">{isActive ? 'Ativo' : 'Inativo'}</span>
+                          <Switch
+                            checked={isActive}
+                            onCheckedChange={(checked) => updateStatus.mutate({ id: user.id, status: checked ? 'ativo' : 'inativo' })}
+                          />
+                        </div>
+
+                        <Button variant="outline" size="sm" className="text-xs h-8" onClick={() => handleOpenEdit(user)}>
+                          <Pencil className="h-3 w-3 mr-1" /> Permissoes
+                        </Button>
+
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="text-xs h-8"
+                          onClick={() => {
+                            setImpersonation(user.id);
+                            toast.success(`Visualizando como ${user.full_name}`);
+                            router.push('/dashboard');
+                          }}
+                        >
+                          <Eye className="h-3 w-3 mr-1" /> Ver
+                        </Button>
+
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="sm" className="text-destructive h-8">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Excluir usuario?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Isso removera {user.full_name || user.email} e todos os dados associados. Essa acao nao pode ser desfeita.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => deleteGestor.mutate(user.id)}>Excluir</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
               );
             })}
+
+            {filteredUsers.length === 0 && (
+              <div className="text-center py-12 text-muted-foreground">
+                <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p>Nenhum usuario encontrado.</p>
+              </div>
+            )}
           </div>
         </TabsContent>
 
         {/* ===== TAB: ASSINATURAS ===== */}
         <TabsContent value="assinaturas" className="mt-4">
           <div className="grid gap-3">
-            {allSubscribableUsers.map((user) => {
+            {filteredUsers.map((user) => {
               const isPaid = user.status_pagamento === true;
+              const role = ROLE_LABELS[user.role] || ROLE_LABELS.user;
 
               return (
                 <Card key={user.id} className={!isPaid ? 'border-destructive/30' : 'border-green-500/30'}>
                   <CardContent className="pt-4">
                     <div className="flex items-center gap-4">
-                      {/* User info */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="font-medium truncate">{user.full_name || 'Sem nome'}</p>
-                          <Badge variant="outline" className="text-[9px] shrink-0">
-                            {(user.role as string) === 'owner' ? 'Owner' : user.role === 'admin' ? 'Admin' : user.role === 'colaborador' ? 'Colab.' : 'Gestor'}
-                          </Badge>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${role.color}`}>
+                            {role.label}
+                          </span>
                         </div>
                         <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                       </div>
 
-                      {/* Status badge */}
                       <Badge variant={isPaid ? 'default' : 'destructive'} className="shrink-0">
                         {isPaid ? (
                           <><CheckCircle2 className="h-3 w-3 mr-1" /> Pago</>
@@ -391,7 +444,6 @@ export default function Gestores() {
                         )}
                       </Badge>
 
-                      {/* Toggle */}
                       <Switch
                         checked={isPaid}
                         onCheckedChange={(checked) => {
@@ -409,7 +461,7 @@ export default function Gestores() {
               );
             })}
 
-            {allSubscribableUsers.length === 0 && (
+            {filteredUsers.length === 0 && (
               <div className="text-center py-12 text-muted-foreground">
                 <CreditCard className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p>Nenhum usuario encontrado.</p>

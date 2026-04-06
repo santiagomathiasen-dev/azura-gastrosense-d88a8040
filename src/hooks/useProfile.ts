@@ -26,33 +26,10 @@ export function useProfile() {
 
                 let profile = Array.isArray(profiles) ? profiles[0] : profiles;
 
-                // Fallback: Create profile automatically if it doesn't exist
+                // If profile doesn't exist, user must register via the signup form
                 if (!profile) {
-                    console.log("useProfile: Profile not found. Creating fallback profile...");
-                    const newProfileData = {
-                        id: user.id,
-                        email: user.email,
-                        full_name: user.user_metadata?.name || user.email?.split('@')[0] || 'Usuário',
-                        role: 'gestor',
-                        status: 'ativo',
-                        status_pagamento: false
-                    };
-                    
-                    try {
-                        const { data: newProfile, error: insertError } = await supabase
-                            .from('profiles')
-                            .upsert([newProfileData], { onConflict: 'id', ignoreDuplicates: true })
-                            .select()
-                            .maybeSingle();
-                            
-                        if (insertError) {
-                            console.error("useProfile: Error creating fallback profile", insertError);
-                        } else if (newProfile) {
-                            profile = newProfile;
-                        }
-                    } catch (e) {
-                         console.error("useProfile: Exception creating fallback profile", e);
-                    }
+                    console.warn("useProfile: No profile found. User needs to register first.");
+                    return null;
                 }
 
                 if (profile && profile.role === 'colaborador') {

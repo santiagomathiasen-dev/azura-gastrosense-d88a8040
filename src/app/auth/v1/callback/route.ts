@@ -45,27 +45,19 @@ export async function GET(request: Request) {
     const providerToken = data.session.provider_token;
     const providerRefreshToken = data.session.provider_refresh_token;
 
-    // Ensure profile exists for Google OAuth users.
-    // ignoreDuplicates: true leaves existing profiles untouched.
-    try {
-        await supabase.from('profiles').upsert(
-            {
-                id: user.id,
-                email: user.email ?? '',
-                full_name:
-                    user.user_metadata?.full_name ||
-                    user.user_metadata?.name ||
-                    user.email?.split('@')[0] ||
-                    'Usuário',
-                role: 'gestor',
-                status: 'ativo',
-                status_pagamento: false,
-            },
-            { onConflict: 'id', ignoreDuplicates: true }
+    // Check if profile already exists
+    const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle();
+
+    if (!existingProfile) {
+        // User not registered — sign them out and redirect to registration
+        await supabase.auth.signOut();
+        return NextResponse.redirect(
+            `${origin}/auth?error=${encodeURIComponent('Conta nao encontrada. Cadastre-se primeiro para acessar o sistema.')}`
         );
-    } catch (profileErr) {
-        // Non-fatal: useProfile hook will create it as a fallback if this fails
-        console.warn('Auth callback: profile upsert skipped:', profileErr);
     }
 
     // Persist Google OAuth tokens for Drive API access

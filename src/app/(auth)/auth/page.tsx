@@ -25,6 +25,13 @@ function AuthContent() {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
     const redirectPath = searchParams?.get('from') || '/dashboard';
+    const urlError = searchParams?.get('error');
+
+    useEffect(() => {
+        if (urlError) {
+            setError(urlError);
+        }
+    }, [urlError]);
 
     useEffect(() => {
         if (user && !isLoading) {

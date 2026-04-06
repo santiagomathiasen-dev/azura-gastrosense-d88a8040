@@ -27,6 +27,7 @@ import {
   Store,
   Zap,
   ShieldCheck,
+  Shield,
   CreditCard
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -56,7 +57,7 @@ const navItems = [
   { to: '/assinatura', icon: CreditCard, label: 'Assinatura', permission: null },
   { to: '/colaboradores', icon: UserCog, label: 'Colaboradores', permission: null, managementOnly: true },
   { to: '/cadastros', icon: ShieldCheck, label: 'Cadastros', permission: null, managementOnly: true },
-  { to: '/gestores', icon: Store, label: 'Gestores', permission: null, adminOnly: true },
+  { to: '/admin', icon: Shield, label: 'Admin', permission: null, adminOnly: true },
 ];
 
 interface SidebarProps {
