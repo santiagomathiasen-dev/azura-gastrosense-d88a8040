@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { StockItem } from './useStockItems';
 import { addDays, format, isValid } from 'date-fns';
 import { getNow } from '@/lib/utils';
-import { supabaseFetch } from '@/lib/supabase-fetch';
+import { AIApi } from '@/api/AIApi';
 
 // Speech Recognition types
 interface SpeechRecognitionEvent extends Event {
@@ -226,7 +226,16 @@ export function useStockVoiceControl({ stockItems, onQuantityUpdate, onExpiryUpd
 
     return () => {
       clearVoiceTimeout();
-      recognition.abort();
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.onresult = null;
+          recognitionRef.current.onerror = null;
+          recognitionRef.current.onend = null;
+          recognitionRef.current.abort();
+        } catch (e) {
+          console.warn("Error cleaning up speech recognition:", e);
+        }
+      }
     };
   }, [isSupported, clearVoiceTimeout]);
 
@@ -301,21 +310,14 @@ export function useStockVoiceControl({ stockItems, onQuantityUpdate, onExpiryUpd
 
         try {
           const now = new Date();
-          const dateContext = `Data atual: ${now.toLocaleDateString('pt-BR')} (${now.toLocaleDateString('pt-BR', { weekday: 'long' })}).`;
+          const cleanFinal = finalTranscript.toLowerCase().trim();
 
-          const systemPrompt = `${dateContext}
-Você é um assistente que atualiza itens de estoque a partir de áudio.
-Determine o item mencionado e extraia a quantidade (que deve ser número decimal caso falarem "vírgula") e a validade (YYYY-MM-DD ou null).
-Retorne APENAS um objeto JSON: {"ingredients": [{"name": string, "quantity": number, "expiration_date": string | null}]}
-IMPORTANTE: Retorne um OBJETO contendo a chave "ingredients", não um array diretamente.`;
+          // Optimized prompt - more concise
+          const systemPrompt = `Hoje: ${now.toLocaleDateString('pt-BR')}.
+Extraia item, qte (decimal) e validade (YYYY-MM-DD ou null).
+Retorne JSON: {"ingredients": [{"name": string, "quantity": number, "expiration_date": string | null}]}`;
 
-          console.log("Calling process-voice-text (stock control) via supabaseFetch");
-          const data = await supabaseFetch('functions/v1/process-voice-text', {
-            method: 'POST',
-            body: JSON.stringify({ text: cleanFinal, systemPrompt })
-          });
-
-          console.log("Voice process output:", data);
+          const data = await AIApi.processVoiceText(cleanFinal, systemPrompt);
 
           if (data && data.error) {
             console.error('Voice process logic error:', data.error);
@@ -342,7 +344,6 @@ IMPORTANTE: Retorne um OBJETO contendo a chave "ingredients", não um array dire
             : findItemByVoice(extracted.name);
 
           if (item) {
-            console.log("Matched item:", item.name);
             const pending: PendingVoiceUpdate = {
               itemId: item.id,
               itemName: item.name,

@@ -69,7 +69,7 @@ export function AIAssistant() {
         }
 
         return list.slice(0, 3); // Show top 3 insights
-    }, [productions, purchaseNeeds, saleProducts, urgentCount, totalEstimatedCost]);
+    }, [productions, saleProducts, urgentCount, totalEstimatedCost]);
 
     return (
         <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-secondary/5 overflow-hidden">

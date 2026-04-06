@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
+import { supabaseFetch } from '@/lib/supabase-fetch';
 
 export interface SalesForecast {
     id: string;
@@ -25,24 +26,19 @@ export function useSalesForecasts(targetDate?: string) {
         queryFn: async () => {
             if (!user?.id && !ownerId) return [];
 
-            let query = supabase
-                .from('sales_forecasts')
-                .select(`
-          *,
-          sale_product:sale_products(id, name, image_url)
-        `)
-                .order('created_at', { ascending: false });
+            let url = `sales_forecasts?select=*,sale_product:sale_products(id,name,image_url)&order=created_at.desc`;
 
             if (targetDate) {
-                query = query.eq('target_date', targetDate);
+                url += `&target_date=eq.${targetDate}`;
             }
 
-            const { data, error } = await query;
-            if (error) throw error;
+            const data = await supabaseFetch(url);
             return data as SalesForecast[];
         },
         enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
-        refetchInterval: 30_000,
+        staleTime: 5 * 60 * 1000,
+        gcTime: 30 * 60 * 1000,
+        refetchInterval: 120_000,
     });
 
     const createForecast = useMutation({
@@ -55,19 +51,20 @@ export function useSalesForecasts(targetDate?: string) {
             if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
             if (!ownerId) throw new Error('Usuário não autenticado');
 
-            const { error } = await supabase
-                .from('sales_forecasts')
-                .upsert({
+            const response = await supabaseFetch('sales_forecasts?on_conflict=user_id,sale_product_id,target_date', {
+                method: 'POST',
+                headers: {
+                    'Prefer': 'resolution=merge-duplicates,return=representation',
+                },
+                body: JSON.stringify({
                     user_id: ownerId,
                     sale_product_id: forecast.sale_product_id,
                     target_date: forecast.target_date,
                     forecasted_quantity: forecast.forecasted_quantity,
                     notes: forecast.notes || null,
-                }, {
-                    onConflict: 'user_id,target_date,sale_product_id',
-                });
-
-            if (error) throw error;
+                })
+            });
+            return response;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['sales_forecasts'] });
@@ -84,11 +81,10 @@ export function useSalesForecasts(targetDate?: string) {
             forecasted_quantity?: number;
             notes?: string;
         }) => {
-            const { error } = await supabase
-                .from('sales_forecasts')
-                .update(updates)
-                .eq('id', id);
-            if (error) throw error;
+            await supabaseFetch(`sales_forecasts?id=eq.${id}`, {
+                method: 'PATCH',
+                body: JSON.stringify(updates)
+            });
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['sales_forecasts'] });
@@ -101,11 +97,9 @@ export function useSalesForecasts(targetDate?: string) {
 
     const deleteForecast = useMutation({
         mutationFn: async (id: string) => {
-            const { error } = await supabase
-                .from('sales_forecasts')
-                .delete()
-                .eq('id', id);
-            if (error) throw error;
+            await supabaseFetch(`sales_forecasts?id=eq.${id}`, {
+                method: 'DELETE'
+            });
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['sales_forecasts'] });
@@ -121,36 +115,25 @@ export function useSalesForecasts(targetDate?: string) {
             if (!ownerId) throw new Error('Usuário não autenticado');
 
             // 1. Fetch sales products
-            const { data: products, error: pErr } = await supabase
-                .from('sale_products')
-                .select('id, name')
-                .eq('user_id', ownerId)
-                .eq('is_active', true);
+            const products = await supabaseFetch(`sale_products?user_id=eq.${ownerId}&is_active=eq.true&select=id,name`);
+            const productsArray = Array.isArray(products) ? products : (products ? [products] : []);
 
-            if (pErr) throw pErr;
-
-            // 2. Fetch sales from baseDate
-            const { data: sales, error: sErr } = await supabase
-                .from('sales')
-                .select('sale_product_id, quantity_sold')
-                .eq('sale_date', baseDate);
-
-            if (sErr) throw sErr;
+            // 2. Fetch sales from baseDate (full day range)
+            const sales = await supabaseFetch(`sales?sale_date=gte.${baseDate}T00:00:00&sale_date=lte.${baseDate}T23:59:59&select=sale_product_id,quantity_sold`);
+            const salesArray = Array.isArray(sales) ? sales : (sales ? [sales] : []);
 
             // 3. Check for events on target date
-            const { data: events } = await supabase
-                .from('calendar_events' as any)
-                .select('multiplier')
-                .eq('event_date', targetDate);
+            const events = await supabaseFetch(`calendar_events?event_date=eq.${targetDate}&select=multiplier`);
+            const eventsArray = Array.isArray(events) ? events : (events ? [events] : []);
 
-            const eventMultiplier = (events as any[])?.reduce((acc, ev) => acc * Number(ev.multiplier), 1) || 1;
+            const eventMultiplier = eventsArray.reduce((acc, ev) => acc * Number(ev.multiplier), 1) || 1;
 
             // 4. Calculate and upsert forecasts
             const baseMultiplier = 1 + (bufferPercent / 100);
             const totalMultiplier = baseMultiplier * eventMultiplier;
 
-            const forecastsToUpsert = products.map(product => {
-                const productSale = sales?.find(s => s.sale_product_id === product.id);
+            const forecastsToUpsert = productsArray.map(product => {
+                const productSale = salesArray.find(s => s.sale_product_id === product.id);
                 const quantity = productSale ? productSale.quantity_sold * totalMultiplier : 0;
 
                 let notes = `Sugerido com base em ${baseDate} (+${bufferPercent}%)`;
@@ -171,13 +154,13 @@ export function useSalesForecasts(targetDate?: string) {
                 throw new Error('Não foram encontradas vendas na data base selecionada.');
             }
 
-            const { error: upErr } = await supabase
-                .from('sales_forecasts')
-                .upsert(forecastsToUpsert, {
-                    onConflict: 'user_id,target_date,sale_product_id'
-                });
-
-            if (upErr) throw upErr;
+            await supabaseFetch('sales_forecasts?on_conflict=user_id,sale_product_id,target_date', {
+                method: 'POST',
+                headers: {
+                    'Prefer': 'resolution=merge-duplicates,return=representation',
+                },
+                body: JSON.stringify(forecastsToUpsert)
+            });
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['sales_forecasts'] });

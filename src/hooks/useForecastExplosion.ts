@@ -59,13 +59,13 @@ export function useForecastExplosion() {
             }>();
 
             for (const forecast of forecasts) {
-                const productName = (forecast.sale_product as any)?.name || 'Produto';
+                const productName = ((forecast as any).sale_product as any)?.name || 'Produto';
 
                 // Get components of this sale product
-                const { data: components, error: cErr } = await supabase
+                const { data: components, error: cErr } = await (supabase as any)
                     .from('sale_product_components')
                     .select('*')
-                    .eq('sale_product_id', forecast.sale_product_id);
+                    .eq('sale_product_id', (forecast as any).sale_product_id);
 
                 if (cErr) throw cErr;
                 if (!components) continue;
@@ -73,10 +73,10 @@ export function useForecastExplosion() {
                 for (const comp of components) {
                     if (comp.component_type === 'finished_production') {
                         // This is a sub-recipe (technical_sheet)
-                        const qtyNeeded = Number(comp.quantity) * forecast.forecasted_quantity;
+                        const qtyNeeded = Number(comp.quantity) * (forecast as any).forecasted_quantity;
 
                         // Get technical sheet details
-                        const { data: sheet } = await supabase
+                        const { data: sheet } = await (supabase as any)
                             .from('technical_sheets')
                             .select('id, name, yield_quantity, yield_unit, lead_time_hours, shelf_life_hours, praca')
                             .eq('id', comp.component_id)
@@ -87,15 +87,15 @@ export function useForecastExplosion() {
                         const existing = demandMap.get(sheet.id);
                         if (existing) {
                             existing.qty += qtyNeeded;
-                            if (!existing.servesProducts.includes(`${productName} (${forecast.forecasted_quantity})`)) {
-                                existing.servesProducts.push(`${productName} (${forecast.forecasted_quantity})`);
+                            if (!existing.servesProducts.includes(`${productName} (${(forecast as any).forecasted_quantity})`)) {
+                                existing.servesProducts.push(`${productName} (${(forecast as any).forecasted_quantity})`);
                             }
                         } else {
                             demandMap.set(sheet.id, {
                                 qty: qtyNeeded,
                                 unit: sheet.yield_unit,
                                 yieldQty: Number(sheet.yield_quantity),
-                                servesProducts: [`${productName} (${forecast.forecasted_quantity})`],
+                                servesProducts: [`${productName} (${(forecast as any).forecasted_quantity})`],
                                 leadTimeHours: Number(sheet.lead_time_hours) || 0,
                                 shelfLifeHours: Number(sheet.shelf_life_hours) || 9999,
                                 praca: sheet.praca,
@@ -126,7 +126,7 @@ export function useForecastExplosion() {
                 }
 
                 // Check existing stock (finished_productions_stock)
-                const { data: stockEntry } = await supabase
+                const { data: stockEntry } = await (supabase as any)
                     .from('finished_productions_stock')
                     .select('quantity')
                     .eq('technical_sheet_id', sheetId)
@@ -135,7 +135,7 @@ export function useForecastExplosion() {
                 const existingStock = stockEntry ? Number(stockEntry.quantity) : 0;
 
                 // Check produced_inputs_stock with valid expiration
-                const { data: inputsStock } = await supabase
+                const { data: inputsStock } = await (supabase as any)
                     .from('produced_inputs_stock')
                     .select('quantity')
                     .eq('technical_sheet_id', sheetId)
@@ -169,7 +169,7 @@ export function useForecastExplosion() {
             }
 
             // 4. Save to database: delete old orders for this target date, insert new ones
-            await supabase
+            await (supabase as any)
                 .from('forecast_production_orders')
                 .delete()
                 .eq('user_id', ownerId)
@@ -191,7 +191,7 @@ export function useForecastExplosion() {
                 }));
 
             if (ordersToInsert.length > 0) {
-                const { error: insertErr } = await supabase
+                const { error: insertErr } = await (supabase as any)
                     .from('forecast_production_orders')
                     .insert(ordersToInsert);
 

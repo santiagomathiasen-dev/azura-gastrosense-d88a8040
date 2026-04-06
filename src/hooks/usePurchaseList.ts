@@ -30,20 +30,24 @@ export interface PurchaseListItemWithDetails extends PurchaseListItem {
   } | null;
 }
 
+const EMPTY_ARRAY: any[] = [];
+
 export function usePurchaseList() {
   const { user } = useAuth();
   const { ownerId, isLoading: isOwnerLoading } = useOwnerId();
   const queryClient = useQueryClient();
 
   // Query uses RLS - no need to filter by user_id client-side
-  const { data: items = [], isLoading, error } = useQuery({
+  const { data: items = EMPTY_ARRAY, isLoading, error } = useQuery({
     queryKey: ['purchase_list_items', ownerId],
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
       const data = await supabaseFetch('purchase_list_items?select=*,stock_item:stock_items(name,unit,category),supplier:suppliers(name,whatsapp_number,whatsapp,phone)&order=created_at.desc');
-      return data as unknown as PurchaseListItemWithDetails[];
+      return (Array.isArray(data) ? data : data ? [data] : []) as unknown as PurchaseListItemWithDetails[];
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
 
   const createItem = useMutation({

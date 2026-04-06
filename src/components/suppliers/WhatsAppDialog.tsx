@@ -9,8 +9,9 @@ import {
     DialogDescription,
     DialogFooter,
 } from '@/components/ui/dialog';
-import { ExternalLink, Copy } from 'lucide-react';
+import { ExternalLink, Copy, Send } from 'lucide-react';
 import { toast } from 'sonner';
+import { useSupplierMessages } from '@/hooks/useSupplierMessages';
 
 interface WhatsAppDialogProps {
     open: boolean;
@@ -18,6 +19,7 @@ interface WhatsAppDialogProps {
     supplierName: string;
     phoneNumber: string;
     supplierId: string;
+    purchaseListId?: string;
     initialMessage?: string;
 }
 
@@ -26,9 +28,12 @@ export function WhatsAppDialog({
     onOpenChange,
     supplierName,
     phoneNumber,
+    supplierId,
+    purchaseListId,
     initialMessage = '',
 }: WhatsAppDialogProps) {
     const [message, setMessage] = useState(initialMessage);
+    const { sendWhatsAppMessage, isSending } = useSupplierMessages();
 
     // Sync message when dialog opens with a new initialMessage
     useEffect(() => {
@@ -40,11 +45,31 @@ export function WhatsAppDialog({
         }
     }, [open, initialMessage]);
 
-    const handleOpenWhatsApp = () => {
+    const handleManualWhatsApp = () => {
         const cleanNumber = phoneNumber.replace(/\D/g, '');
+        if (cleanNumber.length < 10) {
+            toast.error('Número de telefone inválido. Verifique o cadastro do fornecedor.');
+            return;
+        }
         const encodedMessage = encodeURIComponent(message);
         window.open(`https://wa.me/55${cleanNumber}?text=${encodedMessage}`, '_blank');
+
+        // We still log it as 'sent' (or 'manual') even if opening the link
+        // To keep history of what was sent
         onOpenChange(false);
+    };
+
+    const handleAutomatedSend = async () => {
+        const success = await sendWhatsAppMessage({
+            supplierId,
+            phoneNumber,
+            message,
+            purchaseListId
+        });
+
+        if (success) {
+            onOpenChange(false);
+        }
     };
 
     const handleCopyMessage = () => {
@@ -56,44 +81,54 @@ export function WhatsAppDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md mx-auto">
                 <DialogHeader>
-                    <DialogTitle className="text-base">
+                    <DialogTitle className="text-base text-primary font-bold">
                         Enviar Pedido para {supplierName}
                     </DialogTitle>
                     <DialogDescription>
-                        Edite a mensagem se necessário e envie pelo WhatsApp.
+                        Edite a mensagem se necessário e escolha como enviar.
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-3 py-2">
-                    <div className="bg-muted p-3 rounded-md text-sm">
-                        <span className="font-semibold">Número:</span> {phoneNumber}
+                    <div className="bg-muted p-3 rounded-md text-sm flex justify-between items-center">
+                        <div>
+                            <span className="font-semibold">Número:</span> {phoneNumber}
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={handleCopyMessage} className="h-7 px-2">
+                            <Copy className="h-3.5 w-3.5 mr-1" />
+                            Copiar
+                        </Button>
                     </div>
 
                     <Textarea
                         placeholder="Digite sua mensagem aqui..."
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
-                        rows={4}
-                        className="resize-none"
+                        rows={6}
+                        className="resize-none text-sm"
                     />
                 </div>
 
-                <DialogFooter className="flex flex-col gap-2 sm:flex-row">
+                <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-between">
                     <Button
                         variant="outline"
-                        onClick={handleCopyMessage}
-                        className="w-full sm:w-auto"
-                    >
-                        <Copy className="mr-2 h-4 w-4" />
-                        Copiar Mensagem
-                    </Button>
-                    <Button
-                        onClick={handleOpenWhatsApp}
-                        disabled={!message.trim()}
-                        className="w-full sm:w-auto bg-green-600 hover:bg-green-700"
+                        onClick={handleManualWhatsApp}
+                        className="w-full sm:w-auto border-green-200 text-green-700 hover:bg-green-50"
                     >
                         <ExternalLink className="mr-2 h-4 w-4" />
-                        Enviar pelo WhatsApp
+                        Abrir Web WhatsApp
+                    </Button>
+                    <Button
+                        onClick={handleAutomatedSend}
+                        disabled={!message.trim() || isSending}
+                        className="w-full sm:w-auto bg-primary hover:bg-primary/90"
+                    >
+                        {isSending ? (
+                            <div className="h-4 w-4 border-2 border-white/30 border-t-white animate-spin rounded-full mr-2" />
+                        ) : (
+                            <Send className="mr-2 h-4 w-4" />
+                        )}
+                        Enviar Direto (API)
                     </Button>
                 </DialogFooter>
             </DialogContent>

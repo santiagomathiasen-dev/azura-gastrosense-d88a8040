@@ -1,159 +1,97 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
-import type { Database } from '@/integrations/supabase/types';
 import { supabaseFetch } from '@/lib/supabase-fetch';
+import { useDriveCollection } from './useDriveModule';
+import { useDriveData } from '@/contexts/DriveDataContext';
 
-type StockItem = Database['public']['Tables']['stock_items']['Row'];
-type StockItemInsert = Database['public']['Tables']['stock_items']['Insert'];
-type StockItemUpdate = Database['public']['Tables']['stock_items']['Update'];
-type StockCategory = Database['public']['Enums']['stock_category'];
-type StockUnit = Database['public']['Enums']['stock_unit'];
+import { StockService } from '../modules/stock/services/StockService';
+import { stockApi } from '@/api/StockApi';
+import type {
+  StockItem,
+  StockItemInsert,
+  StockItemUpdate,
+  StockCategory,
+  StockUnit
+} from '../modules/stock/types';
+import { CATEGORY_LABELS, UNIT_LABELS } from '../modules/stock/types';
 
 export type { StockItem, StockItemInsert, StockItemUpdate, StockCategory, StockUnit };
-
-export const CATEGORY_LABELS: Record<StockCategory, string> = {
-  laticinios: 'Laticínios',
-  secos_e_graos: 'Secos e Grãos',
-  hortifruti: 'Hortifruti',
-  carnes_e_peixes: 'Carnes e Peixes',
-  embalagens: 'Embalagens',
-  limpeza: 'Limpeza',
-  outros: 'Outros',
-};
-
-export const UNIT_LABELS: Record<StockUnit, string> = {
-  kg: 'kg',
-  g: 'g',
-  L: 'L',
-  ml: 'ml',
-  unidade: 'un',
-  caixa: 'cx',
-  dz: 'dz',
-};
-
-export function getStockStatus(currentQty: number, minimumQty: number, isExpired?: boolean): 'green' | 'yellow' | 'red' {
-  if (isExpired || currentQty <= minimumQty) return 'red';
-  if (currentQty <= minimumQty * 1.2) return 'yellow';
-  return 'green';
-}
+export { CATEGORY_LABELS, UNIT_LABELS };
 
 export function useStockItems() {
   const { user } = useAuth();
   const { ownerId, isLoading: isOwnerLoading } = useOwnerId();
   const queryClient = useQueryClient();
+  const { isDriveConnected, addItem, writeModule, readModule } = useDriveData();
 
-  // Query uses RLS - no need to filter by user_id client-side
-  // RLS policies use can_access_owner_data() which handles gestor/collaborator access
-  const { data: items = [], isLoading, error } = useQuery({
-    queryKey: ['stock_items', ownerId],
-    queryFn: async () => {
-      if (!user?.id && !ownerId) return [];
-      try {
-        const data = await supabaseFetch('stock_items?select=*,supplier:suppliers(name)&order=name.asc');
-        return data as StockItem[];
-      } catch (err) {
-        console.error("Error fetching stock items:", err);
-        throw err;
-      }
-    },
-    enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
-    refetchInterval: 30_000,
+  // Hybrid query: Drive or Supabase
+  const {
+    items,
+    isLoading,
+    error,
+    create: createItem,
+    update: updateItem,
+    remove,
+  } = useDriveCollection<StockItem>('stock', 'stock_items', {
+    supabaseFallback: () => stockApi.getAll(ownerId || user?.id || ''),
+    supabaseCreate: (item) => stockApi.create(item),
+    supabaseUpdate: (id, updates) => stockApi.update(id, updates),
+    supabaseDelete: (id) => stockApi.remove(id),
+    staleTime: 60_000,
+    refetchInterval: 120_000,
   });
 
-  const createItem = useMutation({
-    mutationFn: async (item: Omit<StockItemInsert, 'user_id'>) => {
-      if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
-      if (!ownerId) throw new Error('Usuário não autenticado');
+  const deleteItem = remove;
 
-      try {
-        const data = await supabaseFetch('stock_items', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Prefer': 'return=representation'
-          },
-          body: JSON.stringify({ ...item, user_id: ownerId })
-        });
-        return Array.isArray(data) ? data[0] : data;
-      } catch (err: any) {
-        throw new Error(err.message || 'Erro ao criar item');
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['stock_items'] });
-      toast.success('Item criado com sucesso!');
-    },
-    onError: (err: Error) => {
-      toast.error(`Erro ao criar item: ${err.message}`);
-    },
-  });
+  const itemsInAlert = StockService.getItemsInAlert(items);
 
-  const updateItem = useMutation({
-    mutationFn: async ({ id, ...updates }: StockItemUpdate & { id: string }) => {
-      try {
-        await supabaseFetch(`stock_items?id=eq.${id}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'Prefer': 'return=minimal'
-          },
-          body: JSON.stringify(updates)
-        });
-        return null;
-      } catch (err: any) {
-        throw new Error(err.message || 'Erro ao atualizar item');
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['stock_items'] });
-      toast.success('Item atualizado com sucesso!');
-    },
-    onError: (err: Error) => {
-      toast.error(`Erro ao atualizar item: ${err.message}`);
-    },
-  });
-
-  const deleteItem = useMutation({
-    mutationFn: async (id: string) => {
-      await supabaseFetch(`stock_items?id=eq.${id}`, {
-        method: 'DELETE'
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['stock_items'] });
-      toast.success('Item excluído com sucesso!');
-    },
-    onError: (err: Error) => {
-      toast.error(`Erro ao excluir item: ${err.message}`);
-    },
-  });
-
-  const itemsInAlert = items.filter(
-    (item) => getStockStatus(Number(item.current_quantity), Number(item.minimum_quantity)) !== 'green'
-  );
-
+  // Batch create (import)
   const batchCreateItems = useMutation({
-    mutationFn: async (items: Omit<StockItemInsert, 'user_id'>[]) => {
-      if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
-      if (!ownerId) throw new Error('Usuário não autenticado');
+    mutationFn: async (newItems: Omit<StockItemInsert, 'user_id'>[]) => {
+      if (isOwnerLoading) throw new Error('Carregando dados do usuario...');
+      if (!ownerId) throw new Error('Usuario nao autenticado');
 
-      const itemsWithUser = items.map(item => ({ ...item, user_id: ownerId }));
+      const validUnits = new Set(['kg', 'g', 'L', 'ml', 'unidade', 'caixa', 'dz']);
+      const unitMap: Record<string, string> = { l: 'L', litro: 'L', un: 'unidade', und: 'unidade', cx: 'caixa', quilo: 'kg' };
+      const validCategories = new Set(['laticinios', 'secos_e_graos', 'hortifruti', 'carnes_e_peixes', 'embalagens', 'limpeza', 'outros']);
 
-      try {
-        await supabaseFetch('stock_items', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(itemsWithUser)
+      const normalized = newItems.map(item => {
+        const rawUnit = (item.unit as string || 'unidade').trim();
+        const rawCat = item.category as string;
+        return {
+          ...item,
+          user_id: ownerId,
+          unit: validUnits.has(rawUnit) ? rawUnit : (unitMap[rawUnit.toLowerCase()] || 'unidade'),
+          category: (rawCat && rawCat !== 'null' && validCategories.has(rawCat)) ? rawCat : 'outros',
+        };
+      });
+
+      if (isDriveConnected) {
+        // Add all items to Drive
+        const stockData = await readModule('stock');
+        const existing = stockData.stock_items || [];
+        const created = normalized.map(item => ({
+          ...item,
+          id: crypto.randomUUID(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }));
+        await writeModule('stock', {
+          ...stockData,
+          stock_items: [...existing, ...created],
         });
         return null;
-      } catch (err: any) {
-        throw new Error(err.message || 'Erro ao importar itens');
       }
+
+      // Supabase fallback
+      await supabaseFetch('stock_items', {
+        method: 'POST',
+        body: JSON.stringify(normalized),
+      });
+      return null;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['stock_items'] });
@@ -164,6 +102,143 @@ export function useStockItems() {
     },
   });
 
+  // Invoice import (complex — stays with Supabase for now, syncs to Drive after)
+  const processInvoiceImport = useMutation({
+    mutationFn: async ({ nfeData, mappedItems }: { nfeData: any, mappedItems: any[] }) => {
+      if (isOwnerLoading) throw new Error('Carregando dados do usuario...');
+      if (!ownerId) throw new Error('Usuario nao autenticado');
+
+      // 1. Create Financial Expense
+      const expense = {
+        user_id: ownerId,
+        description: `Compra: ${nfeData.supplierName} (NF ${nfeData.invoiceNumber})`,
+        amount: nfeData.totalValue,
+        category: 'variable',
+        type: 'invoice',
+        date: nfeData.emissionDate.split('T')[0],
+        status: 'paid',
+        invoice_number: nfeData.invoiceNumber,
+        notes: `Importacao automatica via XML. Fornecedor: ${nfeData.supplierName}`
+      };
+
+      await supabaseFetch('financial_expenses', {
+        method: 'POST',
+        body: JSON.stringify(expense)
+      });
+
+      const newItemsToCreate: any[] = [];
+      const existingItemsToUpdate: any[] = [];
+      const movementsToCreate: any[] = [];
+      const purchaseListToCreate: any[] = [];
+
+      for (const item of mappedItems) {
+        if (item.matchedId === 'new') {
+          const rawUnit = (item.unit || 'unidade').trim();
+          const unitMap: Record<string, string> = { l: 'L', litro: 'L', un: 'unidade', und: 'unidade', cx: 'caixa', quilo: 'kg' };
+          const validUnits = new Set(['kg', 'g', 'L', 'ml', 'unidade', 'caixa', 'dz']);
+          const normalizedUnit = validUnits.has(rawUnit) ? rawUnit : (unitMap[rawUnit.toLowerCase()] || 'unidade');
+          const validCategories = new Set(['laticinios', 'secos_e_graos', 'hortifruti', 'carnes_e_peixes', 'embalagens', 'limpeza', 'outros']);
+          const normalizedCategory = (item.category && item.category !== 'null' && validCategories.has(item.category)) ? item.category : 'outros';
+
+          newItemsToCreate.push({
+            user_id: ownerId,
+            name: item.name,
+            current_quantity: item.quantity,
+            unit: normalizedUnit,
+            category: normalizedCategory,
+            unit_price: item.unitPrice,
+            notes: `Criado via NF ${nfeData.invoiceNumber}`
+          });
+        } else if (item.matchedId) {
+          const existing = items.find(ei => ei.id === item.matchedId);
+          if (existing) {
+            existingItemsToUpdate.push({
+              id: item.matchedId,
+              current_quantity: Number(existing.current_quantity) + item.quantity,
+              unit_price: item.unitPrice,
+              updated_at: new Date().toISOString()
+            });
+
+            movementsToCreate.push({
+              user_id: ownerId,
+              stock_item_id: item.matchedId,
+              type: 'entry',
+              quantity: item.quantity,
+              source: 'purchase',
+              notes: `NF ${nfeData.invoiceNumber} - ${nfeData.supplierName}`
+            });
+          }
+        }
+      }
+
+      let newlyCreatedItems: any[] = [];
+      if (newItemsToCreate.length > 0) {
+        const { data, error } = await supabase.from('stock_items').insert(newItemsToCreate).select();
+        if (error) throw error;
+        newlyCreatedItems = data || [];
+
+        newlyCreatedItems.forEach((ni, idx) => {
+          const sourceItem = newItemsToCreate[idx];
+          movementsToCreate.push({
+            user_id: ownerId,
+            stock_item_id: ni.id,
+            type: 'entry',
+            quantity: sourceItem.current_quantity,
+            source: 'purchase',
+            notes: `NF ${nfeData.invoiceNumber} (Novo cadastro)`
+          });
+        });
+      }
+
+      if (existingItemsToUpdate.length > 0) {
+        const { error } = await supabase.from('stock_items').upsert(existingItemsToUpdate);
+        if (error) throw error;
+      }
+
+      if (movementsToCreate.length > 0) {
+        const { error } = await supabase.from('stock_movements').insert(movementsToCreate);
+        if (error) throw error;
+      }
+
+      mappedItems.forEach((item) => {
+        let stockItemId = item.matchedId;
+        if (stockItemId === 'new') {
+          const found = newlyCreatedItems.find(ni => ni.name === item.name);
+          if (found) stockItemId = found.id;
+        }
+
+        if (stockItemId && stockItemId !== 'new') {
+          purchaseListToCreate.push({
+            user_id: ownerId,
+            stock_item_id: stockItemId,
+            suggested_quantity: item.quantity,
+            ordered_quantity: item.quantity,
+            status: 'delivered',
+            actual_delivery_date: new Date().toISOString().split('T')[0],
+            order_date: nfeData.emissionDate.split('T')[0],
+            notes: `NF ${nfeData.invoiceNumber}`
+          });
+        }
+      });
+
+      if (purchaseListToCreate.length > 0) {
+        const { error } = await supabase.from('purchase_list_items').insert(purchaseListToCreate);
+        if (error) throw error;
+      }
+
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['stock_items'] });
+      queryClient.invalidateQueries({ queryKey: ['reports'] });
+      queryClient.invalidateQueries({ queryKey: ['financial_expenses'] });
+      toast.success('Nota Fiscal importada e estoque atualizado!');
+    },
+    onError: (err: Error) => {
+      toast.error(`Erro na importacao: ${err.message}`);
+    }
+  });
+
   return {
     items,
     isLoading,
@@ -171,6 +246,7 @@ export function useStockItems() {
     error,
     createItem,
     batchCreateItems,
+    processInvoiceImport,
     updateItem,
     deleteItem,
     itemsInAlert,

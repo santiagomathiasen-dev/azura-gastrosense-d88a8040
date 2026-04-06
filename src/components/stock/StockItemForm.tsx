@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import { CATEGORY_LABELS, UNIT_LABELS, type StockItem, type StockCategory, type StockUnit } from '@/hooks/useStockItems';
 import { useSuppliers } from '@/hooks/useSuppliers';
@@ -98,9 +99,9 @@ export function StockItemForm({
         minimum_quantity: initialData?.minimum_quantity ?? ('' as any),
         unit_price: (initialData as any)?.unit_price ?? ('' as any),
         waste_factor: (initialData as any)?.waste_factor ?? ('' as any),
-        expiration_date: initialData?.expiration_date || '',
-        supplier_id: initialData?.supplier_id || '',
-        notes: initialData?.notes || '',
+        expiration_date: (initialData as any)?.expiration_date || '',
+        supplier_id: (initialData as any)?.supplier_id || '',
+        notes: (initialData as any)?.notes || '',
       });
     }
   }, [open, initialData, reset]);
@@ -151,7 +152,8 @@ export function StockItemForm({
           <DialogTitle>
             {initialData ? 'Editar Item' : 'Novo Item de Estoque'}
           </DialogTitle>
-        </DialogHeader>
+        <DialogDescription className="sr-only">Detalhes do diálogo</DialogDescription>
+</DialogHeader>
         <form onSubmit={handleSubmit(handleFormSubmit, onInvalid)} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Nome *</Label>

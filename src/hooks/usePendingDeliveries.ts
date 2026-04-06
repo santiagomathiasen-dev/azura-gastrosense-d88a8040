@@ -25,10 +25,12 @@ export function usePendingDeliveries() {
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
       const data = await supabaseFetch('purchase_list_items?status=eq.ordered&select=*,stock_item:stock_items(name,unit,category),supplier:suppliers(name)&order=order_date.desc');
-      return data as unknown as PendingDeliveryItem[];
+      return (Array.isArray(data) ? data : data ? [data] : []) as unknown as PendingDeliveryItem[];
     },
     enabled: !!user?.id || !!ownerId,
-    refetchInterval: 30_000,
+    staleTime: 60_000,
+    gcTime: 10 * 60 * 1000,
+    // No polling — useGlobalRealtimeSync handles invalidation via WebSocket
   });
 
   // Mark an item as "ordered" with quantity (from Compras page)
@@ -48,36 +50,27 @@ export function usePendingDeliveries() {
     }) => {
       if (!ownerId) throw new Error('Usuário não autenticado');
 
-      // Check for existing ordered item
-      const existingData = await supabaseFetch(`purchase_list_items?stock_item_id=eq.${stockItemId}&status=eq.ordered&select=id`);
-      const existing = Array.isArray(existingData) ? existingData[0] : existingData;
+      // Cancel any existing pending/ordered rows for this stock item
+      // so they don't ghost in the shopping list after ordering
+      await supabaseFetch(
+        `purchase_list_items?stock_item_id=eq.${stockItemId}&status=in.(pending,ordered)`,
+        { method: 'PATCH', body: JSON.stringify({ status: 'cancelled' }) }
+      );
 
-      if (existing) {
-        // Update existing ordered item
-        await supabaseFetch(`purchase_list_items?id=eq.${existing.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({
-            ordered_quantity: orderedQuantity,
-            order_date: getTodayStr(),
-            expected_delivery_date: expectedDeliveryDate || null,
-          })
-        });
-      } else {
-        // Create new ordered item
-        await supabaseFetch('purchase_list_items', {
-          method: 'POST',
-          body: JSON.stringify({
-            user_id: ownerId,
-            stock_item_id: stockItemId,
-            suggested_quantity: suggestedQuantity,
-            ordered_quantity: orderedQuantity,
-            supplier_id: supplierId || null,
-            status: 'ordered',
-            order_date: getTodayStr(),
-            expected_delivery_date: expectedDeliveryDate || null,
-          })
-        });
-      }
+      // Create a fresh ordered row
+      await supabaseFetch('purchase_list_items', {
+        method: 'POST',
+        body: JSON.stringify({
+          user_id: ownerId,
+          stock_item_id: stockItemId,
+          suggested_quantity: suggestedQuantity,
+          ordered_quantity: orderedQuantity,
+          supplier_id: supplierId || null,
+          status: 'ordered',
+          order_date: getTodayStr(),
+          expected_delivery_date: expectedDeliveryDate || null,
+        })
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pending_deliveries'] });
@@ -115,7 +108,7 @@ export function usePendingDeliveries() {
         })
       });
 
-      // 2. Mark purchase item as delivered
+      // 2. Mark this purchase item as delivered
       await supabaseFetch(`purchase_list_items?id=eq.${itemId}`, {
         method: 'PATCH',
         body: JSON.stringify({
@@ -123,6 +116,13 @@ export function usePendingDeliveries() {
           actual_delivery_date: getTodayStr(),
         })
       });
+
+      // 3. Cancel any remaining pending rows for the same stock item
+      // so they don't linger in the shopping list
+      await supabaseFetch(
+        `purchase_list_items?stock_item_id=eq.${stockItemId}&status=eq.pending`,
+        { method: 'PATCH', body: JSON.stringify({ status: 'cancelled' }) }
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pending_deliveries'] });

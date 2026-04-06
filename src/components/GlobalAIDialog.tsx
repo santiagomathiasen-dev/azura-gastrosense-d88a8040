@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { usePathname, useRouter } from 'next/navigation';
 
 interface GlobalAIDialogProps {
     open: boolean;
@@ -22,8 +22,8 @@ export function GlobalAIDialog({ open, onOpenChange }: GlobalAIDialogProps) {
     const [transcript, setTranscript] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
     const recognitionRef = useRef<any>(null);
-    const location = useLocation();
-    const navigate = useNavigate();
+    const pathname = usePathname();
+    const router = useRouter();
 
     const isSupported = typeof window !== 'undefined' &&
         (window.SpeechRecognition || (window as any).webkitSpeechRecognition);
@@ -37,7 +37,7 @@ export function GlobalAIDialog({ open, onOpenChange }: GlobalAIDialogProps) {
         setIsListening(false);
     }, []);
 
-    const handleProcessCommand = async (text: string) => {
+    const handleProcessCommand = useCallback(async (text: string) => {
         if (!text.trim()) return;
 
         setIsProcessing(true);
@@ -46,24 +46,31 @@ export function GlobalAIDialog({ open, onOpenChange }: GlobalAIDialogProps) {
         try {
             // Get page context
             const pageContent = document.body.innerText.substring(0, 2000); // Simple context
-            const currentPath = location.pathname;
+            const currentPath = pathname;
 
-            const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-global-command`;
-            console.log("Calling process-global-command:", functionUrl);
+            const functionUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/process-global-command`;
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.access_token) {
+                toast.error('Faça login para usar o assistente.');
+                return;
+            }
 
+            const aiController = new AbortController();
+            const aiTimer = setTimeout(() => aiController.abort(), 30_000);
             const response = await fetch(functionUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-                    'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
                 },
                 body: JSON.stringify({
                     text,
                     path: currentPath,
                     context: pageContent
-                })
-            });
+                }),
+                signal: aiController.signal,
+            }).finally(() => clearTimeout(aiTimer));
 
             if (!response.ok) {
                 throw new Error(`Cloud Error: ${response.status}`);
@@ -71,8 +78,8 @@ export function GlobalAIDialog({ open, onOpenChange }: GlobalAIDialogProps) {
 
             const data = await response.json();
 
-            if (data.action === 'navigate') {
-                navigate(data.target);
+            if (data.action === 'navigate' && data.target) {
+                router.push(data.target);
                 toast.success(`Navegando para ${data.label || data.target}`);
             } else if (data.action === 'toast') {
                 toast(data.message);
@@ -87,7 +94,7 @@ export function GlobalAIDialog({ open, onOpenChange }: GlobalAIDialogProps) {
         } finally {
             setIsProcessing(false);
         }
-    };
+    }, [pathname, router, onOpenChange, stopListening]);
 
     useEffect(() => {
         if (!open || !isSupported) return;
@@ -100,6 +107,7 @@ export function GlobalAIDialog({ open, onOpenChange }: GlobalAIDialogProps) {
 
         recognition.onresult = (event: any) => {
             const current = event.resultIndex;
+            if (!event.results[current]?.[0]) return;
             const transcriptText = event.results[current][0].transcript;
             setTranscript(transcriptText);
 
@@ -123,9 +131,16 @@ export function GlobalAIDialog({ open, onOpenChange }: GlobalAIDialogProps) {
         setTranscript('');
 
         return () => {
-            recognition.abort();
+            try {
+                recognition.onresult = null;
+                recognition.onerror = null;
+                recognition.onend = null;
+                recognition.abort();
+            } catch (e) {
+                console.warn("Error cleaning up global speech recognition:", e);
+            }
         };
-    }, [open, isSupported]);
+    }, [open, isSupported, handleProcessCommand]);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>

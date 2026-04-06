@@ -28,6 +28,8 @@ export interface Gestor extends Profile {
     can_access_financeiro: boolean;
     can_access_relatorios: boolean;
     status_pagamento: boolean;
+    subscription_end_date: string | null;
+    subscription_plan: string | null;
 }
 
 export function useGestaoUsuarios() {
@@ -124,6 +126,31 @@ export function useGestaoUsuarios() {
         }
     });
 
+    const updateSubscription = useMutation({
+        mutationFn: async ({ id, days, plan }: { id: string; days: number; plan?: string }) => {
+            const endDate = new Date();
+            endDate.setDate(endDate.getDate() + days);
+
+            const updates: any = {
+                status_pagamento: days > 0,
+                subscription_end_date: days > 0 ? endDate.toISOString() : null,
+            };
+            if (plan) updates.subscription_plan = plan;
+
+            await supabaseFetch(`profiles?id=eq.${id}`, {
+                method: 'PATCH',
+                body: JSON.stringify(updates),
+            });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['profiles-management'] });
+            toast.success('Assinatura atualizada!');
+        },
+        onError: (error: any) => {
+            toast.error('Erro ao atualizar assinatura: ' + error.message);
+        },
+    });
+
     return {
         profiles,
         isLoading,
@@ -131,6 +158,7 @@ export function useGestaoUsuarios() {
         createGestor,
         updatePermissions,
         updateStatus,
+        updateSubscription,
         deleteGestor
     };
 }

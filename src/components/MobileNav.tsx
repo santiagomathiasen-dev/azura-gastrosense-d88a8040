@@ -1,4 +1,5 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   Package,
@@ -17,7 +18,8 @@ import {
   UserCog,
   Store,
   Zap,
-  CalendarClock
+  CalendarClock,
+  CreditCard
 } from 'lucide-react';
 import { Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -41,15 +43,17 @@ const navItems = [
   { to: '/produtos-venda', icon: ShoppingBag, label: 'Venda', permission: 'can_access_produtos_venda' },
   { to: '/relatorios', icon: BarChart3, label: 'Relatórios', permission: 'can_access_relatorios' },
   { to: '/financeiro', icon: Calculator, label: 'Financeiro', permission: 'can_access_financeiro' },
+  { to: '/assinatura', icon: CreditCard, label: 'Assinatura', permission: null },
   { to: '/colaboradores', icon: UserCog, label: 'Colab.', permission: null, managementOnly: true },
-  { to: '/gestores', icon: Store, label: 'Gestores', permission: null, managementOnly: true, adminOnly: true },
+  { to: '/admin', icon: Shield, label: 'Admin', permission: null, managementOnly: true, adminOnly: true },
 ];
 
 export function MobileNav() {
   const { logout } = useAuth();
   const { isCollaboratorMode, clearCollaboratorSession, hasAccess } = useCollaboratorContext();
   const { isAdmin, isGestor } = useUserRole();
-  const navigate = useNavigate();
+  const router = useRouter();
+  const pathname = usePathname();
 
   const handleLogout = async () => {
     // If in collaborator mode, clear session first
@@ -66,10 +70,10 @@ export function MobileNav() {
   const visibleNavItems = [
     ...navItems.filter(item => {
       // adminOnly é exclusivo para admins
-      if ((item as any).adminOnly) return isAdmin || isGestor || !isAdmin; // Temporarily permissive
+      if ((item as any).adminOnly) return isAdmin;
       if (item.managementOnly) {
         if (isCollaboratorMode) return false;
-        return isAdmin || isGestor || true; // Force show management for testing
+        return isAdmin || isGestor;
       }
       if (isCollaboratorMode && item.permission) {
         return hasAccess(item.to);
@@ -82,21 +86,24 @@ export function MobileNav() {
     <nav className="md:hidden fixed left-0 top-14 bottom-0 w-16 bg-card border-r border-border z-50 flex flex-col">
       <ScrollArea className="flex-1">
         <div className="flex flex-col items-center py-2 gap-1">
-          {visibleNavItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                cn(
-                  "flex flex-col items-center justify-center p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors w-14",
-                  isActive && "text-primary bg-primary/10"
-                )
-              }
-            >
-              <item.icon className="h-5 w-5" />
-              <span className="text-[9px] leading-tight mt-1 text-center">{item.label}</span>
-            </NavLink>
-          ))}
+          {visibleNavItems.map((item) => {
+            const isActive = pathname === item.to;
+            return (
+              <Link
+                key={item.to}
+                href={item.to}
+                className={
+                  cn(
+                    "flex flex-col items-center justify-center p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors w-14",
+                    isActive && "text-primary bg-primary/10"
+                  )
+                }
+              >
+                <item.icon className="h-6 w-6" />
+                <span className="text-[10px] leading-none mt-1 text-center">{item.label}</span>
+              </Link>
+            );
+          })}
         </div>
       </ScrollArea>
 
@@ -106,8 +113,8 @@ export function MobileNav() {
           onClick={handleLogout}
           className="flex flex-col items-center justify-center p-2 rounded-lg text-destructive hover:bg-destructive/10 transition-colors w-full"
         >
-          <LogOut className="h-5 w-5" />
-          <span className="text-[9px] leading-tight mt-1">Sair</span>
+          <LogOut className="h-6 w-6" />
+          <span className="text-[10px] leading-none mt-1">Sair</span>
         </button>
       </div>
     </nav>

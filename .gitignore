@@ -25,3 +25,7 @@ dist-ssr
 
 .vercel
 .env*.local
+.next
+.next/
+playwright-report/
+test-results/

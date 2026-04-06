@@ -16,6 +16,61 @@ interface StockInputRequest {
   stockItems: { id: string; name: string; unit: string; category: string }[];
 }
 
+// ══════════════════════════════════════════════════════════════════
+// GEMINI — chamada com retry automático + fallback de modelo
+// ══════════════════════════════════════════════════════════════════
+const GEMINI_MODELS: [string, string][] = [
+  ["gemini-1.5-flash", "v1"],
+  ["gemini-2.5-flash", "v1"],
+  ["gemini-flash-latest", "v1"],
+];
+
+async function callGemini(apiKey: string, geminiBody: unknown): Promise<any> {
+  let lastErrorDetails = "";
+
+  for (const [model, apiVersion] of GEMINI_MODELS) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      console.log(`[Gemini] Tentando model=${model} api=${apiVersion} attempt=${attempt}`);
+
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(geminiBody),
+        }
+      );
+
+      if (res.ok) {
+        const json = await res.json();
+        console.log(`[Gemini OK] model=${model} attempt=${attempt}`);
+        return json;
+      }
+
+      let errBody: any = {};
+      try { errBody = await res.clone().json(); } catch (_) {
+        try { errBody = { raw: await res.text() }; } catch (_2) { }
+      }
+      const errMsg = errBody?.error?.message ?? JSON.stringify(errBody);
+      lastErrorDetails = `[${model}/${apiVersion}] HTTP ${res.status}: ${errMsg}`;
+      console.error("ERRO REAL DO GEMINI:", lastErrorDetails);
+
+      if (res.status === 429) {
+        let waitMs = (attempt + 1) * 15000;
+        const delay = errBody?.error?.details?.find((d: any) => d.retryDelay)?.retryDelay;
+        if (delay) waitMs = (parseInt(delay) + 3) * 1000;
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+      break;
+    }
+  }
+
+  const finalErr: any = new Error("Todos os modelos Gemini falharam.");
+  finalErr.details = lastErrorDetails;
+  throw finalErr;
+}
+
 serve(async (req: any) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -65,35 +120,19 @@ serve(async (req: any) => {
       .map((item) => `- ${item.name} (ID: ${item.id}, unidade: ${item.unit}, category: ${item.category})`)
       .join("\n");
 
-    const promptText = `Você é um assistente especializado em gestão de estoque para cozinhas profissionais.
-Tarefa: Interpretar comandos e extrair informações sobre movimentações de estoque.
+    const promptText = `IA de Estoque Profissional.
+Extração direta de JSON. 
+Ação: entry, exit, adjustment.
 
-LISTA DE ITENS NO ESTOQUE:
-${stockItemsList || "Nenhum item cadastrado"}
+ITENS:
+${stockItemsList || "Nenhum"}
 
-REGRAS:
-1. Associe o item ao estoque (ID correspondente).
-2. Se não encontrar, sugira o item mais similar com matchedItemId: null.
-3. Ações válidas: entry (entrada), exit (saída), adjustment (ajuste).
-4. Retorne um JSON com a estrutura:
-{
-  "suggestions": [
-    {
-      "itemName": string,
-      "matchedItemId": string | null,
-      "quantity": number,
-      "unit": string,
-      "action": "entry"|"exit"|"adjustment",
-      "confidence": number
-    }
-  ],
-  "message": string
-}`;
+JSON apenas.`;
 
     const parts: any[] = [{ text: promptText }];
 
     if (type === "voice") {
-      parts.push({ text: `Comando de voz: "${content}"` });
+      parts.push({ text: `Voz: "${content}"` });
     } else {
       parts.push({
         inlineData: {
@@ -101,7 +140,7 @@ REGRAS:
           data: content.includes(",") ? content.split(",")[1] : content,
         },
       });
-      parts.push({ text: "Analise esta imagem e extraia as movimentações." });
+      parts.push({ text: "Analise imagem." });
     }
 
     const geminiBody = {
@@ -112,37 +151,19 @@ REGRAS:
       },
     };
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(geminiBody),
-      }
-    );
+    // ── Chamar Gemini ──────────────────────────────────────────────
+    const aiData = await callGemini(GEMINI_API_KEY, geminiBody);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Gemini error:", response.status, errorText);
+    const assistantMessage: string = aiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    const finishReason: string = aiData?.candidates?.[0]?.finishReason ?? "UNKNOWN";
 
-      let errorMessage = "Erro ao processar com Gemini";
-      try {
-        const errorJson = JSON.parse(errorText);
-        errorMessage = errorJson.error?.message || errorMessage;
-      } catch (e) { }
-
+    if (!assistantMessage) {
+      console.error(`[process-stock-input] Gemini candidates vazios. finishReason=${finishReason}`);
       return new Response(
-        JSON.stringify({
-          error: errorMessage,
-          status: response.status,
-          details: errorText
-        }),
+        JSON.stringify({ error: `IA não retornou dados (finishReason: ${finishReason}).` }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    const aiResponse = await response.json();
-    const assistantMessage = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
 
     // Extract JSON from the response with cleaning and recovery
     let result;

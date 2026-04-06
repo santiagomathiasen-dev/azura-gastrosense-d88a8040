@@ -1,19 +1,23 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
 import { getNow } from '@/lib/utils';
-import type { Database } from '@/integrations/supabase/types';
 import { supabaseFetch } from '@/lib/supabase-fetch';
+import { useDriveData } from '@/contexts/DriveDataContext';
 
-type Production = Database['public']['Tables']['productions']['Row'];
-type ProductionInsert = Database['public']['Tables']['productions']['Insert'];
-type ProductionUpdate = Database['public']['Tables']['productions']['Update'];
-type ProductionStatus = Database['public']['Enums']['production_status'];
-type ProductionPeriod = Database['public']['Enums']['production_period'];
+import { productionApi } from '@/api/ProductionApi';
+import { ProductionService } from '../modules/production/services/ProductionService';
+import type {
+  Production,
+  ProductionInsert,
+  ProductionUpdate,
+  ProductionStatus,
+  ProductionPeriod,
+  ProductionWithSheet
+} from '../modules/production/types';
 
-export type { Production, ProductionInsert, ProductionUpdate, ProductionStatus, ProductionPeriod };
+export type { Production, ProductionInsert, ProductionUpdate, ProductionStatus, ProductionPeriod, ProductionWithSheet };
 
 export const STATUS_LABELS: Record<ProductionStatus, string> = {
   requested: 'Solicitada',
@@ -32,51 +36,32 @@ export const PERIOD_LABELS: Record<ProductionPeriod, string> = {
   custom: 'Personalizada',
 };
 
-export interface ProductionWithSheet extends Production {
-  id: string;
-  name: string;
-  status: ProductionStatus;
-  planned_quantity: number;
-  technical_sheet_id: string;
-  scheduled_date: string;
-  user_id: string;
-  technical_sheet: {
-    id: string;
-    name: string;
-    yield_quantity: number;
-    yield_unit: string;
-    preparation_method: string | null;
-    production_type?: 'insumo' | 'final';
-    shelf_life_hours?: number | null;
-    ingredients: {
-      stock_item_id: string;
-      quantity: number;
-      unit: string;
-      stock_item: { name: string } | null;
-    }[];
-  } | null;
-}
+const EMPTY_ARRAY: any[] = [];
 
 export function useProductions() {
   const { user } = useAuth();
   const { ownerId, isLoading: isOwnerLoading } = useOwnerId();
   const queryClient = useQueryClient();
+  const { isDriveConnected, data: driveData } = useDriveData();
 
-  // Query uses RLS - no need to filter by user_id client-side
-  const { data: productions = [], isLoading, error } = useQuery({
-    queryKey: ['productions', ownerId],
+  // Hybrid query: Drive or Supabase
+  const { data: productions = EMPTY_ARRAY, isLoading, error } = useQuery({
+    queryKey: ['productions', ownerId, isDriveConnected ? 'drive' : 'supabase'],
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
-      try {
-        const data = await supabaseFetch('productions?select=*,technical_sheet:technical_sheets(id,name,yield_quantity,yield_unit,preparation_method,ingredients:technical_sheet_ingredients(stock_item_id,quantity,unit,stage_id,stock_item:stock_items(name)))&order=scheduled_date.asc');
-        return data as ProductionWithSheet[];
-      } catch (err) {
-        console.error("Error fetching productions:", err);
-        throw err;
+
+      // Drive mode
+      if (isDriveConnected && driveData?.production?.productions) {
+        return driveData.production.productions as ProductionWithSheet[];
       }
+
+      // Supabase fallback
+      return productionApi.getAll(ownerId || '');
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
-    refetchInterval: 30_000,
+    staleTime: 60_000,
+    gcTime: 10 * 60 * 1000,
+    refetchInterval: isDriveConnected ? false : 120_000,
   });
 
   const createProduction = useMutation({
@@ -84,12 +69,7 @@ export function useProductions() {
       if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
       if (!ownerId) throw new Error('Usuário não autenticado');
 
-      const data = await supabaseFetch('productions', {
-        method: 'POST',
-        headers: { 'Prefer': 'return=representation' },
-        body: JSON.stringify({ ...production, user_id: ownerId })
-      });
-      return Array.isArray(data) ? data[0] : data;
+      return productionApi.create({ ...production, user_id: ownerId });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['productions'] });
@@ -105,32 +85,41 @@ export function useProductions() {
   const subtractStockForProduction = async (production: ProductionWithSheet) => {
     if (!ownerId || !production.technical_sheet) return;
 
-    const yieldQty = Number(production.technical_sheet.yield_quantity);
-    const plannedQty = Number(production.planned_quantity);
-    const multiplier = plannedQty / yieldQty;
+    const multiplier = ProductionService.getMultiplier(
+      Number(production.planned_quantity),
+      Number(production.technical_sheet.yield_quantity)
+    );
 
     const insufficientItems: { name: string; needed: number; available: number; unit: string }[] = [];
 
     for (const ingredient of production.technical_sheet.ingredients) {
       const stockItemId = ingredient.stock_item_id;
-      // Apply waste factor from stock item
-      const stockData = await supabaseFetch(`stock_items?id=eq.${stockItemId}&select=waste_factor,current_quantity,name,unit`);
-      const itemData = Array.isArray(stockData) ? stockData[0] : stockData;
+      const stockResult = await supabaseFetch(`stock_items?id=eq.${stockItemId}&select=waste_factor,current_quantity,name,unit`);
+      const itemData = Array.isArray(stockResult) ? stockResult[0] : stockResult;
 
-      const wasteFactor = Number(itemData?.waste_factor || 0) / 100;
-      const baseQty = Number(ingredient.quantity) * multiplier;
-      const neededQty = baseQty * (1 + wasteFactor); // Apply waste factor
+      const neededQty = ProductionService.calculateNeededQuantity(
+        Number(ingredient.quantity),
+        multiplier,
+        Number(itemData?.waste_factor || 0)
+      );
 
-      let remainingQty = neededQty;
-
-      // 1. First, try to use from production stock
+      // Fetch dependencies for planning
       const prodStockResult = await supabaseFetch(`production_stock?stock_item_id=eq.${stockItemId}&select=id,quantity`);
       const prodStock = Array.isArray(prodStockResult) ? prodStockResult[0] : prodStockResult;
 
-      if (prodStock && Number(prodStock.quantity) > 0) {
-        const useFromProd = Math.min(Number(prodStock.quantity), remainingQty);
-        const newProdQty = Number(prodStock.quantity) - useFromProd;
+      const batchesData = await supabaseFetch(`item_expiry_dates?stock_item_id=eq.${stockItemId}&quantity=gt.0&order=expiry_date.asc`);
+      const batches = Array.isArray(batchesData) ? batchesData : [];
 
+      const plan = ProductionService.planStockDeduction(
+        neededQty,
+        Number(prodStock?.quantity || 0),
+        Number(itemData?.current_quantity || 0),
+        batches
+      );
+
+      // Execution of the plan
+      if (plan.fromProduction > 0 && prodStock) {
+        const newProdQty = Number(prodStock.quantity) - plan.fromProduction;
         if (newProdQty <= 0) {
           await supabaseFetch(`production_stock?id=eq.${prodStock.id}`, { method: 'DELETE' });
         } else {
@@ -139,56 +128,34 @@ export function useProductions() {
             body: JSON.stringify({ quantity: newProdQty })
           });
         }
-
-        remainingQty -= useFromProd;
       }
 
-      // 2. If still need more, use from central stock
-      if (remainingQty > 0) {
-        const centralQty = Number(itemData?.current_quantity || 0);
+      if (plan.fromCentral > 0) {
+        await supabaseFetch('stock_movements', {
+          method: 'POST',
+          body: JSON.stringify({
+            stock_item_id: stockItemId,
+            user_id: ownerId,
+            type: 'exit',
+            quantity: plan.fromCentral,
+            source: 'production',
+            related_production_id: production.id,
+            notes: `Baixa automática - Produção: ${production.name}`,
+          })
+        });
 
-        if (centralQty > 0) {
-          const useFromCentral = Math.min(centralQty, remainingQty);
-
-          // Create exit movement from central stock
-          await supabaseFetch('stock_movements', {
-            method: 'POST',
-            body: JSON.stringify({
-              stock_item_id: stockItemId,
-              user_id: ownerId,
-              type: 'exit',
-              quantity: useFromCentral,
-              source: 'production',
-              related_production_id: production.id,
-              notes: `Baixa automática - Produção: ${production.name}`,
-            })
-          });
-
-          // Deduct from expiry batches (FIFO)
-          const batches = await supabaseFetch(`item_expiry_dates?stock_item_id=eq.${stockItemId}&quantity=gt.0&order=expiry_date.asc`);
-
-          if (Array.isArray(batches) && batches.length > 0) {
-            let remaining = useFromCentral;
-            for (const batch of batches) {
-              if (remaining <= 0) break;
-              const take = Math.min(remaining, Number(batch.quantity));
-              const newQty = Number(batch.quantity) - take;
-
-              await supabaseFetch(`item_expiry_dates?id=eq.${batch.id}`, {
-                method: 'PATCH',
-                body: JSON.stringify({ quantity: newQty })
-              });
-
-              remaining -= take;
-            }
+        for (const deduction of plan.batchDeductions) {
+          const batch = batches.find(b => b.id === deduction.batchId);
+          if (batch) {
+            await supabaseFetch(`item_expiry_dates?id=eq.${batch.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ quantity: Number(batch.quantity) - deduction.take })
+            });
           }
-
-          remainingQty -= useFromCentral;
         }
       }
 
-      // 3. If still insufficient, track for purchase order
-      if (remainingQty > 0) {
+      if (plan.insufficient > 0) {
         insufficientItems.push({
           name: itemData?.name || ingredient.stock_item?.name || 'Item',
           needed: neededQty,
@@ -196,27 +163,21 @@ export function useProductions() {
           unit: itemData?.unit || ingredient.unit,
         });
 
-        // Auto-generate purchase order for missing quantity
-        // Check if item already exists in purchase list
         const purchaseData = await supabaseFetch(`purchase_list_items?stock_item_id=eq.${stockItemId}&status=eq.pending&select=id,suggested_quantity`);
         const existingPurchase = Array.isArray(purchaseData) ? purchaseData[0] : purchaseData;
 
         if (existingPurchase) {
-          // Update existing purchase item
           await supabaseFetch(`purchase_list_items?id=eq.${existingPurchase.id}`, {
             method: 'PATCH',
-            body: JSON.stringify({
-              suggested_quantity: Number(existingPurchase.suggested_quantity) + remainingQty
-            })
+            body: JSON.stringify({ suggested_quantity: Number(existingPurchase.suggested_quantity) + plan.insufficient })
           });
         } else {
-          // Create new purchase item
           await supabaseFetch('purchase_list_items', {
             method: 'POST',
             body: JSON.stringify({
               user_id: ownerId,
               stock_item_id: stockItemId,
-              suggested_quantity: remainingQty,
+              suggested_quantity: plan.insufficient,
               status: 'pending',
               notes: `Gerado automaticamente - Produção: ${production.name}`,
             })
@@ -225,7 +186,6 @@ export function useProductions() {
       }
     }
 
-    // Show warning if some items were insufficient
     if (insufficientItems.length > 0) {
       const itemsList = insufficientItems.map(i => `${i.name} (falta ${(i.needed - i.available).toFixed(2)} ${i.unit})`).join(', ');
       toast.warning(`Estoque insuficiente para: ${itemsList}. Pedidos de compra gerados automaticamente.`);
@@ -310,12 +270,7 @@ export function useProductions() {
       // Get the current production to check status change
       const currentProduction = productions.find(p => p.id === id);
 
-      const data = await supabaseFetch(`productions?id=eq.${id}`, {
-        method: 'PATCH',
-        headers: { 'Prefer': 'return=representation' },
-        body: JSON.stringify(updates)
-      });
-      const updatedData = Array.isArray(data) ? data[0] : data;
+      const updatedData = await productionApi.update(id, updates);
 
       // If changing from 'planned' or 'requested' to 'in_progress', subtract stock
       if (
@@ -360,9 +315,7 @@ export function useProductions() {
 
   const deleteProduction = useMutation({
     mutationFn: async (id: string) => {
-      await supabaseFetch(`productions?id=eq.${id}`, {
-        method: 'DELETE'
-      });
+      await productionApi.remove(id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['productions'] });
@@ -384,7 +337,8 @@ export function useProductions() {
       const plannedQty = Number(production.planned_quantity);
       const multiplier = plannedQty / yieldQty;
 
-      for (const ingredient of production.technical_sheet.ingredients) {
+      const ingredients = production.technical_sheet.ingredients || [];
+      for (const ingredient of ingredients) {
         if (ingredient.stock_item_id === stockItemId) {
           totalConsumption += Number(ingredient.quantity) * multiplier;
         }

@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import {
   Select,
@@ -48,18 +49,18 @@ export function SupplierForm({
 }: SupplierFormProps) {
   const [name, setName] = useState(initialData?.name || '');
 
-  const [cnpjCpf, setCnpjCpf] = useState(initialData?.cnpj_cpf || '');
-  const [phone, setPhone] = useState(initialData?.phone || '');
-  const [whatsapp, setWhatsapp] = useState(initialData?.whatsapp || '');
-  const [email, setEmail] = useState(initialData?.email || '');
-  const [deliveryDays, setDeliveryDays] = useState(String(initialData?.average_delivery_days || 3));
-  const [rating, setRating] = useState(String(initialData?.quality_rating || 3));
-  const [paymentMethod, setPaymentMethod] = useState(initialData?.payment_method || '');
-  const [zipCode, setZipCode] = useState(initialData?.zip_code || '');
-  const [address, setAddress] = useState(initialData?.address || '');
-  const [city, setCity] = useState(initialData?.city || '');
-  const [state, setState] = useState(initialData?.state || '');
-  const [notes, setNotes] = useState(initialData?.notes || '');
+  const [cnpjCpf, setCnpjCpf] = useState((initialData as any)?.cnpj_cpf || '');
+  const [phone, setPhone] = useState((initialData as any)?.phone || '');
+  const [whatsapp, setWhatsapp] = useState((initialData as any)?.whatsapp || '');
+  const [email, setEmail] = useState((initialData as any)?.email || '');
+  const [deliveryDays, setDeliveryDays] = useState(String((initialData as any)?.delivery_time_days || 3));
+  const [rating, setRating] = useState(String((initialData as any)?.quality_rating || 3));
+  const [paymentMethod, setPaymentMethod] = useState((initialData as any)?.payment_method || '');
+  const [zipCode, setZipCode] = useState((initialData as any)?.zip_code || '');
+  const [address, setAddress] = useState((initialData as any)?.address || '');
+  const [city, setCity] = useState((initialData as any)?.city || '');
+  const [state, setState] = useState((initialData as any)?.state || '');
+  const [notes, setNotes] = useState((initialData as any)?.notes || '');
 
   const handleSubmit = () => {
     if (!name.trim()) return;
@@ -75,7 +76,7 @@ export function SupplierForm({
       whatsapp: whatsapp || null,
       whatsapp_number: whatsappNumber,
       email: email || null,
-      average_delivery_days: parseInt(deliveryDays) || 3,
+      delivery_time_days: parseInt(deliveryDays) || 3,
       quality_rating: parseInt(rating) || 3,
       payment_method: paymentMethod || null,
       zip_code: zipCode || null,
@@ -83,25 +84,25 @@ export function SupplierForm({
       city: city || null,
       state: state || null,
       notes: notes || null,
-    });
+    } as any);
   };
 
   const handleOpenChange = (isOpen: boolean) => {
     if (!isOpen) {
       setName(initialData?.name || '');
 
-      setCnpjCpf(initialData?.cnpj_cpf || '');
-      setPhone(initialData?.phone || '');
-      setWhatsapp(initialData?.whatsapp || '');
-      setEmail(initialData?.email || '');
-      setDeliveryDays(String(initialData?.average_delivery_days || 3));
-      setRating(String(initialData?.quality_rating || 3));
-      setPaymentMethod(initialData?.payment_method || '');
-      setZipCode(initialData?.zip_code || '');
-      setAddress(initialData?.address || '');
-      setCity(initialData?.city || '');
-      setState(initialData?.state || '');
-      setNotes(initialData?.notes || '');
+      setCnpjCpf((initialData as any)?.cnpj_cpf || '');
+      setPhone((initialData as any)?.phone || '');
+      setWhatsapp((initialData as any)?.whatsapp || '');
+      setEmail((initialData as any)?.email || '');
+      setDeliveryDays(String((initialData as any)?.delivery_time_days || 3));
+      setRating(String((initialData as any)?.quality_rating || 3));
+      setPaymentMethod((initialData as any)?.payment_method || '');
+      setZipCode((initialData as any)?.zip_code || '');
+      setAddress((initialData as any)?.address || '');
+      setCity((initialData as any)?.city || '');
+      setState((initialData as any)?.state || '');
+      setNotes((initialData as any)?.notes || '');
     }
     onOpenChange(isOpen);
   };
@@ -113,7 +114,8 @@ export function SupplierForm({
           <DialogTitle>
             {initialData ? 'Editar Fornecedor' : 'Novo Fornecedor'}
           </DialogTitle>
-        </DialogHeader>
+        <DialogDescription className="sr-only">Detalhes do diálogo</DialogDescription>
+</DialogHeader>
 
         <div className="space-y-4 py-4">
           {/* Dados Básicos */}

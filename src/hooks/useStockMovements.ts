@@ -5,6 +5,7 @@ import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
 import { supabaseFetch } from '@/lib/supabase-fetch';
+import { useDriveData } from '@/contexts/DriveDataContext';
 
 type StockMovement = Database['public']['Tables']['stock_movements']['Row'];
 type StockMovementInsert = Database['public']['Tables']['stock_movements']['Insert'];
@@ -30,12 +31,24 @@ export function useStockMovements(stockItemId?: string) {
   const { user } = useAuth();
   const { ownerId, isLoading: isOwnerLoading } = useOwnerId();
   const queryClient = useQueryClient();
+  const { isDriveConnected, data: driveData } = useDriveData();
 
-  // Query uses RLS - no need to filter by user_id client-side
+  // Hybrid query: Drive or Supabase
   const { data: movements = [], isLoading, error } = useQuery({
-    queryKey: ['stock_movements', stockItemId, ownerId],
+    queryKey: ['stock_movements', stockItemId, ownerId, isDriveConnected ? 'drive' : 'supabase'],
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
+
+      // Drive mode
+      if (isDriveConnected && driveData?.stock?.stock_movements) {
+        let items = driveData.stock.stock_movements as StockMovement[];
+        if (stockItemId) {
+          items = items.filter(m => m.stock_item_id === stockItemId);
+        }
+        return items.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 100);
+      }
+
+      // Supabase fallback
       let query = supabase
         .from('stock_movements')
         .select('*')
@@ -50,6 +63,9 @@ export function useStockMovements(stockItemId?: string) {
       return data as StockMovement[];
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
+    staleTime: 30_000,
+    gcTime: 5 * 60 * 1000,
+    refetchInterval: isDriveConnected ? false : undefined,
   });
 
   const createMovement = useMutation({

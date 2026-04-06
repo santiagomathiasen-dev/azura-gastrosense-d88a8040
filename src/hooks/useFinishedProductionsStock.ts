@@ -1,9 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
 import { supabaseFetch } from '@/lib/supabase-fetch';
+import { useDriveData } from '@/contexts/DriveDataContext';
 
 export interface FinishedProductionStock {
   id: string;
@@ -29,12 +29,20 @@ export function useFinishedProductionsStock() {
   const { user } = useAuth();
   const { ownerId, isLoading: isOwnerLoading } = useOwnerId();
   const queryClient = useQueryClient();
+  const { isDriveConnected, data: driveData } = useDriveData();
 
-  // Query uses RLS - no need to filter by user_id client-side
+  // Hybrid query: Drive or Supabase
   const { data: finishedStock = [], isLoading, error } = useQuery({
-    queryKey: ['finished_productions_stock', ownerId],
+    queryKey: ['finished_productions_stock', ownerId, isDriveConnected ? 'drive' : 'supabase'],
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
+
+      // Drive mode
+      if (isDriveConnected && driveData?.production?.finished_productions_stock) {
+        return driveData.production.finished_productions_stock as FinishedProductionStock[];
+      }
+
+      // Supabase fallback
       try {
         const data = await supabaseFetch('finished_productions_stock?select=*,technical_sheet:technical_sheets(id,name,yield_unit,image_url,minimum_stock)&order=updated_at.desc');
         return data as unknown as FinishedProductionStock[];
@@ -44,7 +52,9 @@ export function useFinishedProductionsStock() {
       }
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
-    refetchInterval: 30_000,
+    staleTime: 60_000,
+    gcTime: 5 * 60 * 1000,
+    refetchInterval: isDriveConnected ? false : 120_000,
   });
 
   const addFinishedProduction = useMutation({

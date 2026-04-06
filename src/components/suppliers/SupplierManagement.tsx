@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
 import {
     Plus,
     Search,
@@ -67,12 +68,32 @@ export function SupplierManagement() {
 
     const handleFormSubmit = (data: Partial<Supplier>) => {
         if (editingSupplier) {
-            updateSupplier.mutate({ ...data, id: editingSupplier.id, updated_at: getNow().toISOString() });
+            updateSupplier.mutate(
+                { ...data, id: editingSupplier.id, updated_at: getNow().toISOString() } as any,
+                {
+                    onSuccess: () => {
+                        setFormOpen(false);
+                        setEditingSupplier(null);
+                    },
+                    onError: (error: any) => {
+                        toast.error(error?.message?.includes('42501') ? "Erro de permissão: Falha ao salvar (RLS)." : "Erro ao salvar. Tente novamente.");
+                    }
+                }
+            );
         } else {
-            createSupplier.mutate(data as any);
+            createSupplier.mutate(
+                data as any,
+                {
+                    onSuccess: () => {
+                        setFormOpen(false);
+                        setEditingSupplier(null);
+                    },
+                    onError: (error: any) => {
+                        toast.error(error?.message?.includes('42501') ? "Erro de permissão: Falha ao salvar (RLS)." : "Erro ao salvar. Tente novamente.");
+                    }
+                }
+            );
         }
-        setFormOpen(false);
-        setEditingSupplier(null);
     };
 
     const handleFormOpenChange = (open: boolean) => {
@@ -180,10 +201,10 @@ export function SupplierManagement() {
                                 </div>
                             )}
 
-                            {supplier.average_delivery_days && (
+                            {supplier.delivery_time_days && (
                                 <div className="flex items-center text-muted-foreground">
                                     <Truck className="h-4 w-4 mr-2" />
-                                    <span>Entrega em média {supplier.average_delivery_days} dias</span>
+                                    <span>Entrega em média {supplier.delivery_time_days} {supplier.delivery_time_days === 1 ? 'dia' : 'dias'}</span>
                                 </div>
                             )}
                         </CardContent>

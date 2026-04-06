@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { FileText, Upload, Camera, Loader2 } from 'lucide-react';
+import { FileText, Upload, Camera, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -16,9 +16,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
 import type { StockCategory, StockUnit } from '@/hooks/useStockItems';
-import { supabaseFetch } from '@/lib/supabase-fetch';
 
 export interface ExtractedIngredient {
   name: string;
@@ -39,6 +37,7 @@ interface IngredientFileImportDialogProps {
 }
 
 type Step = 'upload' | 'processing' | 'review';
+type ProcessingStage = 'reading' | 'sending' | 'processing' | null;
 
 const categoryLabels: Record<StockCategory, string> = {
   laticinios: 'Laticínios',
@@ -66,8 +65,10 @@ export function IngredientFileImportDialog({
   onImport,
 }: IngredientFileImportDialogProps) {
   const [step, setStep] = useState<Step>('upload');
+  const [processingStage, setProcessingStage] = useState<ProcessingStage>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [fileName, setFileName] = useState<string>('');
+  const [lastFile, setLastFile] = useState<File | null>(null);
   const [ingredients, setIngredients] = useState<ExtractedIngredient[]>([]);
   const [summary, setSummary] = useState('');
 
@@ -76,7 +77,9 @@ export function IngredientFileImportDialog({
 
   const resetState = () => {
     setStep('upload');
+    setProcessingStage(null);
     setFileName('');
+    setLastFile(null);
     setIngredients([]);
     setSummary('');
     setIsProcessing(false);
@@ -88,9 +91,8 @@ export function IngredientFileImportDialog({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check file size (max 5MB) limits
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Arquivo muito grande. Máximo 5MB.');
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Arquivo muito grande. Máximo 10MB.');
       return;
     }
 
@@ -114,43 +116,41 @@ export function IngredientFileImportDialog({
   };
 
   const processFile = async (file: File) => {
+    setLastFile(file);
     setIsProcessing(true);
     setStep('processing');
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 90_000);
+
     try {
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Processamento demorou mais que 5 minutos. Tente um arquivo menor ou recarregue a página.')), 300000);
+      setProcessingStage('reading');
+      let fileToSend: File = file;
+
+      if (file.type.startsWith('image/')) {
+        fileToSend = await compressImageToFile(file, 1200, 0.75);
+      }
+
+      setProcessingStage('sending');
+      const formData = new FormData();
+      formData.append('file', fileToSend, fileToSend.name);
+      formData.append('extractRecipe', 'false');
+
+      const res = await fetch('/api/invoices/upload', {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
       });
 
-      const processTask = async () => {
-        let fileType: 'image' | 'pdf' | 'text';
-        let content: string;
+      clearTimeout(timeout);
 
-        if (file.type.startsWith('image/')) {
-          fileType = 'image';
-          content = await fileToBase64(file);
-        } else if (file.type === 'application/pdf') {
-          fileType = 'pdf';
-          content = await fileToBase64(file);
-        } else if (file.type === 'text/plain') {
-          fileType = 'text';
-          content = await file.text();
-        } else {
-          throw new Error('Tipo de arquivo não suportado');
-        }
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Erro HTTP ${res.status}`);
+      }
 
-        console.log(`Processing ${fileType} file for ingredient extraction via supabaseFetch`);
-
-        const data = await supabaseFetch('functions/v1/extract-ingredients', {
-          method: 'POST',
-          body: JSON.stringify({ fileType, content, extractRecipe: false, mimeType: file.type })
-        });
-
-        console.log("Extraction output:", data);
-        return data;
-      };
-
-      const data = await Promise.race([processTask(), timeoutPromise]) as any;
+      setProcessingStage('processing');
+      const data = await res.json();
 
       if (data?.error) {
         toast.error(data.error);
@@ -158,7 +158,6 @@ export function IngredientFileImportDialog({
         return;
       }
 
-      // Set extracted data
       const extractedIngredients = (data.ingredients || []).map((ing: ExtractedIngredient) => ({
         ...ing,
         selected: true,
@@ -166,7 +165,6 @@ export function IngredientFileImportDialog({
 
       setIngredients(extractedIngredients);
       setSummary(data.summary || '');
-
       setStep('review');
 
       if (extractedIngredients.length > 0) {
@@ -175,11 +173,13 @@ export function IngredientFileImportDialog({
         toast.info(data.summary || 'Nenhum ingrediente encontrado. Verifique o arquivo.');
       }
     } catch (err) {
+      clearTimeout(timeout);
       const message = err instanceof Error ? err.message : 'Erro ao processar arquivo';
       toast.error(message);
       setStep('upload');
     } finally {
       setIsProcessing(false);
+      setProcessingStage(null);
     }
   };
 
@@ -290,7 +290,7 @@ export function IngredientFileImportDialog({
             </div>
 
             <p className="text-xs text-center text-muted-foreground">
-              Formatos aceitos: JPG, PNG, PDF, TXT (máx. 5MB)
+              Formatos aceitos: JPG, PNG, PDF, TXT (máx. 10MB)
             </p>
           </div>
         )}
@@ -298,10 +298,26 @@ export function IngredientFileImportDialog({
         {step === 'processing' && (
           <div className="flex flex-col items-center justify-center py-12 gap-4">
             <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            <p className="text-muted-foreground">Processando arquivo com IA...</p>
-            {fileName && (
-              <p className="text-sm text-muted-foreground">{fileName}</p>
-            )}
+            <div className="text-center space-y-1">
+              {processingStage === 'reading' && (
+                <>
+                  <p className="font-medium">Lendo arquivo...</p>
+                  <p className="text-xs text-muted-foreground">Extraindo texto localmente</p>
+                </>
+              )}
+              {processingStage === 'sending' && (
+                <>
+                  <p className="font-medium">Enviando para IA...</p>
+                  <p className="text-xs text-muted-foreground">Payload otimizado</p>
+                </>
+              )}
+              {(processingStage === 'processing' || !processingStage) && (
+                <>
+                  <p className="font-medium">Processando com IA...</p>
+                  <p className="text-xs text-muted-foreground">{fileName}</p>
+                </>
+              )}
+            </div>
           </div>
         )}
 
@@ -416,6 +432,15 @@ export function IngredientFileImportDialog({
           </ScrollArea>
         )}
 
+        {step === 'upload' && lastFile && (
+          <DialogFooter>
+            <Button variant="outline" onClick={() => processFile(lastFile)} disabled={isProcessing}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Tentar novamente
+            </Button>
+          </DialogFooter>
+        )}
+
         {step === 'review' && (
           <DialogFooter>
             <Button
@@ -444,78 +469,27 @@ export function IngredientFileImportDialog({
     </Dialog>
   );
 }
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const skipResize = file.size < 1024 * 1024; // Less than 1MB
-    const isHeic = file.type.toLowerCase().includes('heic') || file.name.toLowerCase().endsWith('.heic');
-
-    // For images (that are large, and NOT HEIC), resize them before base64 encoding to reduce payload size
-    if (!skipResize && !isHeic && file.type.startsWith('image/')) {
-      const img = new window.Image();
-      const objectUrl = URL.createObjectURL(file);
-      let isResolved = false;
-
-      const resolveFallback = () => {
-        if (isResolved) return;
-        isResolved = true;
-        URL.revokeObjectURL(objectUrl);
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result as string;
-          resolve(result.includes(',') ? result.split(',')[1] : result);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      };
-
-      const fallbackTimer = setTimeout(resolveFallback, 3000);
-
-      img.onload = () => {
-        if (isResolved) return;
-        clearTimeout(fallbackTimer);
-        isResolved = true;
-        URL.revokeObjectURL(objectUrl);
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        const MAX_SIZE = 1200; // max width/height
-
-        if (width > height && width > MAX_SIZE) {
-          height *= MAX_SIZE / width;
-          width = MAX_SIZE;
-        } else if (height > MAX_SIZE) {
-          width *= MAX_SIZE / height;
-          height = MAX_SIZE;
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          const dataUrl = canvas.toDataURL(file.type === 'image/png' ? 'image/png' : 'image/jpeg', 0.7);
-          resolve(dataUrl.split(',')[1]);
-        } else {
-          resolveFallback(); // if canvas context fails
-        }
-      };
-
-      img.onerror = () => {
-        if (isResolved) return;
-        clearTimeout(fallbackTimer);
-        resolveFallback();
-      };
-
-      img.src = objectUrl;
-    } else {
-      // For PDFs, Text, small images, or HEIC
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        resolve(result.includes(',') ? result.split(',')[1] : result);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    }
+// Compress image and return as File (JPEG). Falls back to original on error.
+function compressImageToFile(file: File, maxPx = 1200, quality = 0.75): Promise<File> {
+  return new Promise((resolve) => {
+    const img = new window.Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > maxPx || height > maxPx) {
+        if (width > height) { height = Math.round(height * maxPx / width); width = maxPx; }
+        else { width = Math.round(width * maxPx / height); height = maxPx; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => resolve(new File([blob!], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' })),
+        'image/jpeg', quality
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
   });
 }

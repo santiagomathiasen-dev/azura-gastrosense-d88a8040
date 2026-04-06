@@ -1,0 +1,241 @@
+/* stylelint-disable */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 42 20% 98%;
+    --foreground: 40 12% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 40 12% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 40 12% 10%;
+
+    --primary: 152 40% 45%;
+    /* Pastel green */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 40 30% 95%;
+    /* Lighter pastel yellow */
+    --secondary-foreground: 44 15% 30%;
+
+    --muted: 40 30% 95%;
+    --muted-foreground: 43 12% 55%;
+
+    --accent: 151 45% 92%;
+    /* Light mint */
+    --accent-foreground: 152 40% 45%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 46% 33%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 29 57% 46%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 40 15% 90%;
+    --input: 40 15% 88%;
+    --ring: 152 55% 24%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 42 18% 97%;
+    /* Light pastel background */
+    --sidebar-foreground: 40 12% 20%;
+    --sidebar-primary: 152 40% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 42 14% 93%;
+    /* Light grey/yellow */
+    --sidebar-accent-foreground: 40 12% 20%;
+    --sidebar-border: 42 12% 93%;
+    --sidebar-ring: 152 40% 45%;
+    --sidebar-muted: 43 9% 51%;
+  }
+
+  .dark {
+    --background: 40 12% 7%;
+    --foreground: 40 31% 95%;
+
+    --card: 40 10% 12%;
+    --card-foreground: 40 31% 95%;
+
+    --popover: 40 10% 12%;
+    --popover-foreground: 40 31% 95%;
+
+    --primary: 152 40% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 44 15% 16%;
+    --secondary-foreground: 40 31% 95%;
+
+    --muted: 44 15% 16%;
+    --muted-foreground: 43 12% 55%;
+
+    --accent: 152 35% 22%;
+    --accent-foreground: 40 31% 95%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 40 10% 18%;
+    --input: 40 10% 18%;
+    --ring: 152 46% 33%;
+
+    --sidebar-background: 40 12% 7%;
+    --sidebar-foreground: 40 31% 95%;
+    --sidebar-primary: 152 40% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 40 15% 14%;
+    --sidebar-accent-foreground: 40 31% 95%;
+    --sidebar-border: 40 12% 14%;
+    --sidebar-ring: 152 40% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    @apply h-full;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Outfit', sans-serif;
+  }
+}
+
+@layer utilities {
+  .glass-card {
+    @apply bg-card/80 backdrop-blur-sm border border-border/50 shadow-lg;
+  }
+
+  .stat-card {
+    @apply bg-card rounded-xl border border-border/50 p-4 shadow-sm hover:shadow-md transition-all duration-300;
+  }
+
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all duration-200;
+  }
+
+  .nav-item-active {
+    @apply bg-sidebar-primary text-sidebar-primary-foreground;
+  }
+
+  .mobile-nav-item {
+    @apply flex flex-col items-center justify-center gap-1 py-2 px-3 text-muted-foreground hover:text-primary transition-colors;
+  }
+
+  .mobile-nav-item-active {
+    @apply text-primary;
+  }
+
+  .compact-table th,
+  .compact-table td {
+    @apply py-1.5 px-2 text-xs;
+  }
+
+  .compact-card {
+    @apply p-3 space-y-2;
+  }
+
+  /* Force hide Next.js development badges and overlays */
+  nextjs-portal,
+  #next-route-announcer {
+    display: none !important;
+  }
+}
+/* Estilos de Impresso */
+@media print {
+  /* Esconder elementos de interface */
+  nav, 
+  aside, 
+  header .btn, 
+  button, 
+  .print-hidden,
+  .no-print,
+  [role="navigation"],
+  [role="banner"],
+  .sidebar-container,
+  .mobile-nav,
+  .tabs-list {
+    display: none !important;
+  }
+
+  /* Resetar layout para ocupao total da pgina */
+  main, 
+  .main-content,
+  .container {
+    padding: 0 !important;
+    margin: 0 !important;
+    padding-top: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    background: white !important;
+    position: static !important;
+    overflow: visible !important;
+  }
+
+  /* Tipografia e cores para papel */
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 11pt !important;
+  }
+
+  h1 { font-size: 18pt !important; margin: 0 0 10pt 0 !important; border-bottom: 2px solid #333 !important; padding-bottom: 5pt !important; }
+  h2 { font-size: 14pt !important; margin-top: 20pt !important; }
+  
+  /* Tabelas */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+  
+  th, td {
+    border: 1px solid #ddd !important;
+    padding: 8px !important;
+    text-align: left !important;
+    font-size: 10pt !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+  }
+
+  /* Remover sombras e fundos desnecessrios */
+  .card, .shadow-sm, .shadow-md, .shadow-lg, .badge, .table-header-group {
+    box-shadow: none !important;
+    border: 1px solid #eee !important;
+    background: white !important;
+    color: #333 !important;
+  }
+
+  .bg-primary, .bg-destructive, .bg-secondary, .bg-muted {
+    background: white !important;
+    color: black !important;
+    border: 1px solid #ccc !important;
+  }
+
+  /* Forar exibio de tabelas */
+  .overflow-x-auto {
+    overflow-x: visible !important;
+  }
+
+  /* Links */
+  a { text-decoration: none !important; color: black !important; }
+}

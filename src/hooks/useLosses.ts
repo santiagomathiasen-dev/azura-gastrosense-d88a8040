@@ -1,9 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
 import { toast } from 'sonner';
 import { supabaseFetch } from '@/lib/supabase-fetch';
+import { useDriveData } from '@/contexts/DriveDataContext';
 
 export interface Loss {
   id: string;
@@ -32,20 +32,31 @@ export function useLosses() {
   const { user } = useAuth();
   const { ownerId } = useOwnerId();
   const queryClient = useQueryClient();
+  const { isDriveConnected, data: driveData } = useDriveData();
 
   const { data: losses = [], isLoading } = useQuery({
-    queryKey: ['losses', ownerId],
+    queryKey: ['losses', ownerId, isDriveConnected ? 'drive' : 'supabase'],
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
+
+      // Drive mode
+      if (isDriveConnected && driveData?.losses?.losses) {
+        return driveData.losses.losses as Loss[];
+      }
+
+      // Supabase fallback
       try {
         const data = await supabaseFetch('losses?order=created_at.desc');
-        return data as Loss[];
+        return (Array.isArray(data) ? data : data ? [data] : []) as Loss[];
       } catch (err) {
         console.error("Error fetching losses:", err);
         throw err;
       }
     },
     enabled: !!user?.id || !!ownerId,
+    staleTime: 60_000,
+    gcTime: 10 * 60 * 1000,
+    refetchInterval: isDriveConnected ? false : 120_000,
   });
 
   const createLoss = useMutation({

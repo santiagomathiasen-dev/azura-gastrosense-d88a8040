@@ -6,25 +6,8 @@ import { toast } from 'sonner';
 import type { StockItem } from './useStockItems';
 import { supabaseFetch } from '@/lib/supabase-fetch';
 
-interface ProductionStockItem {
-  id: string;
-  user_id: string;
-  stock_item_id: string;
-  quantity: number;
-  created_at: string;
-  updated_at: string;
-  stock_item?: StockItem;
-}
-
-interface StockTransfer {
-  id: string;
-  user_id: string;
-  stock_item_id: string;
-  quantity: number;
-  direction: 'to_production' | 'to_central';
-  notes: string | null;
-  created_at: string;
-}
+import { ProductionService } from '../modules/production/services/ProductionService';
+import type { ProductionStockItem, StockTransfer } from '../modules/production/types';
 
 export type { ProductionStockItem, StockTransfer };
 
@@ -40,13 +23,16 @@ export function useProductionStock() {
       if (!user?.id && !ownerId) return [];
       try {
         const data = await supabaseFetch('production_stock?select=*,stock_item:stock_items(*)');
-        return data as (ProductionStockItem & { stock_item: StockItem })[];
+        const result = Array.isArray(data) ? data : data ? [data] : [];
+        return result as (ProductionStockItem & { stock_item: StockItem })[];
       } catch (err) {
         console.error("Error fetching production stock:", err);
         throw err;
       }
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
+    staleTime: 30_000,
+    gcTime: 5 * 60 * 1000,
   });
 
   // Fetch transfer history
@@ -56,13 +42,16 @@ export function useProductionStock() {
       if (!user?.id && !ownerId) return [];
       try {
         const data = await supabaseFetch('stock_transfers?select=*,stock_item:stock_items(name,unit)&order=created_at.desc&limit=50');
-        return data as (StockTransfer & { stock_item: { name: string; unit: string } })[];
+        const result = Array.isArray(data) ? data : data ? [data] : [];
+        return result as (StockTransfer & { stock_item: { name: string; unit: string } })[];
       } catch (err) {
         console.error("Error fetching transfers:", err);
         throw err;
       }
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
+    staleTime: 30_000,
+    gcTime: 5 * 60 * 1000,
   });
 
   // Transfer from central to production stock

@@ -12,11 +12,10 @@ export function useUserRole() {
   const { data: profile, isLoading } = useQuery({
     queryKey: ['user_profile_role', user?.id],
     queryFn: async () => {
-      console.log("useUserRole: Querying profile for user:", user?.id);
       const { data, error } = await supabase
         .from('profiles')
-        .select('role, status')
-        .eq('id', user.id)
+        .select('role')
+        .eq('id', user!.id)
         .maybeSingle();
 
 
@@ -24,11 +23,12 @@ export function useUserRole() {
         console.error('useUserRole: ERROR fetching profile:', error);
         throw error;
       }
-      console.log("useUserRole: Profile fetched successfully:", data);
       return data;
     },
     enabled: !!user?.id,
     retry: false,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
 
 
@@ -36,7 +36,7 @@ export function useUserRole() {
   const isAdmin = userRole === 'admin';
   const isGestor = userRole === 'gestor';
   const isColaborador = userRole === 'colaborador';
-  const isBlocked = profile?.status === 'inativo';
+  const isBlocked = false; // The status column is not present in the production profiles table
 
   const assignRole = useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: AppRole }) => {

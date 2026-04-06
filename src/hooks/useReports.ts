@@ -3,8 +3,9 @@ import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useOwnerId } from './useOwnerId';
+import { supabaseFetch } from '@/lib/supabase-fetch';
 import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, format, subDays } from 'date-fns';
-import { getNow } from '@/lib/utils';
+import { getNow, formatInBrasilia } from '@/lib/utils';
 import { parseSafeDate } from './useExpiryDates';
 
 export interface SalesReportItem {
@@ -40,6 +41,16 @@ export interface UsedIngredientsItem {
   unit: string;
   productionName: string | null;
   source: string;
+}
+
+export interface MovementReportItem {
+  date: string;
+  itemName: string;
+  type: 'entry' | 'exit';
+  quantity: number;
+  unit: string;
+  source: string;
+  notes: string | null;
 }
 
 export interface PurchaseReportItem {
@@ -85,19 +96,7 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
 
-      const { data, error } = await supabase
-        .from('sales')
-        .select(`
-          id,
-          quantity_sold,
-          sale_date,
-          sale_product:sale_products!inner(name, sale_price)
-        `)
-        .gte('sale_date', `${startDate}T00:00:00`)
-        .lte('sale_date', `${endDate}T23:59:59`)
-        .order('sale_date', { ascending: false });
-
-      if (error) throw error;
+      const data = await supabaseFetch(`sales?select=id,quantity_sold,sale_date,sale_product:sale_products!inner(name,sale_price)&sale_date=gte.${startDate}T00:00:00&sale_date=lte.${endDate}T23:59:59&order=sale_date.desc`);
 
       return (data as any[]).map(sale => {
         const dateObj = sale.sale_date ? new Date(sale.sale_date) : getNow();
@@ -105,7 +104,7 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
         const unitPrice = sale.sale_product?.sale_price || 0;
 
         return {
-          date: isNaN(dateObj.getTime()) ? '-' : format(dateObj, 'dd/MM/yyyy HH:mm'),
+          date: isNaN(dateObj.getTime()) ? '-' : formatInBrasilia(dateObj, 'dd/MM/yyyy HH:mm'),
           productName,
           quantity: sale.quantity_sold,
           unitPrice,
@@ -114,6 +113,8 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
       }) as SalesReportItem[];
     },
     enabled: !!user?.id || !!ownerId,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
 
   // Losses Report - from unified losses table + legacy stock_movements
@@ -123,38 +124,16 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
       if (!user?.id && !ownerId) return [];
 
       // Get losses from the new unified losses table
-      const { data: lossesData, error: lossesError } = await supabase
-        .from('losses')
-        .select('*')
-        .gte('created_at', `${startDate}T00:00:00`)
-        .lte('created_at', `${endDate}T23:59:59`)
-        .order('created_at', { ascending: false });
-
-      if (lossesError) throw lossesError;
+      const lossesData = await supabaseFetch(`losses?select=*&created_at=gte.${startDate}T00:00:00&created_at=lte.${endDate}T23:59:59&order=created_at.desc`);
 
       // Also get legacy losses from stock_movements (for backwards compatibility)
-      const { data: legacyData, error: legacyError } = await supabase
-        .from('stock_movements')
-        .select(`
-          id,
-          quantity,
-          created_at,
-          notes,
-          stock_item:stock_items!inner(name, unit_price)
-        `)
-        .eq('type', 'exit')
-        .ilike('notes', '%perda%')
-        .gte('created_at', `${startDate}T00:00:00`)
-        .lte('created_at', `${endDate}T23:59:59`)
-        .order('created_at', { ascending: false });
-
-      if (legacyError) throw legacyError;
+      const legacyData = await supabaseFetch(`stock_movements?select=id,quantity,created_at,notes,stock_item:stock_items!inner(name,unit_price)&type=eq.exit&notes=ilike.*perda*&created_at=gte.${startDate}T00:00:00&created_at=lte.${endDate}T23:59:59&order=created_at.desc`);
 
       // Combine both sources
       const newLosses = (lossesData || []).map(loss => {
         const dateObj = loss.created_at ? new Date(loss.created_at) : getNow();
         return {
-          date: isNaN(dateObj.getTime()) ? '-' : format(dateObj, 'dd/MM/yyyy HH:mm'),
+          date: isNaN(dateObj.getTime()) ? '-' : formatInBrasilia(dateObj, 'dd/MM/yyyy HH:mm'),
           productName: loss.source_name,
           quantity: Number(loss.quantity),
           unit: loss.unit,
@@ -167,7 +146,7 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
         const dateObj = movement.created_at ? new Date(movement.created_at) : getNow();
         const stockItem = movement.stock_item;
         return {
-          date: isNaN(dateObj.getTime()) ? '-' : format(dateObj, 'dd/MM/yyyy HH:mm'),
+          date: isNaN(dateObj.getTime()) ? '-' : formatInBrasilia(dateObj, 'dd/MM/yyyy HH:mm'),
           productName: stockItem?.name || 'Item desconhecido',
           quantity: Number(movement.quantity),
           unit: 'unidade',
@@ -188,6 +167,8 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
       }) as LossReportItem[];
     },
     enabled: !!user?.id || !!ownerId,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
 
   // Purchased Ingredients Report (delivered purchase items)
@@ -196,27 +177,12 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
 
-      const { data, error } = await supabase
-        .from('purchase_list_items')
-        .select(`
-          id,
-          ordered_quantity,
-          actual_delivery_date,
-          stock_item:stock_items!inner(name, unit, unit_price),
-          supplier:suppliers(name)
-        `)
-        .eq('status', 'delivered')
-        .not('actual_delivery_date', 'is', null)
-        .gte('actual_delivery_date', startDate)
-        .lte('actual_delivery_date', endDate)
-        .order('actual_delivery_date', { ascending: false });
-
-      if (error) throw error;
+      const data = await supabaseFetch(`purchase_list_items?select=id,ordered_quantity,actual_delivery_date,stock_item:stock_items!inner(name,unit,unit_price),supplier:suppliers(name)&status=eq.delivered&actual_delivery_date=not.is.null&actual_delivery_date=gte.${startDate}&actual_delivery_date=lte.${endDate}&order=actual_delivery_date.desc`);
 
       return (data as any[]).map(item => {
         const stockItem = item.stock_item;
         return {
-          date: item.actual_delivery_date ? format(parseSafeDate(item.actual_delivery_date), 'dd/MM/yyyy') : '-',
+          date: item.actual_delivery_date ? formatInBrasilia(parseSafeDate(item.actual_delivery_date), 'dd/MM/yyyy') : '-',
           itemName: stockItem?.name || 'Item desconhecido',
           quantity: item.ordered_quantity || 0,
           unit: stockItem?.unit || 'un',
@@ -226,6 +192,8 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
       }) as PurchasedIngredientsItem[];
     },
     enabled: !!user?.id || !!ownerId,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
 
   // Used Ingredients Report (stock exits for production)
@@ -234,27 +202,12 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
 
-      const { data, error } = await supabase
-        .from('stock_movements')
-        .select(`
-          id,
-          quantity,
-          created_at,
-          source,
-          notes,
-          stock_item:stock_items!inner(name, unit)
-        `)
-        .eq('type', 'exit')
-        .gte('created_at', `${startDate}T00:00:00`)
-        .lte('created_at', `${endDate}T23:59:59`)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
+      const data = await supabaseFetch(`stock_movements?select=id,quantity,created_at,source,notes,stock_item:stock_items!inner(name,unit)&type=eq.exit&created_at=gte.${startDate}T00:00:00&created_at=lte.${endDate}T23:59:59&order=created_at.desc`);
 
       return (data as any[]).map(movement => {
         const stockItem = movement.stock_item;
         return {
-          date: format(new Date(movement.created_at), 'dd/MM/yyyy HH:mm'),
+          date: formatInBrasilia(movement.created_at, 'dd/MM/yyyy HH:mm'),
           itemName: stockItem?.name || 'Item desconhecido',
           quantity: movement.quantity,
           unit: stockItem?.unit || 'un',
@@ -264,6 +217,8 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
       }) as UsedIngredientsItem[];
     },
     enabled: !!user?.id || !!ownerId,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
 
   // Purchase List Report (all purchase items)
@@ -272,23 +227,7 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
 
-      const { data, error } = await supabase
-        .from('purchase_list_items')
-        .select(`
-          id,
-          suggested_quantity,
-          ordered_quantity,
-          status,
-          created_at,
-          order_date,
-          stock_item:stock_items!inner(name, unit, unit_price),
-          supplier:suppliers(name)
-        `)
-        .gte('created_at', `${startDate}T00:00:00`)
-        .lte('created_at', `${endDate}T23:59:59`)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
+      const data = await supabaseFetch(`purchase_list_items?select=id,suggested_quantity,ordered_quantity,status,created_at,order_date,stock_item:stock_items!inner(name,unit,unit_price),supplier:suppliers(name)&created_at=gte.${startDate}T00:00:00&created_at=lte.${endDate}T23:59:59&order=created_at.desc`);
 
       const statusLabels: Record<string, string> = {
         pending: 'Pendente',
@@ -301,8 +240,8 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
         const stockItem = item.stock_item;
         return {
           date: item.order_date
-            ? format(parseSafeDate(item.order_date), 'dd/MM/yyyy')
-            : format(new Date(item.created_at), 'dd/MM/yyyy'),
+            ? formatInBrasilia(parseSafeDate(item.order_date), 'dd/MM/yyyy')
+            : formatInBrasilia(item.created_at, 'dd/MM/yyyy'),
           itemName: stockItem?.name || 'Item desconhecido',
           quantity: item.ordered_quantity || item.suggested_quantity,
           unit: stockItem?.unit || 'un',
@@ -313,6 +252,36 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
       }) as PurchaseReportItem[];
     },
     enabled: !!user?.id || !!ownerId,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+  });
+
+  // Movements Report (All stock movements)
+  const { data: movementsReport = [], isLoading: movementsLoading } = useQuery({
+    queryKey: ['reports', 'movements', ownerId, startDate, endDate],
+    queryFn: async () => {
+      if (!user?.id && !ownerId) return [];
+
+      const data = await supabaseFetch(`stock_movements?select=id,type,quantity,created_at,source,notes,stock_item:stock_items!inner(name,unit)&created_at=gte.${startDate}T00:00:00&created_at=lte.${endDate}T23:59:59&order=created_at.desc`);
+
+      return (data as any[]).map(movement => {
+        const stockItem = movement.stock_item;
+        return {
+          date: formatInBrasilia(movement.created_at, 'dd/MM/yyyy HH:mm'),
+          itemName: stockItem?.name || 'Item desconhecido',
+          type: movement.type as 'entry' | 'exit',
+          quantity: movement.quantity,
+          unit: stockItem?.unit || 'un',
+          notes: movement.notes || null,
+          source: movement.source === 'production' ? 'Produção' :
+            movement.source === 'manual' ? 'Manual' :
+              movement.source === 'purchase' ? 'Compra' : movement.source,
+        };
+      }) as MovementReportItem[];
+    },
+    enabled: !!user?.id || !!ownerId,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
 
   // Calculate totals
@@ -360,11 +329,12 @@ export function useReports(dateRange: DateRangeType, customStart?: Date, customE
     purchasedReport,
     usedReport,
     purchaseListReport,
+    movementsReport,
     totalSales,
     totalLosses,
     totalPurchased,
     totalPurchaseList,
     alerts,
-    isLoading: salesLoading || lossesLoading || purchasedLoading || usedLoading || purchaseListLoading,
+    isLoading: salesLoading || lossesLoading || purchasedLoading || usedLoading || purchaseListLoading || movementsLoading,
   };
 }

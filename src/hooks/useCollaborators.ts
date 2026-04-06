@@ -11,6 +11,7 @@ export interface Collaborator {
   email: string | null;
   pin_hash: string | null;
   auth_user_id: string | null;
+  role?: string;
   is_active: boolean;
   can_access_dashboard: boolean;
   can_access_estoque: boolean;
@@ -58,11 +59,9 @@ export function useCollaborators() {
       if (!user?.id) return [];
 
       try {
-        console.log('useCollaborators: fetching profile via fetch');
         const profile = await supabaseFetch(`profiles?id=eq.${user.id}&select=role`);
         const userRole = Array.isArray(profile) ? profile[0]?.role : profile?.role;
 
-        console.log('useCollaborators: fetching collaborators via fetch');
         let path = 'collaborators?select=*';
 
         // If not admin, filter by gestor_id
@@ -83,6 +82,8 @@ export function useCollaborators() {
       }
     },
     enabled: !!user?.id,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
 
   const createCollaborator = useMutation({

@@ -44,13 +44,15 @@ export function useFinancials() {
             if (!ownerId) return [];
             try {
                 const data = await supabaseFetch('financial_expenses?select=*&order=date.desc');
-                return data as FinancialExpense[];
+                return (Array.isArray(data) ? data : data ? [data] : []) as FinancialExpense[];
             } catch (err) {
                 console.error('Error fetching expenses:', err);
                 return [];
             }
         },
         enabled: !!ownerId,
+        staleTime: 10 * 60 * 1000,
+        gcTime: 30 * 60 * 1000,
     });
 
     const { data: payroll = [], isLoading: payrollLoading } = useQuery({
@@ -59,13 +61,15 @@ export function useFinancials() {
             if (!ownerId) return [];
             try {
                 const data = await supabaseFetch('payroll_entries?select=*&order=date.desc');
-                return data as PayrollEntry[];
+                return (Array.isArray(data) ? data : data ? [data] : []) as PayrollEntry[];
             } catch (err) {
                 console.error('Error fetching payroll:', err);
                 return [];
             }
         },
         enabled: !!ownerId,
+        staleTime: 10 * 60 * 1000,
+        gcTime: 30 * 60 * 1000,
     });
 
     const addExpense = useMutation({

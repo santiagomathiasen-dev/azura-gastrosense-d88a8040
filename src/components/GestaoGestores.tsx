@@ -10,7 +10,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from '@/components/ui/label';
 import { Loader2, Search, Users, Plus, Pencil, Trash2, Shield, Eye, EyeOff } from 'lucide-react';
 import { useCollaboratorContext } from '@/contexts/CollaboratorContext';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
 const permissionLabels: Record<string, string> = {
@@ -29,7 +29,7 @@ const permissionLabels: Record<string, string> = {
 export function GestaoGestores() {
     const { profiles, isLoading, createGestor, updatePermissions, updateStatus, deleteGestor } = useGestaoUsuarios();
     const { setImpersonation } = useCollaboratorContext();
-    const navigate = useNavigate();
+    const router = useRouter();
 
     const [searchTerm, setSearchTerm] = useState('');
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -77,13 +77,16 @@ export function GestaoGestores() {
         setName('');
         setEmail('');
         setPassword('');
+        setConfirmPassword('');
+        setShowPassword(false);
+        setShowConfirmPassword(false);
         setRole('gestor');
         setDialogOpen(true);
     };
 
     const handleOpenEdit = (gestor: Gestor) => {
         setEditingGestor(gestor);
-        setRole(gestor.role as any || 'gestor');
+        setRole((gestor.role as 'admin' | 'gestor' | 'colaborador') || 'gestor');
         setPermissions({
             can_access_dashboard: gestor.can_access_dashboard,
             can_access_estoque: gestor.can_access_estoque,
@@ -251,7 +254,7 @@ export function GestaoGestores() {
                                             onClick={() => {
                                                 setImpersonation(gestor.id);
                                                 toast.success(`Visualizando como ${gestor.full_name}`);
-                                                navigate('/dashboard');
+                                                router.push('/dashboard');
                                             }}
                                         >
                                             <Users className="h-3 w-3 mr-1" /> Ver Dados

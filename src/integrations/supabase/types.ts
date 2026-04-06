@@ -472,6 +472,9 @@ export type Database = {
           role: Database["public"]["Enums"]["business_role"]
           status: string | null
           status_pagamento: boolean
+          trial_start_date: string | null
+          subscription_end_date: string | null
+          subscription_plan: string | null
           updated_at: string
           pin_hash: string | null
           can_access_dashboard: boolean
@@ -484,6 +487,8 @@ export type Database = {
           can_access_produtos_venda: boolean
           can_access_financeiro: boolean
           can_access_relatorios: boolean
+          google_access_token: string | null
+          google_refresh_token: string | null
         }
         Insert: {
           created_at?: string
@@ -494,6 +499,9 @@ export type Database = {
           role?: Database["public"]["Enums"]["business_role"]
           status?: string | null
           status_pagamento?: boolean
+          trial_start_date?: string | null
+          subscription_end_date?: string | null
+          subscription_plan?: string | null
           updated_at?: string
           pin_hash?: string | null
           can_access_dashboard?: boolean
@@ -506,6 +514,8 @@ export type Database = {
           can_access_produtos_venda?: boolean
           can_access_financeiro?: boolean
           can_access_relatorios?: boolean
+          google_access_token?: string | null
+          google_refresh_token?: string | null
         }
         Update: {
           created_at?: string
@@ -516,6 +526,9 @@ export type Database = {
           role?: Database["public"]["Enums"]["business_role"]
           status?: string | null
           status_pagamento?: boolean
+          trial_start_date?: string | null
+          subscription_end_date?: string | null
+          subscription_plan?: string | null
           updated_at?: string
           pin_hash?: string | null
           can_access_dashboard?: boolean
@@ -528,6 +541,8 @@ export type Database = {
           can_access_produtos_venda?: boolean
           can_access_financeiro?: boolean
           can_access_relatorios?: boolean
+          google_access_token?: string | null
+          google_refresh_token?: string | null
         }
         Relationships: [
           {

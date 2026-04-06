@@ -1,8 +1,6 @@
 {
-    "rewrites": [
-        {
-            "source": "/((?!assets/|favicon.ico|sw.js|manifest.webmanifest|api/).*)",
-            "destination": "/index.html"
-        }
-    ]
+    "buildCommand": "next build",
+    "framework": "nextjs",
+    "installCommand": "npm install",
+    "outputDirectory": ".next"
 }

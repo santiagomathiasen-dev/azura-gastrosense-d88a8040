@@ -8,6 +8,62 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// ══════════════════════════════════════════════════════════════════
+// GEMINI — chamada com retry automático + fallback de modelo
+// ══════════════════════════════════════════════════════════════════
+const GEMINI_MODELS: [string, string][] = [
+  ["gemini-1.5-flash", "v1"],
+  ["gemini-2.5-flash", "v1"],
+  ["gemini-flash-latest", "v1"],
+];
+
+async function callGemini(apiKey: string, geminiBody: unknown): Promise<any> {
+  let lastErrorDetails = "";
+
+  for (const [model, apiVersion] of GEMINI_MODELS) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      console.log(`[Gemini] Tentando model=${model} api=${apiVersion} attempt=${attempt}`);
+
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(geminiBody),
+        }
+      );
+
+      if (res.ok) {
+        const json = await res.json();
+        console.log(`[Gemini OK] model=${model} attempt=${attempt}`);
+        return json;
+      }
+
+      let errBody: any = {};
+      try { errBody = await res.clone().json(); } catch (_) {
+        try { errBody = { raw: await res.text() }; } catch (_2) { }
+      }
+      const errMsg = errBody?.error?.message ?? JSON.stringify(errBody);
+      lastErrorDetails = `[${model}/${apiVersion}] HTTP ${res.status}: ${errMsg}`;
+      console.error("ERRO REAL DO GEMINI:", lastErrorDetails);
+
+      if (res.status === 429) {
+        let waitMs = (attempt + 1) * 15000;
+        const delay = errBody?.error?.details?.find((d: any) => d.retryDelay)?.retryDelay;
+        if (delay) waitMs = (parseInt(delay) + 3) * 1000;
+        console.warn(`[Gemini 429] model=${model} aguardando ${waitMs}ms (tentativa ${attempt + 1})`);
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+      break;
+    }
+  }
+
+  const finalErr: any = new Error("Todos os modelos Gemini falharam.");
+  finalErr.details = lastErrorDetails;
+  throw finalErr;
+}
+
 serve(async (req: any) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -35,7 +91,7 @@ serve(async (req: any) => {
       contents: [
         {
           parts: [
-            { text: `${systemPrompt}\n\nTexto para analisar:\n${text}` },
+            { text: `Extração direta (JSON). Apenas palavras/dados. Sem conversa.\n\nInstrução: ${systemPrompt}\n\nTexto: ${text}` },
           ],
         },
       ],
@@ -45,37 +101,19 @@ serve(async (req: any) => {
       },
     };
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(geminiBody),
-      }
-    );
+    // ── Chamar Gemini ──────────────────────────────────────────────
+    const aiData = await callGemini(GEMINI_API_KEY, geminiBody);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Gemini error:", response.status, errorText);
+    const assistantMessage: string = aiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    const finishReason: string = aiData?.candidates?.[0]?.finishReason ?? "UNKNOWN";
 
-      let errorMessage = "Erro ao processar com Gemini";
-      try {
-        const errorJson = JSON.parse(errorText);
-        errorMessage = errorJson.error?.message || errorMessage;
-      } catch (e) { }
-
+    if (!assistantMessage) {
+      console.error(`[process-voice-text] Gemini candidates vazios. finishReason=${finishReason}`);
       return new Response(
-        JSON.stringify({
-          error: errorMessage,
-          status: response.status,
-          details: errorText
-        }),
+        JSON.stringify({ error: `IA não retornou dados (finishReason: ${finishReason}).`, ingredients: [] }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    const aiResponse = await response.json();
-    const assistantMessage = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
 
     // Extract JSON array from the response with cleaning and recovery
     let ingredients: any[] = [];

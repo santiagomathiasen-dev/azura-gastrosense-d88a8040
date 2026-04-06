@@ -1,16 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
-    DialogFooter
+    DialogFooter,
+    DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Trash2, Plus, Calendar, Package, Hash, Save } from 'lucide-react';
+import { Trash2, Plus, Calendar, Package, Hash } from 'lucide-react';
 import { useExpiryDates, parseSafeDate } from '@/hooks/useExpiryDates';
 import { toast } from 'sonner';
 
@@ -38,16 +38,20 @@ export function BatchManagementDialog({
             return;
         }
 
-        await addExpiryDate.mutateAsync({
-            stock_item_id: stockItemId,
-            expiry_date: newDate,
-            batch_name: newBatch || undefined,
-            quantity: newQty ? parseFloat(newQty) : 0,
-        });
+        try {
+            await addExpiryDate.mutateAsync({
+                stock_item_id: stockItemId,
+                expiry_date: newDate,
+                batch_name: newBatch || undefined,
+                quantity: newQty ? parseFloat(newQty) : 0,
+            });
 
-        setNewDate('');
-        setNewBatch('');
-        setNewQty('');
+            setNewDate('');
+            setNewBatch('');
+            setNewQty('');
+        } catch (error: any) {
+            toast.error(`Erro ao adicionar lote: ${error?.message ?? 'Tente novamente'}`);
+        }
     };
 
     return (
@@ -57,7 +61,8 @@ export function BatchManagementDialog({
                     <DialogTitle className="flex items-center gap-2">
                         Gerenciar Lotes: {stockItemName}
                     </DialogTitle>
-                </DialogHeader>
+                <DialogDescription className="sr-only">Detalhes do diálogo</DialogDescription>
+</DialogHeader>
 
                 <div className="flex-1 overflow-y-auto space-y-4 py-4 pr-2">
                     {/* Add New Batch Form - Compact Horizontal */}

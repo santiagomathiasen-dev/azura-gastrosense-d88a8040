@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
+  <NFe>
+    <infNFe versao="4.00" Id="NFe35230300000000000000550010000001231231231234">
+      <ide>
+        <cUF>35</cUF>
+        <natOp>VENDA</natOp>
+        <mod>55</mod>
+        <serie>1</serie>
+        <nNF>123456</nNF>
+        <dhEmi>2026-03-19T10:00:00-03:00</dhEmi>
+        <tpNF>1</tpNF>
+      </ide>
+      <emit>
+        <CNPJ>12345678000199</CNPJ>
+        <xNome>FORNECEDOR DE TESTE LTDA</xNome>
+        <xFant>TESTE FOODS</xFant>
+      </emit>
+      <det nItem="1">
+        <prod>
+          <cProd>001</cProd>
+          <xProd>ALFACE CRESPA INTEGRAL</xProd>
+          <uCom>UN</uCom>
+          <qCom>10.0000</qCom>
+          <vUnCom>2.5000</vUnCom>
+          <vProd>25.00</vProd>
+        </prod>
+      </det>
+      <det nItem="2">
+        <prod>
+          <cProd>002</cProd>
+          <xProd>TOMATE ITALIANO</xProd>
+          <uCom>KG</uCom>
+          <qCom>5.0000</qCom>
+          <vUnCom>8.0000</vUnCom>
+          <vProd>40.00</vProd>
+        </prod>
+      </det>
+      <total>
+        <ICMSTot>
+          <vNF>65.00</vNF>
+        </ICMSTot>
+      </total>
+    </infNFe>
+  </NFe>
+</nfeProc>

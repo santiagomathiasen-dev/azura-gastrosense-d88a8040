@@ -37,7 +37,7 @@ export function useProducedInputsStock() {
     queryFn: async () => {
       if (!user?.id && !ownerId) return [];
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('produced_inputs_stock')
         .select(`
           *,
@@ -49,6 +49,8 @@ export function useProducedInputsStock() {
       return data as ProducedInputWithSheet[];
     },
     enabled: (!!user?.id || !!ownerId) && !isOwnerLoading,
+    staleTime: 30_000,
+    gcTime: 5 * 60 * 1000,
   });
 
   const createProducedInput = useMutation({
@@ -56,7 +58,7 @@ export function useProducedInputsStock() {
       if (isOwnerLoading) throw new Error('Carregando dados do usuário...');
       if (!ownerId) throw new Error('Usuário não autenticado');
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('produced_inputs_stock')
         .insert({ ...input, user_id: ownerId })
         .select()
@@ -76,7 +78,7 @@ export function useProducedInputsStock() {
 
   const updateProducedInput = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<ProducedInputStock> & { id: string }) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('produced_inputs_stock')
         .update(updates)
         .eq('id', id)
@@ -97,7 +99,7 @@ export function useProducedInputsStock() {
 
   const deleteProducedInput = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('produced_inputs_stock')
         .delete()
         .eq('id', id);
@@ -127,14 +129,14 @@ export function useProducedInputsStock() {
 
       if (newQuantity === 0) {
         // Delete if fully consumed
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('produced_inputs_stock')
           .delete()
           .eq('id', id);
         if (error) throw error;
       } else {
         // Update remaining quantity
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('produced_inputs_stock')
           .update({ quantity: newQuantity })
           .eq('id', id);
