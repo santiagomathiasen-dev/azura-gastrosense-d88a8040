@@ -54,7 +54,9 @@ const navItems = [
   { to: '/relatorios', icon: BarChart3, label: 'Relatórios', permission: 'can_access_relatorios' },
   { to: '/financeiro', icon: Calculator, label: 'Financeiro', permission: 'can_access_financeiro' },
   { to: '/assinatura', icon: CreditCard, label: 'Assinatura', permission: null },
+  { to: '/colaboradores', icon: UserCog, label: 'Colaboradores', permission: null, managementOnly: true },
   { to: '/cadastros', icon: ShieldCheck, label: 'Cadastros', permission: null, managementOnly: true },
+  { to: '/gestores', icon: Store, label: 'Gestores', permission: null, adminOnly: true },
 ];
 
 interface SidebarProps {
@@ -92,7 +94,9 @@ export function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
     // While profile is loading show nothing to avoid flashing management items
     if (!profile) return false;
 
-    // Management-only items (e.g. Cadastros) require admin or gestor role
+    // Admin-only items (e.g. Gestores) require admin/owner role
+    if ((item as any).adminOnly) return false;
+    // Management-only items (e.g. Cadastros, Colaboradores) require admin or gestor role
     if ((item as any).managementOnly) return false;
 
     // Colaboradores only see what they explicitly have permission for

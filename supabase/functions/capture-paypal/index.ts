@@ -83,7 +83,7 @@ Deno.serve(async (req: Request) => {
     const { error: updateError } = await supabase
       .from('profiles')
       .update({
-        plan: planId,
+        subscription_plan: planId,
         status: 'ativo',
         status_pagamento: true,
         subscription_end_date: newExpiryDate.toISOString(),

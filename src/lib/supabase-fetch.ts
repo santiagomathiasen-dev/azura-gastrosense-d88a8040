@@ -39,22 +39,40 @@ export async function supabaseFetch(
 
     if (!headers.has('Authorization')) {
         try {
-            // Usa o cliente Supabase real para garantir que pegamos o token válido
             const { supabase } = await import('@/integrations/supabase/client');
-            const { data: { session } } = await supabase.auth.getSession();
 
-            if (session?.access_token) {
-                headers.set('Authorization', `Bearer ${session.access_token}`);
+            // Timeout de 5s para auth — evita travar o fetch inteiro
+            const authToken = await Promise.race([
+                (async () => {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (session?.access_token) return session.access_token;
+
+                    // Session vazia — tenta refresh
+                    const { data: refreshData } = await supabase.auth.refreshSession();
+                    return refreshData?.session?.access_token ?? null;
+                })(),
+                new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+            ]);
+
+            if (authToken) {
+                headers.set('Authorization', `Bearer ${authToken}`);
+            } else {
+                const method = (options.method || 'GET').toUpperCase();
+                if (method !== 'GET') {
+                    throw new Error('Sessão expirada. Faça login novamente.');
+                }
+                // GET sem auth usa apenas apikey (anon access via RLS)
             }
-        } catch (e) {
-            console.warn("Supabase Fetch: Could not extract auth token via getSession", e);
+        } catch (e: any) {
+            if (e?.message?.includes('Sessão expirada')) throw e;
+            console.warn("Supabase Fetch: Could not extract auth token", e);
         }
     }
 
     // Abort controller: use caller's signal if provided, else create one with timeout
     const { timeoutMs = 60_000, signal: callerSignal, ...fetchOptions } = options;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort('timeout'), timeoutMs);
 
     // If caller passed a signal, abort ours when theirs fires
     const onCallerAbort = () => controller.abort();
@@ -90,9 +108,13 @@ export async function supabaseFetch(
         }
     } catch (error: any) {
         if (error?.name === 'AbortError') {
-            throw new Error(`Supabase Fetch: timeout após ${timeoutMs / 1000}s — ${url}`);
+            throw new Error(`Conexão expirou após ${timeoutMs / 1000}s. Verifique sua internet e tente novamente.`);
         }
-        console.error("Supabase Fetch: Network or Parse error", error);
+        // Re-throw auth errors with clear message
+        if (error?.status === 401 || error?.status === 403) {
+            throw new Error('Sem permissão. Verifique se está logado corretamente.');
+        }
+        console.error("Supabase Fetch error:", error);
         throw error;
     } finally {
         clearTimeout(timer);

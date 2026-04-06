@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(node -e \"const p = require\\(''./node_modules/@google/generative-ai/package.json''\\); console.log\\(p.version\\)\")",
-      "Bash(node -e \"const {GoogleGenerativeAI} = require\\(''@google/generative-ai''\\); const g = new GoogleGenerativeAI\\(''test'', {apiVersion:''v1''}\\); console.log\\(''apiVersion ok''\\)\")"
+      "Bash(node -e \"const {GoogleGenerativeAI} = require\\(''@google/generative-ai''\\); const g = new GoogleGenerativeAI\\(''test'', {apiVersion:''v1''}\\); console.log\\(''apiVersion ok''\\)\")",
+      "Bash(ls \"D:\\\\azura-gastrosense\\\\great-shaw\\\\src\\\\app\\\\\\(dashboard\\)\"\")",
+      "Bash(ls \"D:/azura-gastrosense/great-shaw/src/app/\\(dashboard\\)/\")",
+      "Bash(npx next:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }
