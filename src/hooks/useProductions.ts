@@ -82,33 +82,56 @@ export function useProductions() {
 
   // Function to subtract stock when production starts
   // Priority: 1. Production Stock → 2. Central Stock → 3. Generate purchase order
+  // Phase 1: fetch all data. Phase 2: write only after all reads succeed.
   const subtractStockForProduction = async (production: ProductionWithSheet) => {
     if (!ownerId || !production.technical_sheet) return;
 
+    const yieldQty = Number(production.technical_sheet.yield_quantity);
+    if (!yieldQty || yieldQty <= 0) {
+      console.warn('subtractStockForProduction: yield_quantity is 0 or invalid, skipping deduction');
+      return;
+    }
+
     const multiplier = ProductionService.getMultiplier(
       Number(production.planned_quantity),
-      Number(production.technical_sheet.yield_quantity)
+      yieldQty
     );
 
-    const insufficientItems: { name: string; needed: number; available: number; unit: string }[] = [];
+    if (!isFinite(multiplier) || isNaN(multiplier)) {
+      console.warn('subtractStockForProduction: invalid multiplier, skipping deduction', { multiplier });
+      return;
+    }
+
+    // ── PHASE 1: Fetch all data first ──────────────────────────────────────
+    type IngredientPlan = {
+      stockItemId: string;
+      itemData: any;
+      prodStock: any;
+      batches: any[];
+      neededQty: number;
+      plan: ReturnType<typeof ProductionService.planStockDeduction>;
+    };
+
+    const ingredientPlans: IngredientPlan[] = [];
 
     for (const ingredient of production.technical_sheet.ingredients) {
       const stockItemId = ingredient.stock_item_id;
-      const stockResult = await supabaseFetch(`stock_items?id=eq.${stockItemId}&select=waste_factor,current_quantity,name,unit`);
+
+      const [stockResult, prodStockResult, batchesData] = await Promise.all([
+        supabaseFetch(`stock_items?id=eq.${stockItemId}&select=waste_factor,current_quantity,name,unit`),
+        supabaseFetch(`production_stock?stock_item_id=eq.${stockItemId}&select=id,quantity`),
+        supabaseFetch(`item_expiry_dates?stock_item_id=eq.${stockItemId}&quantity=gt.0&order=expiry_date.asc`),
+      ]);
+
       const itemData = Array.isArray(stockResult) ? stockResult[0] : stockResult;
+      const prodStock = Array.isArray(prodStockResult) ? prodStockResult[0] : prodStockResult;
+      const batches = Array.isArray(batchesData) ? batchesData : [];
 
       const neededQty = ProductionService.calculateNeededQuantity(
         Number(ingredient.quantity),
         multiplier,
         Number(itemData?.waste_factor || 0)
       );
-
-      // Fetch dependencies for planning
-      const prodStockResult = await supabaseFetch(`production_stock?stock_item_id=eq.${stockItemId}&select=id,quantity`);
-      const prodStock = Array.isArray(prodStockResult) ? prodStockResult[0] : prodStockResult;
-
-      const batchesData = await supabaseFetch(`item_expiry_dates?stock_item_id=eq.${stockItemId}&quantity=gt.0&order=expiry_date.asc`);
-      const batches = Array.isArray(batchesData) ? batchesData : [];
 
       const plan = ProductionService.planStockDeduction(
         neededQty,
@@ -117,7 +140,13 @@ export function useProductions() {
         batches
       );
 
-      // Execution of the plan
+      ingredientPlans.push({ stockItemId, itemData, prodStock, batches, neededQty, plan });
+    }
+
+    // ── PHASE 2: Execute writes ────────────────────────────────────────────
+    const insufficientItems: { name: string; needed: number; available: number; unit: string }[] = [];
+
+    for (const { stockItemId, itemData, prodStock, batches, neededQty, plan } of ingredientPlans) {
       if (plan.fromProduction > 0 && prodStock) {
         const newProdQty = Number(prodStock.quantity) - plan.fromProduction;
         if (newProdQty <= 0) {
@@ -151,16 +180,18 @@ export function useProductions() {
               method: 'PATCH',
               body: JSON.stringify({ quantity: Number(batch.quantity) - deduction.take })
             });
+          } else {
+            console.warn(`subtractStockForProduction: batch ${deduction.batchId} not found, deduction skipped`);
           }
         }
       }
 
       if (plan.insufficient > 0) {
         insufficientItems.push({
-          name: itemData?.name || ingredient.stock_item?.name || 'Item',
+          name: itemData?.name || 'Item',
           needed: neededQty,
           available: (Number(prodStock?.quantity || 0) + Number(itemData?.current_quantity || 0)),
-          unit: itemData?.unit || ingredient.unit,
+          unit: itemData?.unit || '',
         });
 
         const purchaseData = await supabaseFetch(`purchase_list_items?stock_item_id=eq.${stockItemId}&status=eq.pending&select=id,suggested_quantity`);

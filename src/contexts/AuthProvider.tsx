@@ -23,18 +23,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
         );
 
-        // 2. Check for initial session (and allow hash parsing)
+        // 2. Check for initial session — retry once if first attempt returns null
         const initSession = async () => {
             try {
-                const { data: { session } } = await supabase.auth.getSession();
+                let { data: { session } } = await supabase.auth.getSession();
                 if (!mounted) return;
+
+                // If session is null, try once more after a short delay
+                // (race condition on cold start where cookies aren't parsed yet)
+                if (!session) {
+                    await new Promise(r => setTimeout(r, 300));
+                    if (!mounted) return;
+                    const retry = await supabase.auth.getSession();
+                    session = retry.data.session;
+                }
+
                 if (session) {
                     setSession(session);
                     setUser(session.user);
                 }
             } catch (error: any) {
                 if (error?.name === 'AbortError' || error?.message?.includes('signal is aborted') || error?.message?.includes('AbortError')) {
-                    // Suppress: This is normal in React StrictMode when the hook unmounts quickly
                     console.log("AuthInit: session fetch aborted (React StrictMode effect cleanup).");
                 } else {
                     console.error("AuthInit Error:", error);
@@ -111,7 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (data.session || data.user) {
-            // Profile fallback creation right after signup
+            // Profile creation right after signup
             if (data.user) {
                 const { error: profileError } = await supabase.from('profiles').upsert({
                     id: data.user.id,
@@ -123,6 +132,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 });
                 if (profileError) {
                     console.error("AuthProvider: Profile creation error:", profileError.message);
+                    // Sign the user out so they don't enter the app without a profile
+                    await supabase.auth.signOut();
+                    return { error: 'Erro ao criar perfil. Por favor, tente novamente.' };
                 }
             }
             if (data.session) return { error: undefined };

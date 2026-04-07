@@ -14,13 +14,23 @@ export function CollaboratorProvider({ children }: { children: ReactNode }) {
     const [impersonatedGestorId, setImpersonatedGestorId] = useState<string | null>(null);
 
     useEffect(() => {
-        // 1. Initial check for stored session (backwards compatibility)
+        // 1. Initial check for stored session — validate schema before trusting it
         const collabStored = localStorage.getItem(STORAGE_KEY);
         if (collabStored) {
             try {
                 const parsed = JSON.parse(collabStored);
-                setCollaborator(parsed.collaborator);
-                setGestorId(parsed.gestorId);
+                // Validate minimum required fields to avoid stale/incompatible schema
+                if (
+                    parsed?.collaborator?.id &&
+                    parsed?.collaborator?.auth_user_id &&
+                    typeof parsed?.gestorId === 'string'
+                ) {
+                    setCollaborator(parsed.collaborator);
+                    setGestorId(parsed.gestorId);
+                } else {
+                    console.warn('CollaboratorProvider: stored session failed schema check, clearing');
+                    localStorage.removeItem(STORAGE_KEY);
+                }
             } catch {
                 localStorage.removeItem(STORAGE_KEY);
             }
@@ -78,7 +88,22 @@ export function CollaboratorProvider({ children }: { children: ReactNode }) {
             }
         });
 
-        return () => subscription.unsubscribe();
+        // 4. Sync sign-out across tabs via storage event
+        const handleStorage = (e: StorageEvent) => {
+            if (e.key === STORAGE_KEY && e.newValue === null) {
+                setCollaborator(null);
+                setGestorId(null);
+            }
+            if (e.key === IMPERSONATION_KEY && e.newValue === null) {
+                setImpersonatedGestorId(null);
+            }
+        };
+        window.addEventListener('storage', handleStorage);
+
+        return () => {
+            subscription.unsubscribe();
+            window.removeEventListener('storage', handleStorage);
+        };
     }, []);
 
     const setCollaboratorSession = (collab: Collaborator, gId: string) => {

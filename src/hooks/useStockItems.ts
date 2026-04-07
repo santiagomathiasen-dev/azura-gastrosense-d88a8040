@@ -226,6 +226,22 @@ export function useStockItems() {
         if (error) throw error;
       }
 
+      // Sync to Drive if connected
+      if (isDriveConnected) {
+        try {
+          const stockData = await readModule('stock');
+          const allStockResult = await supabaseFetch(`stock_items?user_id=eq.${ownerId}&select=*&order=name.asc`).catch(() => null);
+          if (allStockResult && Array.isArray(allStockResult)) {
+            await writeModule('stock', {
+              ...stockData,
+              stock_items: allStockResult,
+            });
+          }
+        } catch (syncErr) {
+          console.warn('processInvoiceImport: Drive sync failed (data saved to Supabase):', syncErr);
+        }
+      }
+
       return { success: true };
     },
     onSuccess: () => {

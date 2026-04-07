@@ -5,7 +5,9 @@ import { NextResponse } from 'next/server';
 export async function GET(request: Request) {
     const { searchParams, origin } = new URL(request.url);
     const code = searchParams.get('code');
-    const next = searchParams.get('next') ?? '/dashboard';
+    const rawNext = searchParams.get('next') ?? '/dashboard';
+    // Prevent open redirect: only allow relative paths within the app
+    const next = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/dashboard';
 
     if (!code) {
         return NextResponse.redirect(`${origin}/auth?error=Código de autenticação ausente`);
@@ -62,16 +64,19 @@ export async function GET(request: Request) {
 
     // Persist Google OAuth tokens for Drive API access
     if (providerToken) {
-        try {
-            const tokenUpdate: Record<string, string> = {
-                google_access_token: providerToken,
-            };
-            if (providerRefreshToken) {
-                tokenUpdate.google_refresh_token = providerRefreshToken;
-            }
-            await supabase.from('profiles').update(tokenUpdate).eq('id', user.id);
-        } catch (tokenErr) {
-            console.warn('Auth callback: token save skipped:', tokenErr);
+        const tokenUpdate: Record<string, string> = {
+            google_access_token: providerToken,
+        };
+        if (providerRefreshToken) {
+            tokenUpdate.google_refresh_token = providerRefreshToken;
+        }
+        const { error: tokenErr } = await supabase
+            .from('profiles')
+            .update(tokenUpdate)
+            .eq('id', user.id);
+        if (tokenErr) {
+            // Log but don't block login — user can still use the app via Supabase
+            console.error('Auth callback: failed to save Google tokens:', tokenErr.message);
         }
     }
 

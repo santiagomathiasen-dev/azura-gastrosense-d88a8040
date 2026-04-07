@@ -60,7 +60,11 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
           <p className="text-muted-foreground animate-pulse">Carregando sistema Azura...</p>
           <button
             onClick={() => {
-              localStorage.clear();
+              // Only clear Supabase auth keys, not all localStorage
+              const authKeys = Object.keys(localStorage).filter(k =>
+                k.startsWith('sb-') || k.includes('supabase') || k.includes('auth')
+              );
+              authKeys.forEach(k => localStorage.removeItem(k));
               sessionStorage.clear();
               window.location.href = '/auth';
             }}
@@ -84,9 +88,12 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
             <button onClick={() => window.location.reload()} className="bg-primary text-primary-foreground px-4 py-2 rounded-md">
               Recarregar Sistema
             </button>
-            <button onClick={() => setShowTimeoutMessage(false)} className="text-sm underline">
-              Tentar entrar mesmo assim
-            </button>
+            {/* Only allow bypass if at least auth is resolved (user exists) */}
+            {user && (
+              <button onClick={() => setShowTimeoutMessage(false)} className="text-sm underline">
+                Tentar entrar mesmo assim
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -115,7 +122,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const isAdminRole = (profile?.role as string) === 'admin';
   const isBlocked = profile?.status === 'inativo' && profile?.status_pagamento !== true;
 
-  if (user && !isOwner && !isAdminRole && profile) {
+  if (user && profile) {
     if (isBlocked) {
       return (
         <div className="flex items-center justify-center min-h-[60vh] w-full p-4 text-center">
@@ -130,8 +137,8 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
       );
     }
 
-    // Block access if trial expired or subscription expired
-    if (shouldBlockAccess && pathname !== '/payment-required' && pathname !== '/assinatura') {
+    // Block access if trial expired or subscription expired (owners exempt)
+    if (!isOwner && shouldBlockAccess && pathname !== '/payment-required' && pathname !== '/assinatura') {
       return <Navigate to="/payment-required" replace />;
     }
   }

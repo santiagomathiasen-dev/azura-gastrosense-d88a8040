@@ -64,6 +64,16 @@ export function useExpiryDates(stockItemId?: string) {
         mutationFn: async (newDate: CreateExpiryDate) => {
             if (!ownerId) throw new Error('Usuário não autenticado');
 
+            // Validate expiry_date is a valid YYYY-MM-DD string
+            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+            if (!newDate.expiry_date || !dateRegex.test(newDate.expiry_date)) {
+                throw new Error(`Data de validade inválida: "${newDate.expiry_date}". Use o formato AAAA-MM-DD.`);
+            }
+            const parsedDate = new Date(newDate.expiry_date);
+            if (isNaN(parsedDate.getTime())) {
+                throw new Error(`Data de validade inválida: "${newDate.expiry_date}".`);
+            }
+
             const { data, error } = await supabase
                 .from('item_expiry_dates' as any)
                 .insert({

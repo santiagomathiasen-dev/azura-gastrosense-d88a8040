@@ -17,13 +17,7 @@ export async function POST(req: NextRequest) {
     ({ importId } = await req.json());
     if (!importId) throw new Error('Missing importId');
 
-    // 1. Update status to 'processing'
-    await supabase
-      .from('invoice_imports')
-      .update({ status: 'processing' })
-      .eq('id', importId);
-
-    // 2. Get import data
+    // 1. Verify record exists before changing status
     const { data: importRecord, error: fetchError } = await supabase
       .from('invoice_imports')
       .select('*')
@@ -31,6 +25,12 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (fetchError || !importRecord) throw fetchError || new Error('Record not found');
+
+    // 2. Update status to 'processing' only after confirming record exists
+    await supabase
+      .from('invoice_imports')
+      .update({ status: 'processing' })
+      .eq('id', importId);
 
     // 3. Download file from storage
     const { data: fileData, error: downloadError } = await supabase.storage
@@ -64,10 +64,10 @@ export async function POST(req: NextRequest) {
     console.error('Processing error:', error);
     
     // Attempt to mark as error in database
-    try {
-      if (importId) {
+    if (importId) {
+      try {
         const supabase = await createClient();
-        await supabase
+        const { error: updateErr } = await supabase
           .from('invoice_imports')
           .update({
             status: 'error',
@@ -75,9 +75,10 @@ export async function POST(req: NextRequest) {
             updated_at: new Date().toISOString()
           })
           .eq('id', importId);
+        if (updateErr) console.error('Failed to log error to DB:', updateErr.message);
+      } catch (e: any) {
+        console.error('Failed to log error to DB (exception):', e?.message ?? e);
       }
-    } catch (e) {
-      console.error('Failed to log error to DB:', e);
     }
 
     return NextResponse.json({ error: error.message }, { status: 500 });

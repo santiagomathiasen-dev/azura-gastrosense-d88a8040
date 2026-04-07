@@ -154,17 +154,27 @@ export async function POST(req: NextRequest) {
 
     // 7. Normalização
     const rawIngredients: any[] = Array.isArray(parsed.ingredients) ? parsed.ingredients : [];
+    if (rawIngredients.length === 0 && !extractRecipe) {
+      console.warn('invoices/upload: AI returned no ingredients', { summary: parsed.summary });
+    }
+    const VALID_CATEGORIES = new Set(['laticinios', 'secos_e_graos', 'hortifruti', 'carnes_e_peixes', 'embalagens', 'limpeza', 'outros']);
     const ingredients = rawIngredients
-      .map((ing: any) => ({
-        name: String(ing.nome ?? ing.name ?? '').trim(),
-        quantity: typeof ing.quantidade === 'number' ? ing.quantidade : parseFloat(String(ing.quantidade ?? 1).replace(',', '.')) || 1,
-        unit: String(ing.unidade ?? ing.unit ?? 'unidade').toLowerCase().trim(),
-        price: ing.preco_unitario ?? ing.price ?? null,
-        price_total: ing.preco_total ?? null,
-        category: ing.categoria ?? ing.category ?? 'outros',
-        supplier: parsed.fornecedor ?? null,
-      }))
-      .filter((i: any) => i.name);
+      .map((ing: any) => {
+        const name = String(ing.nome ?? ing.name ?? '').trim();
+        const rawQty = ing.quantidade ?? ing.quantity ?? 1;
+        const quantity = typeof rawQty === 'number' ? rawQty : parseFloat(String(rawQty).replace(',', '.')) || 1;
+        const rawCat = String(ing.categoria ?? ing.category ?? 'outros').toLowerCase().trim();
+        return {
+          name,
+          quantity,
+          unit: String(ing.unidade ?? ing.unit ?? 'unidade').toLowerCase().trim(),
+          price: typeof ing.preco_unitario === 'number' ? ing.preco_unitario : null,
+          price_total: typeof ing.preco_total === 'number' ? ing.preco_total : null,
+          category: VALID_CATEGORIES.has(rawCat) ? rawCat : 'outros',
+          supplier: parsed.fornecedor ?? null,
+        };
+      })
+      .filter((i: any) => i.name.length > 0);
 
     const responseData: any = {
       ingredients,
@@ -208,6 +218,7 @@ export async function POST(req: NextRequest) {
         responseData.importId = importRecord?.id ?? null;
       } catch (dbErr: any) {
         console.warn('Alerta: Dados extraídos mas não salvos no histórico:', dbErr.message);
+        responseData.importSaved = false;
       }
     }
 

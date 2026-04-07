@@ -114,7 +114,8 @@ export async function POST(request: NextRequest) {
       }
 
       case 'list': {
-        const files = await listFiles(accessToken, folderId);
+        const filesRaw = await listFiles(accessToken, folderId);
+        const files = Array.isArray(filesRaw) ? filesRaw : [];
         return NextResponse.json({ files });
       }
 

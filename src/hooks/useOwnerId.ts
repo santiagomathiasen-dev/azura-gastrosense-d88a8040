@@ -37,9 +37,11 @@ export function useOwnerId() {
       try {
         const data = await supabaseFetch('rpc/get_owner_id', { method: 'POST' });
         return data as string;
-      } catch (error) {
-        console.error('Error getting owner_id via fetch:', error);
-        return user.id; // Fallback to user's own ID
+      } catch (error: any) {
+        // Fallback to user's own ID — safe for gestors (their owner_id IS their user_id)
+        // Collaborators never reach here (handled above), so this fallback is correct
+        console.warn('useOwnerId: rpc/get_owner_id failed, using user.id as fallback:', error?.message ?? error);
+        return user.id;
       }
     },
     enabled: !!user?.id || isCollaboratorMode || isImpersonating,

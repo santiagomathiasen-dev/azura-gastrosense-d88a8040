@@ -41,21 +41,32 @@ export async function supabaseFetch(
         try {
             const { supabase } = await import('@/integrations/supabase/client');
 
-            // Timeout de 5s para auth — evita travar o fetch inteiro
-            const authToken = await Promise.race([
-                (async () => {
-                    const { data: { session } } = await supabase.auth.getSession();
-                    if (session?.access_token) return session.access_token;
-
-                    // Session vazia — tenta refresh
-                    const { data: refreshData } = await supabase.auth.refreshSession();
-                    return refreshData?.session?.access_token ?? null;
-                })(),
-                new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+            // Step 1: Try getSession() quickly from local storage (should be near-instant)
+            let token: string | null = null;
+            const sessionResult = await Promise.race([
+                supabase.auth.getSession(),
+                new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
             ]);
 
-            if (authToken) {
-                headers.set('Authorization', `Bearer ${authToken}`);
+            if (sessionResult && (sessionResult as any).data?.session?.access_token) {
+                token = (sessionResult as any).data.session.access_token;
+            } else {
+                // Session not in storage or timed out — try refreshing with a longer window
+                try {
+                    const refreshResult = await Promise.race([
+                        supabase.auth.refreshSession(),
+                        new Promise<null>((resolve) => setTimeout(() => resolve(null), 12000)),
+                    ]);
+                    if (refreshResult && (refreshResult as any).data?.session?.access_token) {
+                        token = (refreshResult as any).data.session.access_token;
+                    }
+                } catch (_) {
+                    // refresh failed silently
+                }
+            }
+
+            if (token) {
+                headers.set('Authorization', `Bearer ${token}`);
             } else {
                 const method = (options.method || 'GET').toUpperCase();
                 if (method !== 'GET') {
@@ -89,10 +100,22 @@ export async function supabaseFetch(
             const errorText = await response.text();
             console.error(`Supabase Fetch Error [${response.status}] [${url}]:`, errorText);
 
-            // Criar erro enriquecido
-            const error = new Error(errorText || `Erro na conexão: ${response.status}`);
+            let friendlyMessage: string;
+            switch (response.status) {
+                case 400: friendlyMessage = `Requisição inválida: ${errorText || 'verifique os dados enviados'}`; break;
+                case 401: friendlyMessage = 'Sessão expirada. Faça login novamente.'; break;
+                case 403: friendlyMessage = 'Sem permissão para realizar esta operação.'; break;
+                case 404: friendlyMessage = 'Recurso não encontrado.'; break;
+                case 409: friendlyMessage = `Conflito de dados: ${errorText || 'registro já existe'}`; break;
+                case 422: friendlyMessage = `Dados inválidos: ${errorText || 'verifique os campos obrigatórios'}`; break;
+                case 500: case 502: case 503: friendlyMessage = 'Servidor indisponível. Tente novamente em instantes.'; break;
+                default:  friendlyMessage = errorText || `Erro na conexão (${response.status})`;
+            }
+
+            const error = new Error(friendlyMessage);
             (error as any).status = response.status;
             (error as any).url = url;
+            (error as any).raw = errorText;
             throw error;
         }
 
@@ -107,13 +130,14 @@ export async function supabaseFetch(
             return text;
         }
     } catch (error: any) {
-        if (error?.name === 'AbortError') {
-            throw new Error(`Conexão expirou após ${timeoutMs / 1000}s. Verifique sua internet e tente novamente.`);
+        if (error?.name === 'AbortError' || error?.message === 'timeout') {
+            const timeoutErr = new Error(`Conexão expirou após ${timeoutMs / 1000}s. Verifique sua internet e tente novamente.`);
+            (timeoutErr as any).cause = error;
+            (timeoutErr as any).url = url;
+            throw timeoutErr;
         }
-        // Re-throw auth errors with clear message
-        if (error?.status === 401 || error?.status === 403) {
-            throw new Error('Sem permissão. Verifique se está logado corretamente.');
-        }
+        // Already enriched errors (status set above) — re-throw directly
+        if (error?.status) throw error;
         console.error("Supabase Fetch error:", error);
         throw error;
     } finally {

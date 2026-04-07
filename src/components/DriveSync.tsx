@@ -9,7 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabaseFetch } from '@/lib/supabase-fetch';
 import { toast } from 'sonner';
 import {
-  Cloud, CloudOff, RefreshCw, Upload, Download, Loader2, CheckCircle2, AlertTriangle, HardDrive
+  Cloud, CloudOff, RefreshCw, Upload, Download, Loader2, CheckCircle2, AlertTriangle, HardDrive, Link
 } from 'lucide-react';
 
 /**
@@ -18,10 +18,27 @@ import {
  * Displayed in the Dashboard or Settings page.
  */
 export function DriveSync() {
-  const { user } = useAuth();
+  const { user, loginWithGoogle } = useAuth();
   const { isDriveConnected, isLoading: driveLoading, isSaving, data, refresh, writeModule } = useDriveData();
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+
+  const handleConnectGoogle = async () => {
+    setConnecting(true);
+    try {
+      const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/dashboard';
+      const { error } = await loginWithGoogle(currentPath);
+      if (error) {
+        toast.error('Erro ao conectar Google: ' + error);
+        setConnecting(false);
+      }
+      // On success, the page will redirect to Google OAuth
+    } catch (err: any) {
+      toast.error('Erro ao conectar Google Drive');
+      setConnecting(false);
+    }
+  };
 
   const handleExportToDrive = async () => {
     if (!user?.id) return;
@@ -214,9 +231,25 @@ export function DriveSync() {
         )}
 
         {!isDriveConnected && !driveLoading && (
-          <p className="text-xs text-muted-foreground">
-            Para conectar, faca login com Google na pagina de autenticacao.
-          </p>
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Conecte sua conta Google para salvar dados no Drive.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full text-xs"
+              onClick={handleConnectGoogle}
+              disabled={connecting}
+            >
+              {connecting ? (
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              ) : (
+                <Link className="h-3 w-3 mr-1" />
+              )}
+              Conectar Google Drive
+            </Button>
+          </div>
         )}
       </CardContent>
     </Card>

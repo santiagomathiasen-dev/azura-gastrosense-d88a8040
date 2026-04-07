@@ -48,21 +48,26 @@ export function usePreparationAlerts() {
 
             const nameMap = new Map<string, string>();
 
-            const [stockRes, sheetRes, productRes] = await Promise.all([
+            const [stockRes, sheetRes, productRes] = await Promise.allSettled([
                 ids.stock_item.length
                     ? (supabase as any).from('stock_items').select('id, name').in('id', ids.stock_item)
-                    : { data: [] },
+                    : Promise.resolve({ data: [] }),
                 ids.finished_production.length
                     ? (supabase as any).from('technical_sheets').select('id, name').in('id', ids.finished_production)
-                    : { data: [] },
+                    : Promise.resolve({ data: [] }),
                 ids.sale_product.length
                     ? (supabase as any).from('sale_products').select('id, name').in('id', ids.sale_product)
-                    : { data: [] },
+                    : Promise.resolve({ data: [] }),
             ]);
 
-            for (const item of (stockRes.data ?? [])) nameMap.set(item.id, item.name);
-            for (const item of (sheetRes.data ?? [])) nameMap.set(item.id, item.name);
-            for (const item of (productRes.data ?? [])) nameMap.set(item.id, item.name);
+            if (stockRes.status === 'fulfilled') for (const item of (stockRes.value.data ?? [])) nameMap.set(item.id, item.name);
+            else console.warn('usePreparationAlerts: stock_items fetch failed', stockRes.reason);
+
+            if (sheetRes.status === 'fulfilled') for (const item of (sheetRes.value.data ?? [])) nameMap.set(item.id, item.name);
+            else console.warn('usePreparationAlerts: technical_sheets fetch failed', sheetRes.reason);
+
+            if (productRes.status === 'fulfilled') for (const item of (productRes.value.data ?? [])) nameMap.set(item.id, item.name);
+            else console.warn('usePreparationAlerts: sale_products fetch failed', productRes.reason);
 
             return data.map((alert: any) => ({
                 ...alert,

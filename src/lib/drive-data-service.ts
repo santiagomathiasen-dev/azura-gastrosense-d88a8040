@@ -89,10 +89,13 @@ async function callDriveApi(options: DriveApiOptions): Promise<any> {
   return res.json();
 }
 
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 export class DriveDataService {
   private folderId: string | null = null;
   private fileIds: Partial<Record<ModuleName, string>> = {};
   private cache: Partial<DriveModuleMap> = {};
+  private cacheTimestamps: Partial<Record<ModuleName, number>> = {};
   private initialized = false;
 
   /** Initialize: get or create app folder and discover existing files */
@@ -126,8 +129,9 @@ export class DriveDataService {
   async readModule<T extends ModuleName>(module: T): Promise<DriveModuleMap[T]> {
     await this.init();
 
-    // Return from cache if available
-    if (this.cache[module]) {
+    // Return from cache if within TTL
+    const cachedAt = this.cacheTimestamps[module];
+    if (this.cache[module] && cachedAt && Date.now() - cachedAt < CACHE_TTL_MS) {
       return this.cache[module] as DriveModuleMap[T];
     }
 
@@ -142,9 +146,15 @@ export class DriveDataService {
     try {
       const data = await callDriveApi({ action: 'read', fileId });
       this.cache[module] = data;
+      this.cacheTimestamps[module] = Date.now();
       return data as DriveModuleMap[T];
     } catch (error) {
       console.error(`DriveDataService: read ${module} failed`, error);
+      // Return stale cache if available, otherwise defaults
+      if (this.cache[module]) {
+        console.warn(`DriveDataService: returning stale cache for ${module}`);
+        return this.cache[module] as DriveModuleMap[T];
+      }
       return { ...DEFAULT_DATA[module] } as DriveModuleMap[T];
     }
   }
@@ -169,8 +179,9 @@ export class DriveDataService {
         this.fileIds[module] = result.id;
       }
 
-      // Update cache
+      // Update cache with timestamp
       this.cache[module] = data;
+      this.cacheTimestamps[module] = Date.now();
     } catch (error) {
       console.error(`DriveDataService: write ${module} failed`, error);
       throw error;
@@ -256,10 +267,19 @@ export class DriveDataService {
     );
 
     const fullData = { ...DEFAULT_DATA };
+    const failedModules: string[] = [];
     for (const result of results) {
       if (result.status === 'fulfilled') {
         (fullData as any)[result.value.module] = result.value.data;
+      } else {
+        // result.reason doesn't have module name — match by index
+        const module = modules[results.indexOf(result)];
+        failedModules.push(module);
+        console.error(`DriveDataService: loadAll failed for module "${module}":`, result.reason);
       }
+    }
+    if (failedModules.length > 0) {
+      console.warn(`DriveDataService: loadAll completed with ${failedModules.length} failed module(s): ${failedModules.join(', ')}. Using defaults for those.`);
     }
 
     return fullData;
@@ -268,6 +288,7 @@ export class DriveDataService {
   /** Clear cache (force re-read from Drive on next access) */
   clearCache(): void {
     this.cache = {};
+    this.cacheTimestamps = {};
   }
 
   /** Check if Drive is connected */
