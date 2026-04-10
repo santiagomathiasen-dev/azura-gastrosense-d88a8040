@@ -1,5 +1,5 @@
 import { BaseApiService } from './BaseApiService';
-import { TechnicalSheet, TechnicalSheetInsert, TechnicalSheetUpdate } from '@/modules/technical-sheets/types';
+import { TechnicalSheet, TechnicalSheetInsert, TechnicalSheetUpdate } from '@azura/ops';
 
 export class TechnicalSheetApi extends BaseApiService {
     protected get endpoint(): string {

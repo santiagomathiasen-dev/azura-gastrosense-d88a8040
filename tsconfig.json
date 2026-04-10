@@ -4,6 +4,18 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@azura/ops": [
+        "./packages/azura-ops/src/index.ts"
+      ],
+      "@azura/stock": [
+        "./packages/azura-stock/src/index.ts"
+      ],
+      "@azura/purchases": [
+        "./packages/azura-purchases/src/index.ts"
+      ],
+      "@azura/financial": [
+        "./packages/azura-financial/src/index.ts"
       ]
     },
     "noImplicitAny": false,

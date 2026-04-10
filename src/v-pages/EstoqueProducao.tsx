@@ -25,7 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useStockItems } from '@/hooks/useStockItems';
 import { CATEGORY_LABELS, UNIT_LABELS } from '@/hooks/useStockItems';
-import { StockService } from '@/modules/stock/services/StockService';
+import { StockService } from '@azura/stock';
 import { useEarliestExpiryMap, parseSafeDate } from '@/hooks/useExpiryDates';
 import { useProductionStock } from '@/hooks/useProductionStock';
 import { useStockRequests } from '@/hooks/useStockRequests';

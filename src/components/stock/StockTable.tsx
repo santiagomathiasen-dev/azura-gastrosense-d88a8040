@@ -16,7 +16,7 @@ import type {
   StockCategory,
 } from '@/hooks/useStockItems';
 import { CATEGORY_LABELS, UNIT_LABELS } from '@/hooks/useStockItems';
-import { StockService } from '@/modules/stock/services/StockService';
+import { StockService } from '@azura/stock';
 import { parseSafeDate } from '@/hooks/useExpiryDates';
 import { getNow } from '@/lib/utils';
 import {

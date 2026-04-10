@@ -10,7 +10,8 @@
       "Bash(gh pr:*)",
       "Bash(where gh:*)",
       "mcp__76447964-1299-4df6-816f-3c51d3102c76__deploy_to_vercel",
-      "Bash(ls D:/azura-gastrosense/great-shaw/src/app/\\\\\\(dashboard\\\\\\)/gestores/)"
+      "Bash(ls D:/azura-gastrosense/great-shaw/src/app/\\\\\\(dashboard\\\\\\)/gestores/)",
+      "Bash(echo \"EXIT:$?\")"
     ]
   }
 }

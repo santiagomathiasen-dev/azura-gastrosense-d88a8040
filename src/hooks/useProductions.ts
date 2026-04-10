@@ -7,15 +7,7 @@ import { supabaseFetch } from '@/lib/supabase-fetch';
 import { useDriveData } from '@/contexts/DriveDataContext';
 
 import { productionApi } from '@/api/ProductionApi';
-import { ProductionService } from '../modules/production/services/ProductionService';
-import type {
-  Production,
-  ProductionInsert,
-  ProductionUpdate,
-  ProductionStatus,
-  ProductionPeriod,
-  ProductionWithSheet
-} from '../modules/production/types';
+import { ProductionService, type Production, type ProductionInsert, type ProductionUpdate, type ProductionStatus, type ProductionPeriod, type ProductionWithSheet } from '@azura/ops';
 
 export type { Production, ProductionInsert, ProductionUpdate, ProductionStatus, ProductionPeriod, ProductionWithSheet };
 

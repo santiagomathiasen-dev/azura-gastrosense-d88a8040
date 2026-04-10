@@ -7,12 +7,7 @@ import { useDriveCollection } from './useDriveModule';
 import { useDriveData } from '@/contexts/DriveDataContext';
 
 import { technicalSheetApi } from '@/api/TechnicalSheetApi';
-import type {
-  TechnicalSheet,
-  TechnicalSheetInsert,
-  TechnicalSheetUpdate,
-  TechnicalSheetIngredient
-} from '../modules/technical-sheets/types';
+import type { TechnicalSheet, TechnicalSheetInsert, TechnicalSheetUpdate, TechnicalSheetIngredient } from '@azura/ops';
 
 type ProductionType = 'insumo' | 'final';
 

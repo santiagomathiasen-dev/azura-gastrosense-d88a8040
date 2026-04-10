@@ -1,5 +1,5 @@
 import { BaseApiService } from './BaseApiService';
-import { StockItem, StockItemInsert, StockItemUpdate } from '@/modules/stock/types';
+import { StockItem, StockItemInsert, StockItemUpdate } from '@azura/stock';
 
 const VALID_CATEGORIES = new Set(['laticinios', 'secos_e_graos', 'hortifruti', 'carnes_e_peixes', 'embalagens', 'limpeza', 'outros']);
 const VALID_UNITS = new Set(['kg', 'g', 'L', 'ml', 'unidade', 'caixa', 'dz']);

@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -78,7 +82,11 @@
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.9",
     "vite-plugin-pwa": "^1.2.0",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "@azura/ops": "*",
+    "@azura/stock": "*",
+    "@azura/purchases": "*",
+    "@azura/financial": "*"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",

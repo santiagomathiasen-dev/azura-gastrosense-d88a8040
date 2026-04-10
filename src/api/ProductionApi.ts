@@ -1,5 +1,5 @@
 import { BaseApiService } from './BaseApiService';
-import { Production, ProductionInsert, ProductionUpdate, ProductionWithSheet } from '@/modules/production/types';
+import { Production, ProductionInsert, ProductionUpdate, ProductionWithSheet } from '@azura/ops';
 
 export class ProductionApi extends BaseApiService {
     protected get endpoint(): string {

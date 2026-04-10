@@ -1,4 +1,3 @@
-import type { Database } from '@/integrations/supabase/types';
 import { z } from 'zod';
 
 export const StockCategorySchema = z.enum([
@@ -31,6 +30,7 @@ export const StockItemSchema = z.object({
     category: StockCategorySchema,
     unit_price: z.number().nullable().optional(),
     supplier_id: z.string().uuid().nullable().optional(),
+    waste_factor: z.number().min(0).nullable().optional(),
     created_at: z.string().optional(),
     updated_at: z.string().optional(),
     is_expired: z.boolean().optional(),
@@ -55,9 +55,7 @@ export interface StockStatus {
 }
 
 export interface StockItemWithSupplier extends StockItem {
-    suppliers?: {
-        name: string;
-    } | null;
+    suppliers?: { name: string } | null;
 }
 
 export const CATEGORY_LABELS: Record<StockCategory, string> = {

@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { StockItem } from '@/hooks/useStockItems';
 import { UNIT_LABELS } from '@/hooks/useStockItems';
-import { StockService } from '@/modules/stock/services/StockService';
+import { StockService } from '@azura/stock';
 
 interface StockAlertCardProps {
   items: StockItem[];

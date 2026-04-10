@@ -7,16 +7,8 @@ import { supabaseFetch } from '@/lib/supabase-fetch';
 import { useDriveCollection } from './useDriveModule';
 import { useDriveData } from '@/contexts/DriveDataContext';
 
-import { StockService } from '../modules/stock/services/StockService';
+import { StockService, type StockItem, type StockItemInsert, type StockItemUpdate, type StockCategory, type StockUnit, CATEGORY_LABELS, UNIT_LABELS } from '@azura/stock';
 import { stockApi } from '@/api/StockApi';
-import type {
-  StockItem,
-  StockItemInsert,
-  StockItemUpdate,
-  StockCategory,
-  StockUnit
-} from '../modules/stock/types';
-import { CATEGORY_LABELS, UNIT_LABELS } from '../modules/stock/types';
 
 export type { StockItem, StockItemInsert, StockItemUpdate, StockCategory, StockUnit };
 export { CATEGORY_LABELS, UNIT_LABELS };

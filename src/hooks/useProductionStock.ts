@@ -6,8 +6,7 @@ import { toast } from 'sonner';
 import type { StockItem } from './useStockItems';
 import { supabaseFetch } from '@/lib/supabase-fetch';
 
-import { ProductionService } from '../modules/production/services/ProductionService';
-import type { ProductionStockItem, StockTransfer } from '../modules/production/types';
+import { ProductionService, type ProductionStockItem, type StockTransfer } from '@azura/ops';
 
 export type { ProductionStockItem, StockTransfer };
 

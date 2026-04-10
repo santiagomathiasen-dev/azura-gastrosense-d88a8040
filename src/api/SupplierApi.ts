@@ -1,5 +1,5 @@
 import { BaseApiService } from './BaseApiService';
-import { Supplier, SupplierInsert, SupplierUpdate } from '@/modules/supplier/types';
+import { Supplier, SupplierInsert, SupplierUpdate } from '@azura/purchases';
 
 export class SupplierApi extends BaseApiService {
     protected get endpoint(): string {

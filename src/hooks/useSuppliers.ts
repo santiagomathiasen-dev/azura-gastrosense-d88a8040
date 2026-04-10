@@ -1,6 +1,6 @@
 import { useDriveCollection } from './useDriveModule';
 import { supplierApi } from '@/api/SupplierApi';
-import type { Supplier, SupplierInsert, SupplierUpdate } from '../modules/supplier/types';
+import type { Supplier, SupplierInsert, SupplierUpdate } from '@azura/purchases';
 
 export type { Supplier, SupplierInsert, SupplierUpdate };
 
