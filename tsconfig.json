@@ -4,12 +4,6 @@
     "paths": {
       "@/*": [
         "./src/*"
-      ],
-      "@azura/ops": [
-        "./packages/azura-ops/src"
-      ],
-      "@azura/ops/*": [
-        "./packages/azura-ops/src/*"
       ]
     },
     "noImplicitAny": false,
@@ -49,13 +43,6 @@
     "node_modules",
     "supabase",
     "vitest.config.ts",
-    "vite.config.ts",
-    "clever-sanderson",
-    "competent-goodall",
-    "confident-napier",
-    "ecstatic-feynman",
-    "great-shaw",
-    "pedantic-lalande",
-    "recursing-solomon"
+    "vite.config.ts"
   ]
 }

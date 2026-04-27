@@ -9,6 +9,4 @@ export * from './useStockItems';
 export * from './useStockMovements';
 export * from './useStockRequests';
 export * from './useExpiryDates';
-export * from './useStockAI';
-export * from './useStockVoiceControl';
 export * from './useLosses';

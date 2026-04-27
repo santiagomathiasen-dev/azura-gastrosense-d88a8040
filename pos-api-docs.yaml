@@ -1,0 +1,103 @@
+openapi: 3.0.0
+info:
+  title: Azura GastroSense POS Integration API
+  description: API for integrating external POS systems with Azura GastroSense.
+  version: 1.0.0
+servers:
+  - url: https://<YOUR_PROJECT_REF>.supabase.co/functions/v1/pos-integration
+    description: Production Server
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+
+security:
+  - ApiKeyAuth: []
+
+paths:
+  /products:
+    get:
+      summary: Get Active Products
+      description: Returns a list of active products to sync with the POS.
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    name:
+                      type: string
+                    price:
+                      type: number
+                    category:
+                      type: string
+                    description:
+                      type: string
+                    image_url:
+                      type: string
+  
+  /sales:
+    post:
+      summary: Submit Sale Transaction
+      description: Records a sale and deducts stock (ingredients or finished goods).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - date_time
+                - sold_items
+                - payment_method
+                - total_amount
+              properties:
+                date_time:
+                  type: string
+                  format: date-time
+                payment_method:
+                  type: string
+                  example: "Credit Card"
+                total_amount:
+                  type: number
+                sold_items:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - product_id
+                      - quantity
+                    properties:
+                      product_id:
+                        type: string
+                        format: uuid
+                      quantity:
+                        type: number
+      responses:
+        '200':
+          description: Sale processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          description: Invalid Request
+        '401':
+          description: Unauthorized (Invalid API Key)
+        '500':
+          description: Server Error
