@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+﻿import { useState, useCallback } from 'react';
 import { MoreHorizontal, Pencil, Trash2, ArrowUpDown, Check, X, ArrowRightLeft, Calendar, Mic, Package } from 'lucide-react';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
@@ -14,10 +14,10 @@ import { cn, formatQuantity } from '@/lib/utils';
 import type {
   StockItem,
   StockCategory,
-} from '@/hooks/useStockItems';
-import { CATEGORY_LABELS, UNIT_LABELS } from '@/hooks/useStockItems';
+} from '@/hooks/stock/useStockItems';
+import { CATEGORY_LABELS, UNIT_LABELS } from '@/hooks/stock/useStockItems';
 import { StockService } from '@/modules/stock/services/StockService';
-import { parseSafeDate } from '@/hooks/useExpiryDates';
+import { parseSafeDate } from '@/hooks/stock/useExpiryDates';
 import { getNow } from '@/lib/utils';
 import {
   MobileList,

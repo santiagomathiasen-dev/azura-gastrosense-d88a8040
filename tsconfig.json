@@ -4,6 +4,12 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@azura/ops": [
+        "./packages/azura-ops/src"
+      ],
+      "@azura/ops/*": [
+        "./packages/azura-ops/src/*"
       ]
     },
     "noImplicitAny": false,
@@ -23,10 +29,11 @@
     "incremental": true,
     "module": "esnext",
     "esModuleInterop": true,
-    "moduleResolution": "node",
+    "moduleResolution": "nodenext",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
+    "allowImportingTsExtensions": true,
     "plugins": [
       {
         "name": "next"
@@ -37,12 +44,20 @@
     "next-env.d.ts",
     ".next/types/**/*.ts",
     "**/*.ts",
-    "**/*.tsx"
+    "**/*.tsx",
+    ".next/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
     "supabase",
     "vitest.config.ts",
-    "vite.config.ts"
+    "vite.config.ts",
+    "clever-sanderson",
+    "competent-goodall",
+    "confident-napier",
+    "ecstatic-feynman",
+    "great-shaw",
+    "pedantic-lalande",
+    "recursing-solomon"
   ]
 }

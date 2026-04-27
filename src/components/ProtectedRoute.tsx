@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 
 function Navigate({ to, replace }: { to: string, replace?: boolean }) {
@@ -10,11 +10,11 @@ function Navigate({ to, replace }: { to: string, replace?: boolean }) {
   return null;
 }
 
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/hooks/shared/useAuth';
 import { useCollaboratorContext } from '@/contexts/CollaboratorContext';
-import { useUserRole } from '@/hooks/useUserRole';
-import { useProfile } from '@/hooks/useProfile';
-import { usePlanLimits } from '@/hooks/usePlanLimits';
+import { useUserRole } from '@/hooks/shared/useUserRole';
+import { useProfile } from '@/hooks/shared/useProfile';
+import { usePlanLimits } from '@/hooks/shared/usePlanLimits';
 import { Loader2, AlertTriangle } from 'lucide-react';
 
 interface ProtectedRouteProps {

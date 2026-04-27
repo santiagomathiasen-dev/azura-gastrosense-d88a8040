@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, Calendar, Clock, Bot, XCircle, CheckCircle2, Sparkles, ShoppingCart, TrendingUp, ChefHat, CalendarClock, BarChart3, Package, ClipboardList, ArrowUpRight, Plus } from 'lucide-react';
@@ -6,17 +6,17 @@ import { PageHeader } from '@/components/PageHeader';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useProductions } from '@/hooks/useProductions';
-import { useStockItems } from '@/hooks/useStockItems';
-import { useFinishedProductionsStock } from '@/hooks/useFinishedProductionsStock';
-import { useSaleProducts } from '@/hooks/useSaleProducts';
-import { usePendingDeliveries } from '@/hooks/usePendingDeliveries';
-import { usePreparationAlerts } from '@/hooks/usePreparationAlerts';
-import { usePurchaseCalculationByPeriod } from '@/hooks/usePurchaseCalculationByPeriod';
+import { useProductions } from '@/hooks/ops/useProductions';
+import { useStockItems } from '@/hooks/stock/useStockItems';
+import { useFinishedProductionsStock } from '@/hooks/ops/useFinishedProductionsStock';
+import { useSaleProducts } from '@/hooks/financial/useSaleProducts';
+import { usePendingDeliveries } from '@/hooks/purchases/usePendingDeliveries';
+import { usePreparationAlerts } from '@/hooks/ops/usePreparationAlerts';
+import { usePurchaseCalculationByPeriod } from '@/hooks/purchases/usePurchaseCalculationByPeriod';
 import { useMemo } from 'react';
 import { getTodayStr, cn, getNow } from '@/lib/utils';
-import { useAllExpiryAlerts, parseSafeDate, useEarliestExpiryMap } from '@/hooks/useExpiryDates';
-import { useStockMovements } from '@/hooks/useStockMovements';
+import { useAllExpiryAlerts, parseSafeDate, useEarliestExpiryMap } from '@/hooks/stock/useExpiryDates';
+import { useStockMovements } from '@/hooks/stock/useStockMovements';
 import { DriveSync } from '@/components/DriveSync';
 
 export default function Dashboard() {

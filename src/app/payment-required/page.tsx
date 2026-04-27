@@ -1,11 +1,11 @@
-'use client';
+﻿'use client';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardTitle } from '@/components/ui/card';
 import { CreditCard, LogOut, MessageSquare, Copy, CheckCircle2, QrCode, RefreshCw, Wallet, ShieldCheck, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
-import { useProfile } from '@/hooks/useProfile';
+import { useAuth } from '@/hooks/shared/useAuth';
+import { useProfile } from '@/hooks/shared/useProfile';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, Suspense } from 'react';
 import { toast } from 'sonner';

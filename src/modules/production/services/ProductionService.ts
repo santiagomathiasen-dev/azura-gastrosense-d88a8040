@@ -1,7 +1,9 @@
 import {
     ProductionStatus,
-    ProductionWithSheet
+    ProductionWithSheet,
+    PurchaseRequest,
 } from '../types';
+import { supabaseFetch } from '../../../lib/supabase-fetch';
 
 export interface DeductionPlan {
     fromProduction: number;
@@ -11,17 +13,12 @@ export interface DeductionPlan {
 }
 
 export class ProductionService {
-    /**
-     * Calculates the multiplier for an ingredient based on planned quantity vs yield.
-     */
+
     static getMultiplier(plannedQuantity: number, yieldQuantity: number): number {
         if (yieldQuantity <= 0) return 0;
         return plannedQuantity / yieldQuantity;
     }
 
-    /**
-     * Calculates the needed quantity for an ingredient including waste factor.
-     */
     static calculateNeededQuantity(
         baseIngredientQuantity: number,
         multiplier: number,
@@ -32,10 +29,6 @@ export class ProductionService {
         return baseQty * (1 + wasteFactor);
     }
 
-    /**
-     * Plans how to deduct stock for a single ingredient.
-     * Priority: Production Stock -> Central Stock -> Purchase Order
-     */
     static planStockDeduction(
         neededQty: number,
         availableInProduction: number,
@@ -50,19 +43,16 @@ export class ProductionService {
             batchDeductions: []
         };
 
-        // 1. Use from production stock
         if (availableInProduction > 0) {
             const take = Math.min(availableInProduction, remaining);
             plan.fromProduction = take;
             remaining -= take;
         }
 
-        // 2. Use from central stock
         if (remaining > 0 && availableInCentral > 0) {
             const take = Math.min(availableInCentral, remaining);
             plan.fromCentral = take;
 
-            // Calculate batch deductions for central stock
             let batchRemaining = take;
             for (const batch of expiryBatches) {
                 if (batchRemaining <= 0) break;
@@ -74,34 +64,54 @@ export class ProductionService {
             remaining -= take;
         }
 
-        // 3. Any remaining is insufficient
         plan.insufficient = remaining;
-
         return plan;
     }
 
-    /**
-     * Validates if status transition is allowed.
-     */
     static isStarting(oldStatus: ProductionStatus, newStatus: ProductionStatus): boolean {
         return (oldStatus === 'planned' || oldStatus === 'requested') && newStatus === 'in_progress';
     }
 
-    /**
-     * Validates if production is completing.
-     */
     static isCompleting(oldStatus: ProductionStatus, newStatus: ProductionStatus): boolean {
         return (oldStatus === 'in_progress' || oldStatus === 'paused') && newStatus === 'completed';
     }
 
-    /**
-     * Logic to determine batch codes for produced inputs.
-     */
     static generateBatchCode(sheetName: string): string {
         const now = new Date();
         const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
         const msStr = now.getTime().toString(36).slice(-3).toUpperCase();
         const random = Math.random().toString(36).substring(2, 6).toUpperCase();
         return `${sheetName.substring(0, 3).toUpperCase()}-${dateStr}-${msStr}${random}`;
+    }
+
+    // FASE 2: Contrato com Compras
+    // O hook useProductions NAO escreve mais em purchase_list_items diretamente.
+    static async requestPurchase(request: PurchaseRequest): Promise<void> {
+        const { ownerId, stockItemId, quantity, productionName } = request;
+
+        const existingData = await supabaseFetch(
+            `purchase_list_items?stock_item_id=eq.${stockItemId}&status=eq.pending&select=id,suggested_quantity`
+        );
+        const existing = Array.isArray(existingData) ? existingData[0] : existingData;
+
+        if (existing) {
+            await supabaseFetch(`purchase_list_items?id=eq.${existing.id}`, {
+                method: 'PATCH',
+                body: JSON.stringify({
+                    suggested_quantity: Number(existing.suggested_quantity) + quantity
+                })
+            });
+        } else {
+            await supabaseFetch('purchase_list_items', {
+                method: 'POST',
+                body: JSON.stringify({
+                    user_id: ownerId,
+                    stock_item_id: stockItemId,
+                    suggested_quantity: quantity,
+                    status: 'pending',
+                    notes: `Gerado automaticamente - Producao: ${productionName}`,
+                })
+            });
+        }
     }
 }

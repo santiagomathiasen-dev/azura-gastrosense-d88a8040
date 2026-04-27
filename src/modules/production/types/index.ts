@@ -67,6 +67,7 @@ export type Production = z.infer<typeof ProductionSchema>;
 export type ProductionInsert = z.infer<typeof ProductionInsertSchema>;
 export type ProductionUpdate = Partial<ProductionInsert>;
 
+
 export interface ProductionWithSheet extends Production {
     technical_sheet: {
         id: string;
@@ -84,4 +85,14 @@ export interface ProductionWithSheet extends Production {
             stock_item: { name: string; unit?: string; unit_price?: number | null } | null;
         }[];
     } | null;
+}
+
+// FASE 2: Contrato entre OPS e Compras
+// ProductionService usa este tipo para solicitar compras sem conhecer o hook
+// de Compras. Substitui a escrita direta em purchase_list_items.
+export interface PurchaseRequest {
+    ownerId: string;
+    stockItemId: string;
+    quantity: number;
+    productionName: string;
 }
