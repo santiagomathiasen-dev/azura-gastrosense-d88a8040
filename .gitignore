@@ -24,8 +24,26 @@ dist-ssr
 *.sw?
 
 .vercel
+.env
+.env.*
 .env*.local
 .next
 .next/
 playwright-report/
 test-results/
+
+# Temp workdirs gerados por ferramentas
+angry-wu/
+clever-sanderson/
+competent-goodall/
+confident-napier/
+ecstatic-feynman/
+great-shaw/
+pedantic-lalande/
+recursing-solomon/
+
+# Scripts de migração temporários
+phase1_fix.ps1
+phase1_migrate.ps1
+verify_migration.js
+verify_migration.mjs
